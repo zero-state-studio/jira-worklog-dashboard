@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(lsof:*)",
+      "Bash(source:*)",
+      "Bash(python -c:*)",
+      "Bash(uvicorn:*)",
+      "Bash(for i in 1 2 3)",
+      "Bash(do sleep 1)",
+      "Bash(done)",
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "Bash(sqlite3:*)",
+      "Bash(pkill:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git remote:*)"
+    ]
+  }
+}

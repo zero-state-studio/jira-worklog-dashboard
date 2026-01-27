@@ -1,0 +1,151 @@
+"""
+Epics API router - epic-level statistics and contributors.
+"""
+from datetime import date
+from collections import defaultdict
+from fastapi import APIRouter, Depends, Query, HTTPException
+
+from ..models import (
+    EpicListResponse, EpicDetailResponse, EpicHours, UserHours,
+    DailyHours, Worklog, AppConfig
+)
+from ..config import get_config, get_users_from_db
+from ..cache import get_storage
+from .dashboard import calculate_daily_trend, calculate_epic_hours
+
+router = APIRouter(prefix="/api/epics", tags=["epics"])
+
+
+@router.get("", response_model=EpicListResponse)
+async def list_epics(
+    start_date: date = Query(..., description="Start date for the period"),
+    end_date: date = Query(..., description="End date for the period"),
+    jira_instance: str = Query(None, description="Filter by JIRA instance name"),
+    config: AppConfig = Depends(get_config)
+):
+    """List all epics with hours in the given period."""
+    storage = get_storage()
+
+    # Get all configured user emails from database
+    users = await get_users_from_db()
+    all_emails = [u["email"] for u in users]
+
+    # Read worklogs from local storage
+    worklogs = await storage.get_worklogs_in_range(
+        start_date, end_date,
+        user_emails=all_emails,
+        jira_instance=jira_instance
+    )
+
+    # Handle complementary instances
+    if not jira_instance:
+        complementary = config.settings.complementary_instances
+        if complementary and len(complementary) >= 2:
+            primary_instance = complementary[0]
+            worklogs = [w for w in worklogs if w.jira_instance == primary_instance]
+
+    # Calculate epic hours
+    epic_hours = calculate_epic_hours(worklogs)
+
+    # Total hours across all epics
+    total_hours = sum(e.total_hours for e in epic_hours)
+
+    return EpicListResponse(
+        epics=epic_hours,
+        total_hours=round(total_hours, 2)
+    )
+
+
+@router.get("/{epic_key}", response_model=EpicDetailResponse)
+async def get_epic_detail(
+    epic_key: str,
+    start_date: date = Query(..., description="Start date for the period"),
+    end_date: date = Query(..., description="End date for the period"),
+    config: AppConfig = Depends(get_config)
+):
+    """Get detailed statistics for a specific epic."""
+    storage = get_storage()
+
+    # Get all configured user emails from database
+    users = await get_users_from_db()
+    all_emails = [u["email"] for u in users]
+
+    # Read worklogs from local storage
+    all_worklogs = await storage.get_worklogs_in_range(
+        start_date, end_date,
+        user_emails=all_emails
+    )
+
+    # Filter to this epic only
+    epic_worklogs = [w for w in all_worklogs if w.epic_key == epic_key]
+
+    if not epic_worklogs:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No worklogs found for epic '{epic_key}'"
+        )
+
+    # Get epic info from first worklog
+    first_wl = epic_worklogs[0]
+    epic_name = first_wl.epic_name or "Unknown"
+    jira_instance = first_wl.jira_instance
+
+    # Calculate total hours
+    total_seconds = sum(w.time_spent_seconds for w in epic_worklogs)
+    total_hours = total_seconds / 3600
+
+    # Hours per contributor
+    contributors = await calculate_contributors_from_db(epic_worklogs, users)
+
+    # Daily trend
+    daily_trend = calculate_daily_trend(epic_worklogs, start_date, end_date)
+
+    # Sort worklogs by date (newest first)
+    sorted_worklogs = sorted(epic_worklogs, key=lambda w: w.started, reverse=True)
+
+    return EpicDetailResponse(
+        epic_key=epic_key,
+        epic_name=epic_name,
+        jira_instance=jira_instance,
+        total_hours=round(total_hours, 2),
+        contributors=contributors,
+        daily_trend=daily_trend,
+        worklogs=sorted_worklogs
+    )
+
+
+async def calculate_contributors_from_db(worklogs: list[Worklog], users: list[dict]) -> list[UserHours]:
+    """Calculate hours per contributor for an epic (using database data)."""
+    # Build lookup maps from users
+    email_to_name = {}
+    email_to_team = {}
+    for u in users:
+        email_lower = u["email"].lower()
+        email_to_name[email_lower] = f"{u['first_name']} {u['last_name']}"
+        email_to_team[email_lower] = u.get("team_name")
+
+    contributor_data = defaultdict(lambda: {"hours": 0, "name": "Unknown"})
+
+    for wl in worklogs:
+        email = wl.author_email.lower()
+        contributor_data[email]["hours"] += wl.time_spent_seconds / 3600
+
+        # Get display name from database or worklog
+        if email in email_to_name:
+            contributor_data[email]["name"] = email_to_name[email]
+        else:
+            contributor_data[email]["name"] = wl.author_display_name
+
+    result = []
+    for email, data in contributor_data.items():
+        team_name = email_to_team.get(email, "External")
+        result.append(UserHours(
+            email=email,
+            full_name=data["name"],
+            total_hours=round(data["hours"], 2),
+            team_name=team_name or "External"
+        ))
+
+    # Sort by hours descending
+    result.sort(key=lambda x: x.total_hours, reverse=True)
+    return result

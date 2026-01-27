@@ -1,0 +1,55 @@
+# JIRA Worklog Dashboard Configuration
+# Copy this file to config.yaml and fill in your values
+
+# JIRA instances configuration
+jira_instances:
+  - name: "Company Main"
+    url: "https://your-company.atlassian.net"
+    email: "your.email@company.com"
+    api_token: "your-api-token-here"
+    # Get your token from: https://id.atlassian.com/manage-profile/security/api-tokens
+  
+  - name: "Company Partner"
+    url: "https://partner-company.atlassian.net"
+    email: "your.email@partner.com"
+    api_token: "partner-api-token-here"
+
+# Team configuration
+teams:
+  - name: "Frontend Team"
+    members:
+      - email: "mario.rossi@company.com"
+        first_name: "Mario"
+        last_name: "Rossi"
+      - email: "giulia.bianchi@company.com"
+        first_name: "Giulia"
+        last_name: "Bianchi"
+  
+  - name: "Backend Team"
+    members:
+      - email: "luca.verdi@company.com"
+        first_name: "Luca"
+        last_name: "Verdi"
+      - email: "anna.neri@company.com"
+        first_name: "Anna"
+        last_name: "Neri"
+  
+  - name: "DevOps Team"
+    members:
+      - email: "paolo.gialli@company.com"
+        first_name: "Paolo"
+        last_name: "Gialli"
+
+# Application settings
+settings:
+  # Expected working hours per day
+  daily_working_hours: 8
+  
+  # Timezone for date calculations
+  timezone: "Europe/Rome"
+  
+  # Cache TTL in seconds (15 minutes default)
+  cache_ttl_seconds: 900
+  
+  # Enable demo mode (uses mock data instead of real JIRA)
+  demo_mode: false
