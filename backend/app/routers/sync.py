@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
 
 from ..models import AppConfig
-from ..config import get_config, get_users_from_db
+from ..config import get_config, get_users_from_db, get_jira_instances_from_db
 from ..cache import get_storage
 from ..jira_client import JiraService
 from ..demo_data import DemoJiraService
@@ -59,15 +59,18 @@ async def sync_worklogs(
     - jira_instances: List of instance names to sync (None = all)
     """
     storage = get_storage()
-    
+
+    # Get JIRA instances from database (with fallback to config.yaml)
+    db_instances = await get_jira_instances_from_db()
+
     # Determine which instances to sync
-    all_instance_names = [inst.name for inst in config.jira_instances]
+    all_instance_names = [inst.name for inst in db_instances]
     if request.jira_instances:
         # Validate requested instances
         for name in request.jira_instances:
             if name not in all_instance_names:
                 raise HTTPException(
-                    status_code=400, 
+                    status_code=400,
                     detail=f"Unknown JIRA instance: {name}"
                 )
         instances_to_sync = request.jira_instances
@@ -125,7 +128,7 @@ async def sync_worklogs(
                 worklogs = [w for w in worklogs if w.jira_instance == instance_name]
             else:
                 # Real mode - fetch from specific instance
-                for inst_config in config.jira_instances:
+                for inst_config in db_instances:
                     if inst_config.name == instance_name:
                         # Check if Tempo API token is configured
                         if inst_config.tempo_api_token:
@@ -266,15 +269,28 @@ async def get_data_status():
 async def get_sync_defaults(config: AppConfig = Depends(get_config)):
     """Get default values for sync UI."""
     from datetime import date
-    
+
     today = date.today()
     start_of_month = today.replace(day=1)
-    
-    return {
-        "default_start_date": start_of_month.isoformat(),
-        "default_end_date": today.isoformat(),
-        "available_instances": [
+
+    # Get instances from database first, fallback to config.yaml
+    storage = get_storage()
+    db_instances = await storage.get_all_jira_instances()
+
+    if db_instances:
+        available_instances = [
+            {"name": inst["name"], "url": inst["url"]}
+            for inst in db_instances if inst.get("is_active", True)
+        ]
+    else:
+        # Fallback to config.yaml
+        available_instances = [
             {"name": inst.name, "url": inst.url}
             for inst in config.jira_instances
         ]
+
+    return {
+        "default_start_date": start_of_month.isoformat(),
+        "default_end_date": today.isoformat(),
+        "available_instances": available_instances
     }

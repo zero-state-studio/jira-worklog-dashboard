@@ -36,7 +36,9 @@
       "Bash(git add:*)",
       "Bash(git fetch:*)",
       "Bash(git merge:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Read(//private/tmp/**)",
+      "Bash(./venv/bin/python -m uvicorn:*)"
     ]
   }
 }

@@ -61,11 +61,13 @@ class JiraClient:
         Returns the accountId if found, None otherwise.
         """
         try:
+            print(f"[JiraClient] Searching for user '{email}' on instance '{self.instance.name}' at URL: {self.base_url}")
             result = await self._request(
                 "GET",
                 "/user/search",
                 params={"query": email}
             )
+            print(f"[JiraClient] Found {len(result)} results from {self.instance.name}")
 
             # Find exact match by email (case insensitive)
             for user in result:

@@ -258,7 +258,7 @@ async def get_jira_instances_from_db() -> List[JiraInstanceConfig]:
     storage = get_storage()
     await storage.initialize()
 
-    instances = await storage.get_all_jira_instances()
+    instances = await storage.get_all_jira_instances(include_credentials=True)
 
     # If database has instances, use them
     if instances:
@@ -267,9 +267,11 @@ async def get_jira_instances_from_db() -> List[JiraInstanceConfig]:
                 name=inst["name"],
                 url=inst["url"],
                 email=inst["email"],
-                api_token=inst["api_token"]
+                api_token=inst["api_token"],
+                tempo_api_token=inst.get("tempo_api_token")
             )
             for inst in instances
+            if inst.get("is_active", True)  # Only include active instances
         ]
 
     # Fallback to config.yaml
@@ -293,7 +295,7 @@ async def get_complementary_instances_from_db() -> Dict[str, List[str]]:
     result = {}
 
     for group in groups:
-        instance_names = await storage.get_complementary_instance_names(group["id"])
+        instance_names = await storage.get_complementary_instance_names_by_group(group["id"])
         if instance_names:
             result[group["name"]] = instance_names
 

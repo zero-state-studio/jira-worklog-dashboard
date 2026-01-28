@@ -9,7 +9,7 @@ from ..models import (
     DashboardResponse, TeamHours, DailyHours, EpicHours,
     AppConfig, Worklog
 )
-from ..config import get_config, get_users_from_db
+from ..config import get_config, get_users_from_db, get_complementary_instances_from_db
 from ..cache import get_storage
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -42,10 +42,17 @@ async def get_dashboard(
 
     # Handle complementary instances when no specific instance filter
     if not jira_instance:
-        complementary = config.settings.complementary_instances
-        if complementary and len(complementary) >= 2:
-            primary_instance = complementary[0]
-            worklogs = [w for w in worklogs if w.jira_instance == primary_instance]
+        # Build set of secondary instances to exclude (from database)
+        complementary_groups = await get_complementary_instances_from_db()
+        secondary_instances = set()
+        for group_name, instances in complementary_groups.items():
+            if len(instances) >= 2:
+                # First instance is primary, rest are secondary
+                secondary_instances.update(instances[1:])
+
+        # Filter out worklogs from secondary instances
+        if secondary_instances:
+            worklogs = [w for w in worklogs if w.jira_instance not in secondary_instances]
 
     # Calculate total hours
     total_seconds = sum(w.time_spent_seconds for w in worklogs)

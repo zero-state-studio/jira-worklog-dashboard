@@ -1473,6 +1473,26 @@ class WorklogStorage:
                     names.append(row[0])
         return names
 
+    async def get_complementary_instance_names_by_group(self, group_id: int) -> list[str]:
+        """
+        Get instance names for a specific complementary group.
+        Returns list of instance names in the specified group.
+        """
+        await self.initialize()
+
+        names = []
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT ji.name
+                FROM complementary_group_members cgm
+                JOIN jira_instances ji ON ji.id = cgm.instance_id
+                WHERE cgm.group_id = ?
+                ORDER BY ji.name
+            """, (group_id,)) as cursor:
+                async for row in cursor:
+                    names.append(row[0])
+        return names
+
     async def get_primary_instance_for_complementary(self) -> Optional[str]:
         """
         Get the primary instance name to use when complementary instances exist.

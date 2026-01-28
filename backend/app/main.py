@@ -5,8 +5,10 @@ Main application entry point.
 import os
 import time
 import json
+import traceback
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
@@ -216,6 +218,44 @@ app.include_router(settings.router)
 app.include_router(logs.router)
 
 
+# Global exception handler to log tracebacks
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch all unhandled exceptions and log full traceback."""
+    logger = get_logger("error")
+
+    # Get full traceback
+    tb_str = traceback.format_exception(type(exc), exc, exc.__traceback__)
+    full_traceback = "".join(tb_str)
+
+    # Log with full traceback
+    logger.error(
+        f"Unhandled exception on {request.method} {request.url.path}:\n{full_traceback}"
+    )
+
+    # Store error log to database
+    try:
+        storage = get_storage()
+        await storage.insert_logs_batch([{
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "level": "ERROR",
+            "logger_name": "error",
+            "message": f"Unhandled exception: {str(exc)}",
+            "request_id": request_id_var.get(""),
+            "endpoint": request.url.path,
+            "method": request.method,
+            "status_code": 500,
+            "extra_data": {"traceback": full_traceback}
+        }])
+    except Exception:
+        pass  # Don't fail if logging fails
+
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {str(exc)}"}
+    )
+
+
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
@@ -249,6 +289,22 @@ async def get_config_info():
     teams = await get_teams_from_db()
     users = await get_users_from_db()
 
+    # Get JIRA instances from database first, fallback to config.yaml
+    storage = get_storage()
+    db_instances = await storage.get_all_jira_instances()
+
+    if db_instances:
+        jira_instances = [
+            {"name": inst["name"], "url": inst["url"]}
+            for inst in db_instances if inst.get("is_active", True)
+        ]
+    else:
+        # Fallback to config.yaml
+        jira_instances = [
+            {"name": inst.name, "url": inst.url}
+            for inst in config.jira_instances
+        ]
+
     # Group users by team
     team_members = {}
     for user in users:
@@ -266,10 +322,7 @@ async def get_config_info():
         "daily_working_hours": config.settings.daily_working_hours,
         "timezone": config.settings.timezone,
         "complementary_instances": config.settings.complementary_instances,
-        "jira_instances": [
-            {"name": inst.name, "url": inst.url}
-            for inst in config.jira_instances
-        ],
+        "jira_instances": jira_instances,
         "teams": [
             {
                 "name": team["name"],
