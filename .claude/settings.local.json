@@ -33,7 +33,10 @@
       "Bash(npm run build:*)",
       "Bash(sh -s -- -y)",
       "Bash(pip3 install:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)",
+      "Bash(git stash:*)"
     ]
   }
 }

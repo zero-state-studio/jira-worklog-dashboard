@@ -1,9 +1,9 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import DatePicker from 'react-datepicker'
-import { format, subDays, startOfMonth, startOfWeek, endOfWeek } from 'date-fns'
+import { format, subDays, startOfMonth, startOfWeek } from 'date-fns'
 import { it } from 'date-fns/locale'
-import { getConfig } from '../api/client'
+import { getConfig, getEpics } from '../api/client'
 import SyncModal from './SyncModal'
 import 'react-datepicker/dist/react-datepicker.css'
 
@@ -54,16 +54,40 @@ const datePresets = [
     { label: 'Ultimi 30 giorni', getRange: () => ({ start: subDays(new Date(), 29), end: new Date() }) },
 ]
 
+// Icons for initiative types
+const ProjectIcon = () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+    </svg>
+)
+
 export default function Layout({ children, dateRange, setDateRange, selectedInstance, setSelectedInstance }) {
     const [config, setConfig] = useState(null)
+    const [epics, setEpics] = useState([])
     const [sidebarOpen, setSidebarOpen] = useState(true)
     const [datePickerOpen, setDatePickerOpen] = useState(false)
     const [syncModalOpen, setSyncModalOpen] = useState(false)
-    const navigate = useNavigate()
 
     useEffect(() => {
         getConfig().then(setConfig).catch(console.error)
     }, [])
+
+    // Fetch epics when date range changes
+    useEffect(() => {
+        if (dateRange.startDate && dateRange.endDate) {
+            getEpics(dateRange.startDate, dateRange.endDate, selectedInstance)
+                .then(data => setEpics(data.epics || []))
+                .catch(err => console.error('Error fetching epics:', err))
+        }
+    }, [dateRange.startDate, dateRange.endDate, selectedInstance])
+
+    // Group epics by parent_type
+    const epicsByType = epics.reduce((acc, epic) => {
+        const type = epic.parent_type || 'Other'
+        if (!acc[type]) acc[type] = []
+        acc[type].push(epic)
+        return acc
+    }, {})
 
     const handleDateChange = (dates) => {
         const [start, end] = dates
@@ -113,7 +137,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                     </NavLink>
 
                     {/* Teams Section */}
-                    {config?.teams && sidebarOpen && (
+                    {config?.teams && config.teams.length > 0 && sidebarOpen && (
                         <div className="pt-4">
                             <p className="px-4 text-xs font-semibold text-dark-500 uppercase tracking-wider mb-2">Teams</p>
                             {config.teams.map((team) => (
@@ -132,17 +156,55 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                         </div>
                     )}
 
-                    {/* Iniziative Link */}
+                    {/* Iniziative Section */}
                     <div className="pt-4">
                         {sidebarOpen && <p className="px-4 text-xs font-semibold text-dark-500 uppercase tracking-wider mb-2">Iniziative</p>}
+
+                        {/* Projects Link */}
+                        {epicsByType['Project'] && epicsByType['Project'].length > 0 && (
+                            <NavLink
+                                to="/epics?type=Project"
+                                className={({ isActive }) =>
+                                    `nav-link ${isActive && window.location.search.includes('type=Project') ? 'nav-link-active' : ''}`
+                                }
+                            >
+                                <ProjectIcon />
+                                {sidebarOpen && (
+                                    <>
+                                        <span>Projects</span>
+                                        <span className="ml-auto text-xs text-dark-500">{epicsByType['Project'].length}</span>
+                                    </>
+                                )}
+                            </NavLink>
+                        )}
+
+                        {/* Epics Link */}
+                        {epicsByType['Epic'] && epicsByType['Epic'].length > 0 && (
+                            <NavLink
+                                to="/epics?type=Epic"
+                                className={({ isActive }) =>
+                                    `nav-link ${isActive && window.location.search.includes('type=Epic') ? 'nav-link-active' : ''}`
+                                }
+                            >
+                                <EpicIcon />
+                                {sidebarOpen && (
+                                    <>
+                                        <span>Epics</span>
+                                        <span className="ml-auto text-xs text-dark-500">{epicsByType['Epic'].length}</span>
+                                    </>
+                                )}
+                            </NavLink>
+                        )}
+
+                        {/* All Initiatives Link */}
                         <NavLink
                             to="/epics"
                             className={({ isActive }) =>
-                                `nav-link ${isActive ? 'nav-link-active' : ''}`
+                                `nav-link ${isActive && !window.location.search.includes('type=') ? 'nav-link-active' : ''}`
                             }
                         >
                             <EpicIcon />
-                            {sidebarOpen && <span>Iniziative</span>}
+                            {sidebarOpen && <span>Tutte</span>}
                         </NavLink>
                     </div>
 

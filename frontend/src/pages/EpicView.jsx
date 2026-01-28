@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { getEpics, getEpicDetail } from '../api/client'
 import { formatHours } from '../hooks/useData'
 import { EpicCard, UserCard, StatCard, ErrorState, CardSkeleton, EmptyState } from '../components/Cards'
@@ -9,10 +9,14 @@ import WorklogCalendar from '../components/WorklogCalendar'
 export default function EpicView({ dateRange, selectedInstance }) {
     const { epicKey } = useParams()
     const navigate = useNavigate()
+    const [searchParams, setSearchParams] = useSearchParams()
     const [listData, setListData] = useState(null)
     const [detailData, setDetailData] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
+
+    // Get type filter from URL
+    const typeFilter = searchParams.get('type') || 'all'
 
     const fetchData = useCallback(async () => {
         try {
@@ -66,6 +70,26 @@ export default function EpicView({ dateRange, selectedInstance }) {
 
     // Epic List View
     if (listData) {
+        // Count by type
+        const projectCount = listData.epics.filter(e => e.parent_type === 'Project').length
+        const epicCount = listData.epics.filter(e => e.parent_type === 'Epic').length
+
+        // Filter epics based on selected type
+        const filteredEpics = typeFilter === 'all'
+            ? listData.epics
+            : listData.epics.filter(epic => epic.parent_type === typeFilter)
+
+        // Calculate filtered hours
+        const filteredHours = filteredEpics.reduce((sum, e) => sum + e.total_hours, 0)
+
+        const setTypeFilter = (type) => {
+            if (type === 'all') {
+                setSearchParams({})
+            } else {
+                setSearchParams({ type })
+            }
+        }
+
         return (
             <div className="space-y-6 animate-fade-in">
                 {/* Header */}
@@ -74,22 +98,60 @@ export default function EpicView({ dateRange, selectedInstance }) {
                         <div>
                             <h1 className="text-2xl font-bold text-dark-100">Iniziative</h1>
                             <p className="text-dark-400">
-                                {listData.epics.length} iniziative con ore registrate nel periodo
+                                {filteredEpics.length} iniziative con ore registrate nel periodo
                             </p>
                         </div>
                         <div className="text-right">
                             <p className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-                                {formatHours(listData.total_hours)}
+                                {formatHours(filteredHours)}
                             </p>
                             <p className="text-dark-400 text-sm">ore totali</p>
                         </div>
                     </div>
+
+                    {/* Filter Tabs */}
+                    <div className="flex gap-2 mt-4">
+                        <button
+                            onClick={() => setTypeFilter('all')}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                typeFilter === 'all'
+                                    ? 'bg-gradient-primary text-white shadow-glow'
+                                    : 'text-dark-400 hover:text-dark-200 hover:bg-dark-700 bg-dark-800'
+                            }`}
+                        >
+                            Tutti ({listData.epics.length})
+                        </button>
+                        {projectCount > 0 && (
+                            <button
+                                onClick={() => setTypeFilter('Project')}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                    typeFilter === 'Project'
+                                        ? 'bg-accent-blue text-white'
+                                        : 'text-dark-400 hover:text-dark-200 hover:bg-dark-700 bg-dark-800'
+                                }`}
+                            >
+                                Projects ({projectCount})
+                            </button>
+                        )}
+                        {epicCount > 0 && (
+                            <button
+                                onClick={() => setTypeFilter('Epic')}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                    typeFilter === 'Epic'
+                                        ? 'bg-accent-purple text-white'
+                                        : 'text-dark-400 hover:text-dark-200 hover:bg-dark-700 bg-dark-800'
+                                }`}
+                            >
+                                Epics ({epicCount})
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 {/* Epic Cards Grid */}
-                {listData.epics.length > 0 ? (
+                {filteredEpics.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {listData.epics.map((epic) => (
+                        {filteredEpics.map((epic) => (
                             <EpicCard
                                 key={epic.epic_key}
                                 epicKey={epic.epic_key}
