@@ -189,6 +189,28 @@ class ImportConfigResponse(BaseModel):
     jira_instances_created: int = 0
 
 
+class BulkUserCreateRequest(BaseModel):
+    """Request for bulk user creation."""
+    emails: list[str]
+    team_id: Optional[int] = None
+
+
+class BulkUserCreateResult(BaseModel):
+    """Result for a single user in bulk creation."""
+    email: str
+    success: bool
+    error: Optional[str] = None
+    user_id: Optional[int] = None
+
+
+class BulkUserCreateResponse(BaseModel):
+    """Response from bulk user creation."""
+    total: int
+    created: int
+    failed: int
+    results: list[BulkUserCreateResult]
+
+
 # ============ API Response Models ============
 
 class DailyHours(BaseModel):

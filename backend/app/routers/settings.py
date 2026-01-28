@@ -9,7 +9,8 @@ from ..models import (
     TeamCreate, TeamUpdate, TeamInDB, TeamWithMembers,
     UserCreate, UserUpdate, UserInDB,
     FetchAccountIdRequest, FetchAccountIdResponse,
-    ImportConfigResponse
+    ImportConfigResponse,
+    BulkUserCreateRequest, BulkUserCreateResult, BulkUserCreateResponse
 )
 from ..config import get_config
 from ..cache import get_storage
@@ -235,6 +236,138 @@ async def delete_user(user_id: int):
     return {"success": True, "message": "User deleted"}
 
 
+def extract_name_from_email(email: str) -> tuple[str, str]:
+    """
+    Extract first_name and last_name from email address.
+
+    Examples:
+    - mario.rossi@example.com -> ("Mario", "Rossi")
+    - m.rossi@example.com -> ("M", "Rossi")
+    - mrossi@example.com -> ("Mrossi", "")
+    - mario_rossi@example.com -> ("Mario", "Rossi")
+    """
+    import re
+
+    # Get the local part (before @)
+    local_part = email.split("@")[0].lower()
+
+    # Split by common separators (., -, _)
+    parts = re.split(r'[.\-_]', local_part)
+    parts = [p for p in parts if p]  # Remove empty strings
+
+    if len(parts) >= 2:
+        # First part is first_name, last part is last_name
+        first_name = parts[0].capitalize()
+        last_name = parts[-1].capitalize()
+    elif len(parts) == 1:
+        # Single part - use as first_name, empty last_name
+        first_name = parts[0].capitalize()
+        last_name = ""
+    else:
+        # Fallback
+        first_name = local_part.capitalize()
+        last_name = ""
+
+    return first_name, last_name
+
+
+@router.post("/users/bulk", response_model=BulkUserCreateResponse)
+async def create_users_bulk(request: BulkUserCreateRequest):
+    """
+    Create multiple users from a list of emails.
+
+    Name and surname are extracted automatically from email addresses.
+    Duplicate emails or already existing users are skipped.
+    """
+    import re
+
+    storage = get_storage()
+    results = []
+    created_count = 0
+    failed_count = 0
+
+    # Email validation regex
+    email_regex = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+
+    # Validate team_id if provided
+    if request.team_id:
+        team = await storage.get_team(request.team_id)
+        if not team:
+            raise HTTPException(status_code=400, detail="Team not found")
+
+    # Process each email
+    seen_emails = set()
+    for email in request.emails:
+        email = email.strip().lower()
+
+        # Skip empty emails
+        if not email:
+            continue
+
+        # Skip duplicates in the same request
+        if email in seen_emails:
+            results.append(BulkUserCreateResult(
+                email=email,
+                success=False,
+                error="Duplicato nella richiesta"
+            ))
+            failed_count += 1
+            continue
+        seen_emails.add(email)
+
+        # Validate email format
+        if not email_regex.match(email):
+            results.append(BulkUserCreateResult(
+                email=email,
+                success=False,
+                error="Formato email non valido"
+            ))
+            failed_count += 1
+            continue
+
+        # Check if user already exists
+        existing = await storage.get_user_by_email(email)
+        if existing:
+            results.append(BulkUserCreateResult(
+                email=email,
+                success=False,
+                error="Utente già esistente"
+            ))
+            failed_count += 1
+            continue
+
+        # Extract name from email
+        first_name, last_name = extract_name_from_email(email)
+
+        try:
+            user_id = await storage.create_user(
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                team_id=request.team_id
+            )
+            results.append(BulkUserCreateResult(
+                email=email,
+                success=True,
+                user_id=user_id
+            ))
+            created_count += 1
+        except Exception as e:
+            results.append(BulkUserCreateResult(
+                email=email,
+                success=False,
+                error=str(e)
+            ))
+            failed_count += 1
+
+    return BulkUserCreateResponse(
+        total=len(results),
+        created=created_count,
+        failed=failed_count,
+        results=results
+    )
+
+
 # ========== JIRA Account Endpoints ==========
 
 @router.post("/users/{user_id}/fetch-account/{jira_instance}", response_model=FetchAccountIdResponse)
@@ -244,6 +377,7 @@ async def fetch_jira_account_id(
     config: AppConfig = Depends(get_config)
 ):
     """Fetch and store JIRA accountId for a user from a specific instance."""
+    from ..models import JiraInstanceConfig
     storage = get_storage()
 
     # Get user
@@ -251,12 +385,25 @@ async def fetch_jira_account_id(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Find JIRA instance config
+    # Find JIRA instance - first check database, then fallback to config.yaml
     instance_config = None
-    for inst in config.jira_instances:
-        if inst.name == jira_instance:
-            instance_config = inst
-            break
+
+    # Try database first
+    db_instance = await storage.get_jira_instance_by_name(jira_instance)
+    if db_instance:
+        instance_config = JiraInstanceConfig(
+            name=db_instance["name"],
+            url=db_instance["url"],
+            email=db_instance["email"],
+            api_token=db_instance["api_token"],
+            tempo_api_token=db_instance.get("tempo_api_token")
+        )
+    else:
+        # Fallback to config.yaml
+        for inst in config.jira_instances:
+            if inst.name == jira_instance:
+                instance_config = inst
+                break
 
     if not instance_config:
         raise HTTPException(status_code=404, detail=f"JIRA instance '{jira_instance}' not found")

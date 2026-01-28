@@ -236,6 +236,10 @@ export async function deleteUser(userId) {
     return fetchApiDelete(`/settings/users/${userId}`)
 }
 
+export async function createUsersBulk(emails, teamId = null) {
+    return fetchApiPost('/settings/users/bulk', { emails, team_id: teamId })
+}
+
 // ============ Settings API - JIRA Accounts ============
 
 export async function fetchJiraAccountId(userId, jiraInstance) {

@@ -89,16 +89,55 @@ async def get_log_stats():
     return LogStatsResponse(**stats)
 
 
+def format_log_as_text(log: dict) -> str:
+    """Format a single log entry as readable text."""
+    lines = []
+    lines.append("=" * 80)
+    lines.append(f"[{log.get('timestamp', 'N/A')}] [{log.get('level', 'N/A')}]")
+    lines.append(f"Endpoint: {log.get('method', '')} {log.get('endpoint', 'N/A')}")
+    lines.append(f"Status: {log.get('status_code', 'N/A')} | Duration: {log.get('duration_ms', 0):.1f}ms")
+    lines.append(f"Request ID: {log.get('request_id', 'N/A')}")
+    lines.append(f"Message: {log.get('message', 'N/A')}")
+
+    # Include extra_data if present
+    extra_data = log.get('extra_data')
+    if extra_data:
+        if isinstance(extra_data, str):
+            try:
+                extra_data = json.loads(extra_data)
+            except:
+                pass
+
+        if isinstance(extra_data, dict):
+            if extra_data.get('query_params'):
+                lines.append(f"Query Params: {json.dumps(extra_data['query_params'], ensure_ascii=False)}")
+            if extra_data.get('request_body'):
+                body = extra_data['request_body']
+                if isinstance(body, dict):
+                    body = json.dumps(body, indent=2, ensure_ascii=False)
+                lines.append(f"Request Body:\n{body}")
+            if extra_data.get('response_body'):
+                body = extra_data['response_body']
+                if isinstance(body, dict):
+                    body = json.dumps(body, indent=2, ensure_ascii=False)
+                # Truncate long response bodies
+                if len(str(body)) > 500:
+                    body = str(body)[:500] + "... (truncated)"
+                lines.append(f"Response Body:\n{body}")
+
+    return "\n".join(lines)
+
+
 @router.get("/download")
 async def download_logs(
-    format: str = Query("json", description="Download format: json or csv"),
+    format: str = Query("json", description="Download format: json, csv, or txt"),
     level: Optional[str] = Query(None, description="Filter by log level"),
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     endpoint: Optional[str] = Query(None, description="Filter by endpoint pattern"),
     limit: int = Query(10000, ge=100, le=100000, description="Max logs to download")
 ):
-    """Download logs as JSON or CSV."""
+    """Download logs as JSON, CSV, or TXT."""
     storage = get_storage()
 
     logs, _ = await storage.get_logs(
@@ -111,8 +150,9 @@ async def download_logs(
     )
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    format_lower = format.lower()
 
-    if format.lower() == "csv":
+    if format_lower == "csv":
         # Generate CSV
         output = io.StringIO()
         if logs:
@@ -132,8 +172,30 @@ async def download_logs(
                 "Content-Disposition": f"attachment; filename=logs_{timestamp}.csv"
             }
         )
+    elif format_lower == "txt":
+        # Generate human-readable TXT
+        lines = [
+            f"JIRA Worklog Dashboard - Application Logs",
+            f"Exported: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"Total logs: {len(logs)}",
+            f"Filters: level={level or 'all'}, start={start_date or 'N/A'}, end={end_date or 'N/A'}",
+            "",
+        ]
+        for log in logs:
+            lines.append(format_log_as_text(log))
+        lines.append("=" * 80)
+        lines.append("END OF LOG FILE")
+
+        content = "\n".join(lines)
+        return StreamingResponse(
+            iter([content]),
+            media_type="text/plain",
+            headers={
+                "Content-Disposition": f"attachment; filename=logs_{timestamp}.txt"
+            }
+        )
     else:
-        # Generate JSON
+        # Generate JSON (default)
         content = json.dumps(logs, indent=2, ensure_ascii=False)
         return StreamingResponse(
             iter([content]),

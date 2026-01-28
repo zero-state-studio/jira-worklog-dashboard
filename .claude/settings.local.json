@@ -30,7 +30,10 @@
       "Bash(/opt/homebrew/bin/python3.11:*)",
       "Bash(pip install:*)",
       "Bash(npm run tauri:dev:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(sh -s -- -y)",
+      "Bash(pip3 install:*)",
+      "Bash(git add:*)"
     ]
   }
 }

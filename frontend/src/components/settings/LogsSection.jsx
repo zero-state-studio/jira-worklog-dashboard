@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { getLogs, getLogStats, downloadLogs, deleteOldLogs } from '../../api/client'
+import LogDetailPanel from './LogDetailPanel'
 
 const DownloadIcon = () => (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -52,6 +53,13 @@ export default function LogsSection() {
     const [deleteLoading, setDeleteLoading] = useState(false)
     const [deleteDays, setDeleteDays] = useState(30)
 
+    // Selected log for detail panel
+    const [selectedLog, setSelectedLog] = useState(null)
+
+    // Export dropdown
+    const [showExportMenu, setShowExportMenu] = useState(false)
+    const exportMenuRef = useRef(null)
+
     const loadLogs = useCallback(async () => {
         try {
             setLoading(true)
@@ -91,6 +99,17 @@ export default function LogsSection() {
         const interval = setInterval(loadLogs, 30000) // 30 seconds
         return () => clearInterval(interval)
     }, [autoRefresh, loadLogs])
+
+    // Close export menu when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (exportMenuRef.current && !exportMenuRef.current.contains(event.target)) {
+                setShowExportMenu(false)
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [])
 
     const handleDownload = async (format) => {
         try {
@@ -138,15 +157,26 @@ export default function LogsSection() {
 
     return (
         <div className="space-y-6">
-            {/* Stats Cards */}
+            {/* Stats Cards - Clickable for filtering */}
             {stats && (
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <div className="glass-card p-4">
+                    <div
+                        onClick={() => { setLevel(''); handleFilterChange(); }}
+                        className={`glass-card p-4 cursor-pointer transition-all hover:bg-dark-700/50 ${
+                            level === '' ? 'ring-2 ring-accent-blue' : ''
+                        }`}
+                    >
                         <div className="text-2xl font-bold text-dark-100">{stats.total}</div>
                         <div className="text-sm text-dark-400">Totale Log</div>
                     </div>
                     {Object.entries(stats.by_level || {}).map(([lvl, count]) => (
-                        <div key={lvl} className="glass-card p-4">
+                        <div
+                            key={lvl}
+                            onClick={() => { setLevel(lvl); handleFilterChange(); }}
+                            className={`glass-card p-4 cursor-pointer transition-all hover:bg-dark-700/50 ${
+                                level === lvl ? 'ring-2 ring-accent-blue' : ''
+                            }`}
+                        >
                             <div className="text-2xl font-bold text-dark-100">{count}</div>
                             <div className={`text-sm ${levelColors[lvl]?.split(' ')[0] || 'text-dark-400'}`}>{lvl}</div>
                         </div>
@@ -232,20 +262,41 @@ export default function LogsSection() {
                     {total} log trovati
                 </div>
                 <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => handleDownload('json')}
-                        className="flex items-center gap-2 px-3 py-2 bg-dark-700 text-dark-200 rounded-lg hover:bg-dark-600 transition-colors text-sm"
-                    >
-                        <DownloadIcon />
-                        JSON
-                    </button>
-                    <button
-                        onClick={() => handleDownload('csv')}
-                        className="flex items-center gap-2 px-3 py-2 bg-dark-700 text-dark-200 rounded-lg hover:bg-dark-600 transition-colors text-sm"
-                    >
-                        <DownloadIcon />
-                        CSV
-                    </button>
+                    {/* Export Dropdown */}
+                    <div className="relative" ref={exportMenuRef}>
+                        <button
+                            onClick={() => setShowExportMenu(!showExportMenu)}
+                            className="flex items-center gap-2 px-3 py-2 bg-dark-700 text-dark-200 rounded-lg hover:bg-dark-600 transition-colors text-sm"
+                        >
+                            <DownloadIcon />
+                            Esporta
+                            <svg className={`w-4 h-4 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        {showExportMenu && (
+                            <div className="absolute right-0 mt-1 w-32 bg-dark-700 border border-dark-600 rounded-lg shadow-xl z-10 overflow-hidden">
+                                <button
+                                    onClick={() => { handleDownload('json'); setShowExportMenu(false); }}
+                                    className="w-full px-4 py-2 text-left text-sm text-dark-200 hover:bg-dark-600 transition-colors"
+                                >
+                                    JSON
+                                </button>
+                                <button
+                                    onClick={() => { handleDownload('csv'); setShowExportMenu(false); }}
+                                    className="w-full px-4 py-2 text-left text-sm text-dark-200 hover:bg-dark-600 transition-colors"
+                                >
+                                    CSV
+                                </button>
+                                <button
+                                    onClick={() => { handleDownload('txt'); setShowExportMenu(false); }}
+                                    className="w-full px-4 py-2 text-left text-sm text-dark-200 hover:bg-dark-600 transition-colors"
+                                >
+                                    TXT
+                                </button>
+                            </div>
+                        )}
+                    </div>
                     <button
                         onClick={() => setDeleteConfirm(true)}
                         className="flex items-center gap-2 px-3 py-2 bg-red-500/10 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/20 transition-colors text-sm"
@@ -288,7 +339,11 @@ export default function LogsSection() {
                             </thead>
                             <tbody>
                                 {logs.map((log) => (
-                                    <tr key={log.id} className="hover:bg-dark-700/30 transition-colors">
+                                    <tr
+                                        key={log.id}
+                                        onClick={() => setSelectedLog(log)}
+                                        className="hover:bg-dark-700/30 transition-colors cursor-pointer"
+                                    >
                                         <td className="table-cell whitespace-nowrap text-dark-400 font-mono text-xs">
                                             {formatTimestamp(log.timestamp)}
                                         </td>
@@ -402,6 +457,14 @@ export default function LogsSection() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Log Detail Panel */}
+            {selectedLog && (
+                <LogDetailPanel
+                    log={selectedLog}
+                    onClose={() => setSelectedLog(null)}
+                />
             )}
         </div>
     )

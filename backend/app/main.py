@@ -4,10 +4,12 @@ Main application entry point.
 """
 import os
 import time
+import json
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from .config import get_config, DEMO_CONFIG, get_teams_from_db, get_users_from_db
 from .cache import get_storage
@@ -64,6 +66,8 @@ app = FastAPI(
 class LoggingMiddleware(BaseHTTPMiddleware):
     """Middleware to log all requests and responses."""
 
+    MAX_BODY_SIZE = 10000  # Max 10KB for body capture
+
     async def dispatch(self, request: Request, call_next):
         # Generate and set request ID
         request_id = generate_request_id()
@@ -75,14 +79,62 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         start_time = time.time()
         logger = get_logger("http")
 
+        # Capture request body for POST/PUT/PATCH/DELETE
+        request_body = None
+        query_params = None
+        if not skip_logging:
+            # Capture query params
+            if request.query_params:
+                query_params = dict(request.query_params)
+
+            # Capture request body
+            if request.method in ["POST", "PUT", "PATCH", "DELETE"]:
+                try:
+                    body_bytes = await request.body()
+                    if body_bytes and len(body_bytes) < self.MAX_BODY_SIZE:
+                        content_type = request.headers.get("content-type", "")
+                        if "application/json" in content_type:
+                            try:
+                                request_body = json.loads(body_bytes)
+                            except json.JSONDecodeError:
+                                request_body = body_bytes.decode("utf-8", errors="replace")
+                        else:
+                            request_body = body_bytes.decode("utf-8", errors="replace")
+                except Exception:
+                    pass  # Ignore body capture errors
+
         # Log request (unless skipped)
         if not skip_logging:
             logger.info(f"Request: {request.method} {request.url.path}")
 
-        # Process request
+        # Process request and capture response body
+        response_body = None
         try:
             response = await call_next(request)
             duration_ms = (time.time() - start_time) * 1000
+
+            # Capture response body if JSON and small enough
+            if not skip_logging:
+                content_type = response.headers.get("content-type", "")
+                if "application/json" in content_type:
+                    # Read the response body
+                    response_body_bytes = b""
+                    async for chunk in response.body_iterator:
+                        response_body_bytes += chunk
+
+                    if len(response_body_bytes) < self.MAX_BODY_SIZE:
+                        try:
+                            response_body = json.loads(response_body_bytes)
+                        except json.JSONDecodeError:
+                            pass
+
+                    # Recreate the response with the captured body
+                    response = Response(
+                        content=response_body_bytes,
+                        status_code=response.status_code,
+                        headers=dict(response.headers),
+                        media_type=response.media_type
+                    )
 
             # Log response
             if not skip_logging:
@@ -95,12 +147,30 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             if db_handler and not skip_logging:
                 buffered_logs = db_handler.get_and_clear_buffer()
                 if buffered_logs:
+                    # Build extra_data with request/response info
+                    extra_data = {}
+                    if query_params:
+                        extra_data["query_params"] = query_params
+                    if request_body is not None:
+                        extra_data["request_body"] = request_body
+                    if response_body is not None:
+                        extra_data["response_body"] = response_body
+
                     # Enrich with request info
                     for log in buffered_logs:
                         log["endpoint"] = request.url.path
                         log["method"] = request.method
                         log["status_code"] = response.status_code
                         log["duration_ms"] = duration_ms
+                        if extra_data:
+                            # Merge with existing extra_data if any
+                            existing = log.get("extra_data") or {}
+                            if isinstance(existing, str):
+                                try:
+                                    existing = json.loads(existing)
+                                except:
+                                    existing = {}
+                            log["extra_data"] = {**existing, **extra_data}
 
                     # Store to database
                     storage = get_storage()
