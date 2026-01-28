@@ -16,6 +16,38 @@ from .dashboard import calculate_expected_hours, calculate_daily_trend, calculat
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 
+def enrich_worklogs_with_names(worklogs: list[Worklog], users: list[dict]) -> list[Worklog]:
+    """Enrich worklogs with resolved author names from database."""
+    # Build email -> name lookup
+    email_to_name = {}
+    for u in users:
+        email_lower = u["email"].lower()
+        email_to_name[email_lower] = f"{u['first_name']} {u['last_name']}"
+
+    enriched = []
+    for wl in worklogs:
+        email_lower = wl.author_email.lower()
+        resolved_name = email_to_name.get(email_lower, wl.author_display_name or wl.author_email)
+
+        enriched.append(Worklog(
+            id=wl.id,
+            issue_key=wl.issue_key,
+            issue_summary=wl.issue_summary,
+            author_email=wl.author_email,
+            author_display_name=resolved_name,
+            time_spent_seconds=wl.time_spent_seconds,
+            started=wl.started,
+            jira_instance=wl.jira_instance,
+            parent_key=wl.parent_key,
+            parent_name=wl.parent_name,
+            parent_type=wl.parent_type,
+            epic_key=wl.epic_key,
+            epic_name=wl.epic_name
+        ))
+
+    return enriched
+
+
 @router.get("")
 async def list_users(config: AppConfig = Depends(get_config)):
     """List all configured users."""
@@ -89,8 +121,11 @@ async def get_user_detail(
     # Daily trend
     daily_trend = calculate_daily_trend(worklogs, start_date, end_date)
 
+    # Enrich worklogs with resolved author names
+    enriched_worklogs = enrich_worklogs_with_names(worklogs, users)
+
     # Sort worklogs by date (newest first)
-    sorted_worklogs = sorted(worklogs, key=lambda w: w.started, reverse=True)
+    sorted_worklogs = sorted(enriched_worklogs, key=lambda w: w.started, reverse=True)
 
     return UserDetailResponse(
         email=email,

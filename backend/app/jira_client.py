@@ -31,16 +31,28 @@ class JiraClient:
     async def _request(self, method: str, endpoint: str, **kwargs) -> dict:
         """Make an authenticated request to JIRA API."""
         url = f"{self.base_url}/rest/api/3{endpoint}"
-        
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.request(
-                method, 
-                url, 
+                method,
+                url,
                 headers=self.headers,
                 **kwargs
             )
             response.raise_for_status()
             return response.json()
+
+    async def test_connection(self) -> dict:
+        """
+        Test the connection to JIRA by getting current user info.
+        Returns user info if successful, raises exception otherwise.
+        """
+        result = await self._request("GET", "/myself")
+        return {
+            "accountId": result.get("accountId"),
+            "emailAddress": result.get("emailAddress"),
+            "displayName": result.get("displayName")
+        }
 
     async def search_user_by_email(self, email: str) -> Optional[str]:
         """

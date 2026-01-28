@@ -1,0 +1,5 @@
+#!/bin/bash
+# Placeholder for development mode
+# In production, this will be replaced with the PyInstaller-built executable
+echo "Development mode: Please start the backend manually with:"
+echo "  cd backend && source venv/bin/activate && uvicorn app.main:app --reload"

@@ -6,17 +6,24 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.9.1",
+    "@tauri-apps/plugin-log": "^2.8.0",
+    "@tauri-apps/plugin-shell": "^2.3.4",
+    "date-fns": "^3.2.0",
     "react": "^18.2.0",
+    "react-datepicker": "^6.0.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.21.0",
-    "recharts": "^2.10.3",
-    "date-fns": "^3.2.0",
-    "react-datepicker": "^6.0.0"
+    "recharts": "^2.10.3"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.9.6",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@vitejs/plugin-react": "^4.2.1",

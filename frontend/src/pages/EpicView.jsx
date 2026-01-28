@@ -2,10 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getEpics, getEpicDetail } from '../api/client'
 import { formatHours } from '../hooks/useData'
-import { format } from 'date-fns'
-import { it } from 'date-fns/locale'
 import { EpicCard, UserCard, StatCard, ErrorState, CardSkeleton } from '../components/Cards'
 import { TrendChart, ComparisonBarChart, ChartCard } from '../components/Charts'
+import WorklogCalendar from '../components/WorklogCalendar'
 
 export default function EpicView({ dateRange, selectedInstance }) {
     const { epicKey } = useParams()
@@ -73,9 +72,9 @@ export default function EpicView({ dateRange, selectedInstance }) {
                 <div className="glass-card p-6">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h1 className="text-2xl font-bold text-dark-100">Epic</h1>
+                            <h1 className="text-2xl font-bold text-dark-100">Iniziative</h1>
                             <p className="text-dark-400">
-                                {listData.epics.length} epic con ore registrate nel periodo
+                                {listData.epics.length} iniziative con ore registrate nel periodo
                             </p>
                         </div>
                         <div className="text-right">
@@ -98,6 +97,7 @@ export default function EpicView({ dateRange, selectedInstance }) {
                                 hours={epic.total_hours}
                                 contributorCount={epic.contributor_count}
                                 jiraInstance={epic.jira_instance}
+                                parentType={epic.parent_type}
                                 onClick={() => navigate(`/epics/${encodeURIComponent(epic.epic_key)}`)}
                             />
                         ))}
@@ -109,8 +109,8 @@ export default function EpicView({ dateRange, selectedInstance }) {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
                         </div>
-                        <h3 className="text-lg font-semibold text-dark-200 mb-2">Nessuna Epic</h3>
-                        <p className="text-dark-400">Non ci sono epic con ore registrate nel periodo selezionato</p>
+                        <h3 className="text-lg font-semibold text-dark-200 mb-2">Nessuna Iniziativa</h3>
+                        <p className="text-dark-400">Non ci sono iniziative con ore registrate nel periodo selezionato</p>
                     </div>
                 )}
             </div>
@@ -201,11 +201,11 @@ function EpicDetailView({ data, navigate }) {
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <ChartCard title="Trend Giornaliero" subtitle="Ore registrate sulla epic">
+                <ChartCard title="Trend Giornaliero" subtitle="Ore registrate sull'iniziativa">
                     <TrendChart data={data.daily_trend} height={280} />
                 </ChartCard>
 
-                <ChartCard title="Contributi per Persona" subtitle="Chi ha lavorato sulla epic">
+                <ChartCard title="Contributi per Persona" subtitle="Chi ha lavorato sull'iniziativa">
                     <ComparisonBarChart
                         data={contributorChartData}
                         dataKey="total_hours"
@@ -233,56 +233,11 @@ function EpicDetailView({ data, navigate }) {
                 </div>
             </div>
 
-            {/* Worklog Table */}
-            <div className="glass-card overflow-hidden">
-                <div className="p-4 border-b border-dark-700">
-                    <h2 className="font-semibold text-dark-100">Dettaglio Worklog</h2>
-                    <p className="text-sm text-dark-400">{data.worklogs.length} registrazioni nel periodo</p>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full">
-                        <thead className="bg-dark-700/50">
-                            <tr>
-                                <th className="table-header">Data</th>
-                                <th className="table-header">Autore</th>
-                                <th className="table-header">Issue</th>
-                                <th className="table-header text-right">Ore</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {data.worklogs.slice(0, 50).map((wl) => (
-                                <tr key={wl.id} className="hover:bg-dark-700/30 transition-colors">
-                                    <td className="table-cell whitespace-nowrap">
-                                        {format(new Date(wl.started), 'd MMM yyyy HH:mm', { locale: it })}
-                                    </td>
-                                    <td className="table-cell">
-                                        <button
-                                            onClick={() => navigate(`/users/${encodeURIComponent(wl.author_email)}`)}
-                                            className="text-accent-blue hover:underline"
-                                        >
-                                            {wl.author_display_name}
-                                        </button>
-                                    </td>
-                                    <td className="table-cell">
-                                        <div>
-                                            <span className="text-dark-200 font-medium">{wl.issue_key}</span>
-                                            <p className="text-dark-400 text-sm truncate max-w-xs">{wl.issue_summary}</p>
-                                        </div>
-                                    </td>
-                                    <td className="table-cell text-right font-medium">
-                                        {formatHours(wl.time_spent_seconds / 3600)}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    {data.worklogs.length > 50 && (
-                        <div className="p-4 text-center text-dark-400 text-sm border-t border-dark-700">
-                            Mostrati 50 di {data.worklogs.length} worklog
-                        </div>
-                    )}
-                </div>
-            </div>
+            {/* Calendario Worklog */}
+            <WorklogCalendar
+                worklogs={data.worklogs}
+                onUserClick={(email) => navigate(`/users/${encodeURIComponent(email)}`)}
+            />
         </div>
     )
 }

@@ -301,7 +301,7 @@ async def delete_jira_account(user_id: int, jira_instance: str):
 
 @router.post("/import-config", response_model=ImportConfigResponse)
 async def import_from_config(config: AppConfig = Depends(get_config)):
-    """Import teams and users from config.yaml to database."""
+    """Import teams, users, and JIRA instances from config.yaml to database."""
     storage = get_storage()
 
     # Convert config teams to dict format
@@ -321,15 +321,309 @@ async def import_from_config(config: AppConfig = Depends(get_config)):
     ]
 
     result = await storage.import_teams_from_config(teams_config)
-    return ImportConfigResponse(**result)
+
+    # Import JIRA instances
+    jira_instances_created = 0
+    for instance in config.jira_instances:
+        # Check if instance already exists
+        existing = await storage.get_jira_instance_by_name(instance.name)
+        if not existing:
+            await storage.create_jira_instance(
+                name=instance.name,
+                url=instance.url,
+                email=instance.email,
+                api_token=instance.api_token,
+                tempo_api_token=instance.tempo_api_token
+            )
+            jira_instances_created += 1
+
+    return ImportConfigResponse(
+        teams_created=result["teams_created"],
+        users_created=result["users_created"],
+        jira_instances_created=jira_instances_created
+    )
 
 
 @router.get("/jira-instances")
-async def get_jira_instances(config: AppConfig = Depends(get_config)):
-    """Get list of configured JIRA instances (names only, no credentials)."""
+async def get_jira_instances():
+    """Get list of JIRA instances from database with fallback to config.yaml."""
+    storage = get_storage()
+    instances = await storage.get_all_jira_instances(include_credentials=False)
+
+    # If database is empty, fallback to config.yaml
+    if not instances:
+        try:
+            from ..config import get_config
+            config = get_config()
+            instances = [
+                {
+                    "id": idx,
+                    "name": inst.name,
+                    "url": inst.url,
+                    "is_active": True,
+                    "source": "config.yaml",  # Flag to indicate it's from config file
+                    "created_at": None,
+                    "updated_at": None
+                }
+                for idx, inst in enumerate(config.jira_instances, 1)
+            ]
+        except FileNotFoundError:
+            instances = []
+
+    return {"instances": instances}
+
+
+@router.post("/jira-instances")
+async def create_jira_instance(data: dict):
+    """Create a new JIRA instance."""
+    storage = get_storage()
+
+    name = data.get("name")
+    url = data.get("url")
+    email = data.get("email")
+    api_token = data.get("api_token")
+    tempo_api_token = data.get("tempo_api_token")
+
+    if not all([name, url, email, api_token]):
+        raise HTTPException(status_code=400, detail="name, url, email, and api_token are required")
+
+    # Check if name already exists
+    existing = await storage.get_jira_instance_by_name(name)
+    if existing:
+        raise HTTPException(status_code=400, detail="Instance name already exists")
+
+    instance_id = await storage.create_jira_instance(
+        name=name,
+        url=url,
+        email=email,
+        api_token=api_token,
+        tempo_api_token=tempo_api_token
+    )
+
+    instance = await storage.get_jira_instance(instance_id)
+    # Don't expose credentials in response
     return {
-        "instances": [
-            {"name": inst.name, "url": inst.url}
-            for inst in config.jira_instances
-        ]
+        "id": instance["id"],
+        "name": instance["name"],
+        "url": instance["url"],
+        "is_active": instance["is_active"],
+        "has_tempo": bool(instance.get("tempo_api_token"))
     }
+
+
+@router.get("/jira-instances/{instance_id}")
+async def get_jira_instance(instance_id: int, include_credentials: bool = False):
+    """Get a JIRA instance by ID."""
+    storage = get_storage()
+
+    instance = await storage.get_jira_instance(instance_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail="Instance not found")
+
+    result = {
+        "id": instance["id"],
+        "name": instance["name"],
+        "url": instance["url"],
+        "is_active": instance["is_active"],
+        "has_tempo": bool(instance.get("tempo_api_token")),
+        "created_at": instance["created_at"],
+        "updated_at": instance["updated_at"]
+    }
+
+    if include_credentials:
+        result["email"] = instance["email"]
+        result["api_token"] = instance["api_token"]
+        result["tempo_api_token"] = instance.get("tempo_api_token")
+
+    return result
+
+
+@router.put("/jira-instances/{instance_id}")
+async def update_jira_instance(instance_id: int, data: dict):
+    """Update a JIRA instance."""
+    storage = get_storage()
+
+    existing = await storage.get_jira_instance(instance_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Instance not found")
+
+    # Check name uniqueness if changing
+    if data.get("name") and data["name"] != existing["name"]:
+        name_check = await storage.get_jira_instance_by_name(data["name"])
+        if name_check:
+            raise HTTPException(status_code=400, detail="Instance name already exists")
+
+    await storage.update_jira_instance(instance_id, **data)
+
+    updated = await storage.get_jira_instance(instance_id)
+    return {
+        "id": updated["id"],
+        "name": updated["name"],
+        "url": updated["url"],
+        "is_active": updated["is_active"],
+        "has_tempo": bool(updated.get("tempo_api_token"))
+    }
+
+
+@router.delete("/jira-instances/{instance_id}")
+async def delete_jira_instance(instance_id: int):
+    """Delete a JIRA instance."""
+    storage = get_storage()
+
+    existing = await storage.get_jira_instance(instance_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Instance not found")
+
+    await storage.delete_jira_instance(instance_id)
+    return {"success": True, "message": "Instance deleted"}
+
+
+@router.post("/jira-instances/{instance_id}/test")
+async def test_jira_instance(instance_id: int):
+    """Test connection to a JIRA instance."""
+    storage = get_storage()
+
+    instance = await storage.get_jira_instance(instance_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail="Instance not found")
+
+    # Create a temporary config for the JiraClient
+    from ..models import JiraInstanceConfig
+    instance_config = JiraInstanceConfig(
+        name=instance["name"],
+        url=instance["url"],
+        email=instance["email"],
+        api_token=instance["api_token"],
+        tempo_api_token=instance.get("tempo_api_token")
+    )
+
+    try:
+        client = JiraClient(instance_config)
+        # Try to get current user to test connection
+        result = await client.test_connection()
+        return {"success": True, "message": "Connection successful", "user": result}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+
+# ========== Complementary Groups Endpoints ==========
+
+@router.get("/complementary-groups")
+async def list_complementary_groups():
+    """List all complementary groups with their members."""
+    storage = get_storage()
+    groups = await storage.get_all_complementary_groups()
+    return {"groups": groups}
+
+
+@router.post("/complementary-groups")
+async def create_complementary_group(data: dict):
+    """Create a new complementary group."""
+    storage = get_storage()
+
+    name = data.get("name")
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+
+    primary_instance_id = data.get("primary_instance_id")
+    member_ids = data.get("member_ids", [])
+
+    # Validate primary_instance_id if provided
+    if primary_instance_id:
+        instance = await storage.get_jira_instance(primary_instance_id)
+        if not instance:
+            raise HTTPException(status_code=400, detail="Primary instance not found")
+
+    group_id = await storage.create_complementary_group(
+        name=name,
+        primary_instance_id=primary_instance_id
+    )
+
+    # Add members if provided
+    for instance_id in member_ids:
+        await storage.add_instance_to_complementary_group(group_id, instance_id)
+
+    group = await storage.get_complementary_group(group_id)
+    return group
+
+
+@router.get("/complementary-groups/{group_id}")
+async def get_complementary_group(group_id: int):
+    """Get a complementary group with its members."""
+    storage = get_storage()
+
+    group = await storage.get_complementary_group(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    return group
+
+
+@router.put("/complementary-groups/{group_id}")
+async def update_complementary_group(group_id: int, data: dict):
+    """Update a complementary group."""
+    storage = get_storage()
+
+    existing = await storage.get_complementary_group(group_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    # Update basic fields
+    if "name" in data or "primary_instance_id" in data:
+        await storage.update_complementary_group(
+            group_id,
+            name=data.get("name"),
+            primary_instance_id=data.get("primary_instance_id")
+        )
+
+    # Update members if provided
+    if "member_ids" in data:
+        await storage.set_complementary_group_members(group_id, data["member_ids"])
+
+    updated = await storage.get_complementary_group(group_id)
+    return updated
+
+
+@router.delete("/complementary-groups/{group_id}")
+async def delete_complementary_group(group_id: int):
+    """Delete a complementary group."""
+    storage = get_storage()
+
+    existing = await storage.get_complementary_group(group_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    await storage.delete_complementary_group(group_id)
+    return {"success": True, "message": "Group deleted"}
+
+
+@router.post("/complementary-groups/{group_id}/members/{instance_id}")
+async def add_member_to_group(group_id: int, instance_id: int):
+    """Add an instance to a complementary group."""
+    storage = get_storage()
+
+    group = await storage.get_complementary_group(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    instance = await storage.get_jira_instance(instance_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail="Instance not found")
+
+    added = await storage.add_instance_to_complementary_group(group_id, instance_id)
+    if not added:
+        raise HTTPException(status_code=400, detail="Instance already in group")
+
+    return {"success": True, "message": "Instance added to group"}
+
+
+@router.delete("/complementary-groups/{group_id}/members/{instance_id}")
+async def remove_member_from_group(group_id: int, instance_id: int):
+    """Remove an instance from a complementary group."""
+    storage = get_storage()
+
+    removed = await storage.remove_instance_from_complementary_group(group_id, instance_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Instance not in group")
+
+    return {"success": True, "message": "Instance removed from group"}

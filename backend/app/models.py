@@ -186,6 +186,7 @@ class ImportConfigResponse(BaseModel):
     """Response from import config operation."""
     teams_created: int
     users_created: int
+    jira_instances_created: int = 0
 
 
 # ============ API Response Models ============
@@ -212,12 +213,13 @@ class UserHours(BaseModel):
 
 
 class EpicHours(BaseModel):
-    """Hours logged on an Epic."""
-    epic_key: str
-    epic_name: str
+    """Hours logged on a parent initiative (Epic, Project, etc.)."""
+    epic_key: str  # Actually parent_key (kept for backward compatibility)
+    epic_name: str  # Actually parent_name (kept for backward compatibility)
     total_hours: float
     contributor_count: int
     jira_instance: str
+    parent_type: Optional[str] = None  # "Epic", "Project", "Story", etc.
 
 
 class DashboardResponse(BaseModel):

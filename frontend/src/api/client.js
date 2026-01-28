@@ -1,8 +1,13 @@
 /**
  * API client for the JIRA Worklog Dashboard backend.
+ * Supports both web (via Vite proxy) and desktop (Tauri) modes.
  */
 
-const API_BASE = '/api'
+// Detect if running in Tauri desktop environment
+const isTauri = () => typeof window !== 'undefined' && window.__TAURI_INTERNALS__ !== undefined
+
+// In Tauri, connect directly to the backend; in web, use Vite proxy
+const API_BASE = isTauri() ? 'http://localhost:8000/api' : '/api'
 
 /**
  * Format a date for API requests
@@ -12,10 +17,21 @@ function formatDate(date) {
 }
 
 /**
+ * Build the full API URL, handling both web and Tauri contexts
+ */
+function buildApiUrl(endpoint) {
+    if (isTauri()) {
+        return `${API_BASE}${endpoint}`
+    }
+    return `${API_BASE}${endpoint}`
+}
+
+/**
  * Generic fetch wrapper with error handling
  */
 async function fetchApi(endpoint, params = {}) {
-    const url = new URL(`${API_BASE}${endpoint}`, window.location.origin)
+    const baseUrl = buildApiUrl(endpoint)
+    const url = new URL(baseUrl, isTauri() ? undefined : window.location.origin)
 
     Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
@@ -240,6 +256,58 @@ export async function getJiraInstances() {
     return fetchApi('/settings/jira-instances')
 }
 
+export async function createJiraInstance(data) {
+    return fetchApiPost('/settings/jira-instances', data)
+}
+
+export async function getJiraInstance(instanceId, includeCredentials = false) {
+    return fetchApi(`/settings/jira-instances/${instanceId}`, {
+        include_credentials: includeCredentials
+    })
+}
+
+export async function updateJiraInstance(instanceId, data) {
+    return fetchApiPut(`/settings/jira-instances/${instanceId}`, data)
+}
+
+export async function deleteJiraInstance(instanceId) {
+    return fetchApiDelete(`/settings/jira-instances/${instanceId}`)
+}
+
+export async function testJiraInstance(instanceId) {
+    return fetchApiPost(`/settings/jira-instances/${instanceId}/test`, {})
+}
+
+// ============ Settings API - Complementary Groups ============
+
+export async function getComplementaryGroups() {
+    return fetchApi('/settings/complementary-groups')
+}
+
+export async function createComplementaryGroup(data) {
+    return fetchApiPost('/settings/complementary-groups', data)
+}
+
+export async function getComplementaryGroup(groupId) {
+    return fetchApi(`/settings/complementary-groups/${groupId}`)
+}
+
+export async function updateComplementaryGroup(groupId, data) {
+    return fetchApiPut(`/settings/complementary-groups/${groupId}`, data)
+}
+
+export async function deleteComplementaryGroup(groupId) {
+    return fetchApiDelete(`/settings/complementary-groups/${groupId}`)
+}
+
+export async function addInstanceToGroup(groupId, instanceId) {
+    return fetchApiPost(`/settings/complementary-groups/${groupId}/members/${instanceId}`, {})
+}
+
+export async function removeInstanceFromGroup(groupId, instanceId) {
+    return fetchApiDelete(`/settings/complementary-groups/${groupId}/members/${instanceId}`)
+}
+
 // ============ Logs API ============
 
 export async function getLogs(params = {}) {
@@ -259,7 +327,8 @@ export async function getLogStats() {
 }
 
 export async function downloadLogs(format = 'json', filters = {}) {
-    const url = new URL(`${API_BASE}/logs/download`, window.location.origin)
+    const baseUrl = buildApiUrl('/logs/download')
+    const url = new URL(baseUrl, isTauri() ? undefined : window.location.origin)
     url.searchParams.set('format', format)
 
     if (filters.level) url.searchParams.set('level', filters.level)

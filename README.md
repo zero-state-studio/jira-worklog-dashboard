@@ -78,8 +78,14 @@ jira-worklog-dashboard/
 │   │   ├── pages/           # Page views
 │   │   ├── api/             # API client
 │   │   └── hooks/           # Custom hooks
+│   ├── src-tauri/            # Tauri desktop app
+│   │   ├── src/lib.rs        # Tauri Rust code
+│   │   ├── tauri.conf.json   # Tauri configuration
+│   │   └── binaries/         # Backend sidecar
 │   ├── package.json
 │   └── tailwind.config.js
+├── scripts/
+│   └── build-backend.sh      # Script per build backend
 └── README.md
 ```
 
@@ -126,6 +132,41 @@ settings:
 | `GET /api/epics/{key}?start_date=&end_date=` | Dettaglio epic |
 | `POST /api/cache/clear` | Svuota cache |
 
+## 🖥️ Desktop App (Tauri)
+
+L'applicazione può essere eseguita anche come app desktop nativa usando Tauri.
+
+### Sviluppo Desktop
+
+```bash
+# 1. Avvia il backend Python (in un terminale)
+cd backend
+source venv/bin/activate
+uvicorn app.main:app --reload --port 8000
+
+# 2. Avvia l'app desktop (in un altro terminale)
+cd frontend
+npm run tauri:dev
+```
+
+### Build Desktop per Distribuzione
+
+```bash
+# 1. Compila il backend Python come eseguibile
+./scripts/build-backend.sh
+
+# 2. Compila l'app desktop
+cd frontend
+npm run tauri:build
+```
+
+L'app compilata sarà disponibile in `frontend/src-tauri/target/release/bundle/`.
+
+### Requisiti Tauri
+
+- **Rust** - `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+- **Xcode Command Line Tools** (macOS) - `xcode-select --install`
+
 ## 🛠️ Stack Tecnico
 
 ### Backend
@@ -143,6 +184,10 @@ settings:
 - **Recharts** - Grafici
 - **React Router** - Routing
 - **date-fns** - Utilità date
+
+### Desktop (opzionale)
+- **Tauri 2** - Framework per app desktop native
+- **Rust** - Backend Tauri
 
 ## 📝 License
 

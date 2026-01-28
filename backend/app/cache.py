@@ -186,6 +186,50 @@ class WorklogStorage:
                     ON logs(request_id)
                 """)
 
+                # ========== JIRA Instances Table ==========
+
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS jira_instances (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL UNIQUE,
+                        url TEXT NOT NULL,
+                        email TEXT NOT NULL,
+                        api_token TEXT NOT NULL,
+                        tempo_api_token TEXT,
+                        is_active INTEGER DEFAULT 1,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # Complementary instance groups - instances in same group track same work
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS complementary_groups (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL UNIQUE,
+                        primary_instance_id INTEGER REFERENCES jira_instances(id) ON DELETE SET NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # Junction table for complementary group members
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS complementary_group_members (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        group_id INTEGER NOT NULL REFERENCES complementary_groups(id) ON DELETE CASCADE,
+                        instance_id INTEGER NOT NULL REFERENCES jira_instances(id) ON DELETE CASCADE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(group_id, instance_id)
+                    )
+                """)
+
+                # Index for JIRA instances
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_jira_instances_name
+                    ON jira_instances(name)
+                """)
+
                 # ========== Migrations ==========
 
                 # Add parent columns to worklogs table (migration)
@@ -1063,6 +1107,391 @@ class WorklogStorage:
             "by_level": by_level,
             "date_range": date_range
         }
+
+    # ========== JIRA Instance Operations ==========
+
+    async def create_jira_instance(
+        self,
+        name: str,
+        url: str,
+        email: str,
+        api_token: str,
+        tempo_api_token: Optional[str] = None
+    ) -> int:
+        """Create a new JIRA instance. Returns instance_id."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                INSERT INTO jira_instances (name, url, email, api_token, tempo_api_token)
+                VALUES (?, ?, ?, ?, ?)
+            """, (name, url, email, api_token, tempo_api_token))
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_jira_instance(self, instance_id: int) -> Optional[dict]:
+        """Get a JIRA instance by ID."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT id, name, url, email, api_token, tempo_api_token, is_active,
+                       created_at, updated_at
+                FROM jira_instances WHERE id = ?
+            """, (instance_id,)) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return {
+                        "id": row[0],
+                        "name": row[1],
+                        "url": row[2],
+                        "email": row[3],
+                        "api_token": row[4],
+                        "tempo_api_token": row[5],
+                        "is_active": bool(row[6]),
+                        "created_at": row[7],
+                        "updated_at": row[8]
+                    }
+        return None
+
+    async def get_jira_instance_by_name(self, name: str) -> Optional[dict]:
+        """Get a JIRA instance by name."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT id, name, url, email, api_token, tempo_api_token, is_active,
+                       created_at, updated_at
+                FROM jira_instances WHERE name = ?
+            """, (name,)) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return {
+                        "id": row[0],
+                        "name": row[1],
+                        "url": row[2],
+                        "email": row[3],
+                        "api_token": row[4],
+                        "tempo_api_token": row[5],
+                        "is_active": bool(row[6]),
+                        "created_at": row[7],
+                        "updated_at": row[8]
+                    }
+        return None
+
+    async def get_all_jira_instances(self, include_credentials: bool = False) -> list[dict]:
+        """Get all JIRA instances. Optionally include credentials."""
+        await self.initialize()
+
+        instances = []
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT id, name, url, email, api_token, tempo_api_token, is_active,
+                       created_at, updated_at
+                FROM jira_instances
+                ORDER BY name
+            """) as cursor:
+                async for row in cursor:
+                    instance = {
+                        "id": row[0],
+                        "name": row[1],
+                        "url": row[2],
+                        "is_active": bool(row[6]),
+                        "created_at": row[7],
+                        "updated_at": row[8]
+                    }
+                    if include_credentials:
+                        instance["email"] = row[3]
+                        instance["api_token"] = row[4]
+                        instance["tempo_api_token"] = row[5]
+                    instances.append(instance)
+        return instances
+
+    async def update_jira_instance(self, instance_id: int, **kwargs) -> bool:
+        """Update JIRA instance fields. Returns True if updated."""
+        await self.initialize()
+
+        allowed_fields = {"name", "url", "email", "api_token", "tempo_api_token", "is_active"}
+        updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
+
+        if not updates:
+            return False
+
+        set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
+        values = list(updates.values())
+        values.append(instance_id)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                f"UPDATE jira_instances SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                values
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def delete_jira_instance(self, instance_id: int) -> bool:
+        """Delete a JIRA instance. Returns True if deleted."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "DELETE FROM jira_instances WHERE id = ?",
+                (instance_id,)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    # ========== Complementary Group Operations ==========
+
+    async def create_complementary_group(
+        self,
+        name: str,
+        primary_instance_id: Optional[int] = None
+    ) -> int:
+        """Create a new complementary group. Returns group_id."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                INSERT INTO complementary_groups (name, primary_instance_id)
+                VALUES (?, ?)
+            """, (name, primary_instance_id))
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_complementary_group(self, group_id: int) -> Optional[dict]:
+        """Get a complementary group with its members."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT g.id, g.name, g.primary_instance_id, g.created_at, g.updated_at,
+                       pi.name as primary_instance_name
+                FROM complementary_groups g
+                LEFT JOIN jira_instances pi ON pi.id = g.primary_instance_id
+                WHERE g.id = ?
+            """, (group_id,)) as cursor:
+                row = await cursor.fetchone()
+                if not row:
+                    return None
+
+                group = {
+                    "id": row[0],
+                    "name": row[1],
+                    "primary_instance_id": row[2],
+                    "primary_instance_name": row[5],
+                    "created_at": row[3],
+                    "updated_at": row[4],
+                    "members": []
+                }
+
+            # Get members
+            async with db.execute("""
+                SELECT ji.id, ji.name, ji.url
+                FROM complementary_group_members cgm
+                JOIN jira_instances ji ON ji.id = cgm.instance_id
+                WHERE cgm.group_id = ?
+                ORDER BY ji.name
+            """, (group_id,)) as cursor:
+                async for row in cursor:
+                    group["members"].append({
+                        "id": row[0],
+                        "name": row[1],
+                        "url": row[2]
+                    })
+
+        return group
+
+    async def get_all_complementary_groups(self) -> list[dict]:
+        """Get all complementary groups with their members."""
+        await self.initialize()
+
+        groups = []
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT g.id, g.name, g.primary_instance_id, g.created_at, g.updated_at,
+                       pi.name as primary_instance_name
+                FROM complementary_groups g
+                LEFT JOIN jira_instances pi ON pi.id = g.primary_instance_id
+                ORDER BY g.name
+            """) as cursor:
+                async for row in cursor:
+                    groups.append({
+                        "id": row[0],
+                        "name": row[1],
+                        "primary_instance_id": row[2],
+                        "primary_instance_name": row[5],
+                        "created_at": row[3],
+                        "updated_at": row[4],
+                        "members": []
+                    })
+
+            # Get members for all groups
+            group_ids = [g["id"] for g in groups]
+            if group_ids:
+                placeholders = ",".join("?" * len(group_ids))
+                async with db.execute(f"""
+                    SELECT cgm.group_id, ji.id, ji.name, ji.url
+                    FROM complementary_group_members cgm
+                    JOIN jira_instances ji ON ji.id = cgm.instance_id
+                    WHERE cgm.group_id IN ({placeholders})
+                    ORDER BY ji.name
+                """, group_ids) as cursor:
+                    async for row in cursor:
+                        group_id, inst_id, inst_name, inst_url = row
+                        for group in groups:
+                            if group["id"] == group_id:
+                                group["members"].append({
+                                    "id": inst_id,
+                                    "name": inst_name,
+                                    "url": inst_url
+                                })
+                                break
+
+        return groups
+
+    async def update_complementary_group(
+        self,
+        group_id: int,
+        name: Optional[str] = None,
+        primary_instance_id: Optional[int] = None
+    ) -> bool:
+        """Update complementary group. Returns True if updated."""
+        await self.initialize()
+
+        updates = []
+        values = []
+
+        if name is not None:
+            updates.append("name = ?")
+            values.append(name)
+        if primary_instance_id is not None:
+            updates.append("primary_instance_id = ?")
+            values.append(primary_instance_id if primary_instance_id > 0 else None)
+
+        if not updates:
+            return False
+
+        values.append(group_id)
+        set_clause = ", ".join(updates)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                f"UPDATE complementary_groups SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                values
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def delete_complementary_group(self, group_id: int) -> bool:
+        """Delete a complementary group. Returns True if deleted."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "DELETE FROM complementary_groups WHERE id = ?",
+                (group_id,)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def add_instance_to_complementary_group(
+        self,
+        group_id: int,
+        instance_id: int
+    ) -> bool:
+        """Add an instance to a complementary group. Returns True if added."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            try:
+                await db.execute("""
+                    INSERT INTO complementary_group_members (group_id, instance_id)
+                    VALUES (?, ?)
+                """, (group_id, instance_id))
+                await db.commit()
+                return True
+            except Exception:
+                return False  # Already exists
+
+    async def remove_instance_from_complementary_group(
+        self,
+        group_id: int,
+        instance_id: int
+    ) -> bool:
+        """Remove an instance from a complementary group. Returns True if removed."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                DELETE FROM complementary_group_members
+                WHERE group_id = ? AND instance_id = ?
+            """, (group_id, instance_id))
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def set_complementary_group_members(
+        self,
+        group_id: int,
+        instance_ids: list[int]
+    ) -> bool:
+        """Set the members of a complementary group (replaces existing)."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            # Remove all existing members
+            await db.execute(
+                "DELETE FROM complementary_group_members WHERE group_id = ?",
+                (group_id,)
+            )
+
+            # Add new members
+            for instance_id in instance_ids:
+                await db.execute("""
+                    INSERT INTO complementary_group_members (group_id, instance_id)
+                    VALUES (?, ?)
+                """, (group_id, instance_id))
+
+            await db.commit()
+            return True
+
+    async def get_complementary_instance_names(self) -> list[str]:
+        """
+        Get list of complementary instance names for backward compatibility.
+        Returns names of instances in all complementary groups (for filtering).
+        """
+        await self.initialize()
+
+        names = []
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT DISTINCT ji.name
+                FROM complementary_group_members cgm
+                JOIN jira_instances ji ON ji.id = cgm.instance_id
+            """) as cursor:
+                async for row in cursor:
+                    names.append(row[0])
+        return names
+
+    async def get_primary_instance_for_complementary(self) -> Optional[str]:
+        """
+        Get the primary instance name to use when complementary instances exist.
+        Returns the first primary instance found, or None.
+        """
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT ji.name
+                FROM complementary_groups cg
+                JOIN jira_instances ji ON ji.id = cg.primary_instance_id
+                WHERE cg.primary_instance_id IS NOT NULL
+                LIMIT 1
+            """) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return row[0]
+        return None
 
     # ========== Utility Operations ==========
 

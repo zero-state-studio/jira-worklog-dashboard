@@ -119,7 +119,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 # Add logging middleware (before CORS)
 app.add_middleware(LoggingMiddleware)
 
-# Configure CORS for frontend
+# Configure CORS for frontend (web and Tauri desktop)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -127,6 +127,8 @@ app.add_middleware(
         "http://localhost:3000",  # Alternative dev server
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
+        "tauri://localhost",      # Tauri desktop app
+        "https://tauri.localhost", # Tauri desktop app (alternative)
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -215,3 +217,9 @@ async def clear_cache():
     cache = get_cache()
     await cache.clear_all()
     return {"status": "ok", "message": "Cache cleared"}
+
+
+# Entry point for running as standalone executable (Tauri sidecar)
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")

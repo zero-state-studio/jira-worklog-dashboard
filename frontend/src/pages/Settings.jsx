@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getSettingsTeams, getSettingsUsers, getJiraInstances, importConfigToDatabase } from '../api/client'
+import { getSettingsTeams, getSettingsUsers, getJiraInstances, getComplementaryGroups, importConfigToDatabase } from '../api/client'
 import TeamsSection from '../components/settings/TeamsSection'
 import UsersSection from '../components/settings/UsersSection'
 import LogsSection from '../components/settings/LogsSection'
+import JiraInstancesSection from '../components/settings/JiraInstancesSection'
 
 const SettingsIcon = () => (
     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -19,10 +20,11 @@ const ImportIcon = () => (
 )
 
 export default function Settings() {
-    const [activeTab, setActiveTab] = useState('teams')
+    const [activeTab, setActiveTab] = useState('jira')
     const [teams, setTeams] = useState([])
     const [users, setUsers] = useState([])
     const [jiraInstances, setJiraInstances] = useState([])
+    const [complementaryGroups, setComplementaryGroups] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
     const [importing, setImporting] = useState(false)
@@ -33,15 +35,17 @@ export default function Settings() {
             setLoading(true)
             setError(null)
 
-            const [teamsData, usersData, instancesData] = await Promise.all([
+            const [teamsData, usersData, instancesData, groupsData] = await Promise.all([
                 getSettingsTeams(),
                 getSettingsUsers(),
-                getJiraInstances()
+                getJiraInstances(),
+                getComplementaryGroups()
             ])
 
             setTeams(teamsData)
             setUsers(usersData)
             setJiraInstances(instancesData.instances || [])
+            setComplementaryGroups(groupsData.groups || [])
         } catch (err) {
             setError(err.message)
         } finally {
@@ -76,6 +80,15 @@ export default function Settings() {
     const handleUsersChange = async () => {
         const usersData = await getSettingsUsers()
         setUsers(usersData)
+    }
+
+    const handleJiraDataChange = async () => {
+        const [instancesData, groupsData] = await Promise.all([
+            getJiraInstances(),
+            getComplementaryGroups()
+        ])
+        setJiraInstances(instancesData.instances || [])
+        setComplementaryGroups(groupsData.groups || [])
     }
 
     return (
@@ -118,7 +131,7 @@ export default function Settings() {
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
-                        Importazione completata: {importResult.teams_created} team e {importResult.users_created} utenti creati
+                        Importazione completata: {importResult.jira_instances_created || 0} istanze JIRA, {importResult.teams_created} team e {importResult.users_created} utenti creati
                     </div>
                 </div>
             )}
@@ -137,7 +150,17 @@ export default function Settings() {
             )}
 
             {/* Tabs */}
-            <div className="flex gap-2 mb-6">
+            <div className="flex gap-2 mb-6 flex-wrap">
+                <button
+                    onClick={() => setActiveTab('jira')}
+                    className={`px-6 py-3 rounded-lg font-medium transition-all ${
+                        activeTab === 'jira'
+                            ? 'bg-gradient-primary text-white shadow-glow'
+                            : 'bg-dark-800 text-dark-300 hover:bg-dark-700 hover:text-dark-100'
+                    }`}
+                >
+                    JIRA ({jiraInstances.length})
+                </button>
                 <button
                     onClick={() => setActiveTab('teams')}
                     className={`px-6 py-3 rounded-lg font-medium transition-all ${
@@ -177,6 +200,13 @@ export default function Settings() {
                 </div>
             ) : (
                 <>
+                    {activeTab === 'jira' && (
+                        <JiraInstancesSection
+                            instances={jiraInstances}
+                            complementaryGroups={complementaryGroups}
+                            onDataChange={handleJiraDataChange}
+                        />
+                    )}
                     {activeTab === 'teams' && (
                         <TeamsSection
                             teams={teams}

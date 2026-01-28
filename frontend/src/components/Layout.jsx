@@ -132,7 +132,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                         </div>
                     )}
 
-                    {/* Epics Link */}
+                    {/* Iniziative Link */}
                     <div className="pt-4">
                         {sidebarOpen && <p className="px-4 text-xs font-semibold text-dark-500 uppercase tracking-wider mb-2">Iniziative</p>}
                         <NavLink
@@ -142,7 +142,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                             }
                         >
                             <EpicIcon />
-                            {sidebarOpen && <span>Epic</span>}
+                            {sidebarOpen && <span>Iniziative</span>}
                         </NavLink>
                     </div>
 

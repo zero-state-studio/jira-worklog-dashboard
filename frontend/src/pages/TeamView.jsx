@@ -61,8 +61,8 @@ export default function TeamView({ dateRange, selectedInstance }) {
         full_name: m.full_name,
     }))
 
-    // Transform epic data for pie chart
-    const epicPieData = data.epics.slice(0, 6).map(e => ({
+    // Transform initiative data for pie chart
+    const initiativePieData = data.epics.slice(0, 6).map(e => ({
         name: e.epic_name.length > 15 ? e.epic_name.substring(0, 15) + '...' : e.epic_name,
         value: e.total_hours,
         full_name: e.epic_name,
@@ -120,7 +120,7 @@ export default function TeamView({ dateRange, selectedInstance }) {
                     }
                 />
                 <StatCard
-                    label="Epic Lavorate"
+                    label="Iniziative Lavorate"
                     value={data.epics.length}
                     color="purple"
                     icon={
@@ -137,12 +137,12 @@ export default function TeamView({ dateRange, selectedInstance }) {
                     <TrendChart data={data.daily_trend} height={280} />
                 </ChartCard>
 
-                <ChartCard title="Distribuzione Epic" subtitle="Come sono distribuite le ore">
-                    {epicPieData.length > 0 ? (
-                        <DistributionChart data={epicPieData} height={280} />
+                <ChartCard title="Distribuzione Iniziative" subtitle="Come sono distribuite le ore">
+                    {initiativePieData.length > 0 ? (
+                        <DistributionChart data={initiativePieData} height={280} />
                     ) : (
                         <div className="h-64 flex items-center justify-center text-dark-400">
-                            Nessuna epic nel periodo selezionato
+                            Nessuna iniziativa nel periodo selezionato
                         </div>
                     )}
                 </ChartCard>
@@ -177,10 +177,10 @@ export default function TeamView({ dateRange, selectedInstance }) {
                 </ChartCard>
             </div>
 
-            {/* Epics Section */}
+            {/* Iniziative Section */}
             {data.epics.length > 0 && (
                 <div>
-                    <h2 className="text-lg font-semibold text-dark-100 mb-4">Epic Lavorate</h2>
+                    <h2 className="text-lg font-semibold text-dark-100 mb-4">Iniziative Lavorate</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {data.epics.slice(0, 8).map((epic) => (
                             <EpicCard
@@ -190,6 +190,7 @@ export default function TeamView({ dateRange, selectedInstance }) {
                                 hours={epic.total_hours}
                                 contributorCount={epic.contributor_count}
                                 jiraInstance={epic.jira_instance}
+                                parentType={epic.parent_type}
                                 onClick={() => navigate(`/epics/${encodeURIComponent(epic.epic_key)}`)}
                             />
                         ))}

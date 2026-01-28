@@ -76,32 +76,41 @@ async def get_epic_detail(
         user_emails=all_emails
     )
 
-    # Filter to this epic only
-    epic_worklogs = [w for w in all_worklogs if w.epic_key == epic_key]
+    # Filter to this initiative (using parent_key, with fallback to epic_key for backwards compatibility)
+    initiative_worklogs = [
+        w for w in all_worklogs
+        if w.parent_key == epic_key or w.epic_key == epic_key
+    ]
 
-    if not epic_worklogs:
+    if not initiative_worklogs:
         raise HTTPException(
             status_code=404,
-            detail=f"No worklogs found for epic '{epic_key}'"
+            detail=f"No worklogs found for initiative '{epic_key}'"
         )
 
-    # Get epic info from first worklog
-    first_wl = epic_worklogs[0]
-    epic_name = first_wl.epic_name or "Unknown"
+    # Get initiative info from first worklog (prefer parent_key data)
+    first_wl = initiative_worklogs[0]
+    if first_wl.parent_key == epic_key:
+        epic_name = first_wl.parent_name or "Unknown"
+    else:
+        epic_name = first_wl.epic_name or "Unknown"
     jira_instance = first_wl.jira_instance
 
     # Calculate total hours
-    total_seconds = sum(w.time_spent_seconds for w in epic_worklogs)
+    total_seconds = sum(w.time_spent_seconds for w in initiative_worklogs)
     total_hours = total_seconds / 3600
 
     # Hours per contributor
-    contributors = await calculate_contributors_from_db(epic_worklogs, users)
+    contributors = await calculate_contributors_from_db(initiative_worklogs, users)
 
     # Daily trend
-    daily_trend = calculate_daily_trend(epic_worklogs, start_date, end_date)
+    daily_trend = calculate_daily_trend(initiative_worklogs, start_date, end_date)
+
+    # Enrich worklogs with resolved author names from database
+    enriched_worklogs = enrich_worklogs_with_names(initiative_worklogs, users)
 
     # Sort worklogs by date (newest first)
-    sorted_worklogs = sorted(epic_worklogs, key=lambda w: w.started, reverse=True)
+    sorted_worklogs = sorted(enriched_worklogs, key=lambda w: w.started, reverse=True)
 
     return EpicDetailResponse(
         epic_key=epic_key,
@@ -112,6 +121,40 @@ async def get_epic_detail(
         daily_trend=daily_trend,
         worklogs=sorted_worklogs
     )
+
+
+def enrich_worklogs_with_names(worklogs: list[Worklog], users: list[dict]) -> list[Worklog]:
+    """Enrich worklogs with resolved author names from database."""
+    # Build email -> name lookup
+    email_to_name = {}
+    for u in users:
+        email_lower = u["email"].lower()
+        email_to_name[email_lower] = f"{u['first_name']} {u['last_name']}"
+
+    enriched = []
+    for wl in worklogs:
+        # Create a new worklog with resolved name
+        email_lower = wl.author_email.lower()
+        resolved_name = email_to_name.get(email_lower, wl.author_display_name or wl.author_email)
+
+        # Create enriched worklog with resolved name
+        enriched.append(Worklog(
+            id=wl.id,
+            issue_key=wl.issue_key,
+            issue_summary=wl.issue_summary,
+            author_email=wl.author_email,
+            author_display_name=resolved_name,  # Use resolved name
+            time_spent_seconds=wl.time_spent_seconds,
+            started=wl.started,
+            jira_instance=wl.jira_instance,
+            parent_key=wl.parent_key,
+            parent_name=wl.parent_name,
+            parent_type=wl.parent_type,
+            epic_key=wl.epic_key,
+            epic_name=wl.epic_name
+        ))
+
+    return enriched
 
 
 async def calculate_contributors_from_db(worklogs: list[Worklog], users: list[dict]) -> list[UserHours]:

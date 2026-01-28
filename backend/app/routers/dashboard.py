@@ -59,8 +59,8 @@ async def get_dashboard(
         config.settings.daily_working_hours
     )
 
-    # Hours per team
-    team_hours = calculate_team_hours(worklogs, email_to_team)
+    # Hours per team (with total member count from configuration)
+    team_hours = calculate_team_hours(worklogs, email_to_team, users)
 
     # Daily trend
     daily_trend = calculate_daily_trend(worklogs, start_date, end_date)
@@ -101,22 +101,38 @@ def calculate_expected_hours(
     return working_days * num_users * daily_hours
 
 
-def calculate_team_hours(worklogs: list[Worklog], email_to_team: dict[str, str]) -> list[TeamHours]:
-    """Calculate hours per team."""
-    team_data = defaultdict(lambda: {"hours": 0, "members": set()})
+def calculate_team_hours(
+    worklogs: list[Worklog],
+    email_to_team: dict[str, str],
+    users: list[dict]
+) -> list[TeamHours]:
+    """Calculate hours per team. Member count shows ALL team members, not just those who logged hours."""
+    # First, calculate total members per team from all users
+    team_member_count = defaultdict(int)
+    for user in users:
+        team_name = user.get("team_name")
+        if team_name:
+            team_member_count[team_name] += 1
+
+    # Then calculate hours from worklogs
+    team_hours = defaultdict(float)
+    teams_with_worklogs = set()
 
     for wl in worklogs:
         team_name = email_to_team.get(wl.author_email.lower())
         if team_name:
-            team_data[team_name]["hours"] += wl.time_spent_seconds / 3600
-            team_data[team_name]["members"].add(wl.author_email)
+            team_hours[team_name] += wl.time_spent_seconds / 3600
+            teams_with_worklogs.add(team_name)
+
+    # Build result: include all teams that have members or worklogs
+    all_teams = set(team_member_count.keys()) | teams_with_worklogs
 
     result = []
-    for team_name, data in sorted(team_data.items()):
+    for team_name in sorted(all_teams):
         result.append(TeamHours(
             team_name=team_name,
-            total_hours=round(data["hours"], 2),
-            member_count=len(data["members"])
+            total_hours=round(team_hours.get(team_name, 0), 2),
+            member_count=team_member_count.get(team_name, 0)
         ))
 
     return result
@@ -148,31 +164,35 @@ def calculate_daily_trend(
 
 
 def calculate_epic_hours(worklogs: list[Worklog]) -> list[EpicHours]:
-    """Calculate hours per epic."""
-    epic_data = defaultdict(lambda: {
-        "name": "Unknown", 
-        "hours": 0, 
+    """Calculate hours per parent initiative (Epic, Project, etc.)."""
+    initiative_data = defaultdict(lambda: {
+        "name": "Unknown",
+        "type": None,
+        "hours": 0,
         "contributors": set(),
         "instance": ""
     })
-    
+
     for wl in worklogs:
-        if wl.epic_key:
-            epic_data[wl.epic_key]["name"] = wl.epic_name or "Unknown"
-            epic_data[wl.epic_key]["hours"] += wl.time_spent_seconds / 3600
-            epic_data[wl.epic_key]["contributors"].add(wl.author_email)
-            epic_data[wl.epic_key]["instance"] = wl.jira_instance
-    
+        # Use parent_key/parent_name/parent_type instead of epic_key/epic_name
+        if wl.parent_key:
+            initiative_data[wl.parent_key]["name"] = wl.parent_name or "Unknown"
+            initiative_data[wl.parent_key]["type"] = wl.parent_type
+            initiative_data[wl.parent_key]["hours"] += wl.time_spent_seconds / 3600
+            initiative_data[wl.parent_key]["contributors"].add(wl.author_email)
+            initiative_data[wl.parent_key]["instance"] = wl.jira_instance
+
     result = []
-    for epic_key, data in epic_data.items():
+    for parent_key, data in initiative_data.items():
         result.append(EpicHours(
-            epic_key=epic_key,
-            epic_name=data["name"],
+            epic_key=parent_key,  # Using epic_key field for backward compatibility
+            epic_name=data["name"],  # Using epic_name field for backward compatibility
             total_hours=round(data["hours"], 2),
             contributor_count=len(data["contributors"]),
-            jira_instance=data["instance"]
+            jira_instance=data["instance"],
+            parent_type=data["type"]
         ))
-    
+
     # Sort by hours descending
     result.sort(key=lambda x: x.total_hours, reverse=True)
     return result

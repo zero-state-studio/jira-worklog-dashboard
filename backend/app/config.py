@@ -5,6 +5,7 @@ Loads and validates the YAML configuration file.
 import os
 from pathlib import Path
 from functools import lru_cache
+from typing import Optional, List, Dict, Set
 import yaml
 
 from .models import AppConfig, JiraInstanceConfig, TeamConfig, TeamMemberConfig, SettingsConfig
@@ -73,7 +74,7 @@ def get_config() -> AppConfig:
     return load_config_from_file(config_path)
 
 
-def get_user_team(email: str, config: AppConfig) -> str | None:
+def get_user_team(email: str, config: AppConfig) -> Optional[str]:
     """Find which team a user belongs to."""
     for team in config.teams:
         for member in team.members:
@@ -82,7 +83,7 @@ def get_user_team(email: str, config: AppConfig) -> str | None:
     return None
 
 
-def get_user_by_email(email: str, config: AppConfig) -> TeamMemberConfig | None:
+def get_user_by_email(email: str, config: AppConfig) -> Optional[TeamMemberConfig]:
     """Get user configuration by email."""
     for team in config.teams:
         for member in team.members:
@@ -91,7 +92,7 @@ def get_user_by_email(email: str, config: AppConfig) -> TeamMemberConfig | None:
     return None
 
 
-def get_all_team_emails(team_name: str, config: AppConfig) -> list[str]:
+def get_all_team_emails(team_name: str, config: AppConfig) -> List[str]:
     """Get all email addresses for a team."""
     for team in config.teams:
         if team.name.lower() == team_name.lower():
@@ -99,7 +100,7 @@ def get_all_team_emails(team_name: str, config: AppConfig) -> list[str]:
     return []
 
 
-def get_all_configured_emails(config: AppConfig) -> set[str]:
+def get_all_configured_emails(config: AppConfig) -> Set[str]:
     """Get all configured user emails."""
     emails = set()
     for team in config.teams:
@@ -199,7 +200,7 @@ async def get_users_from_db():
         return []
 
 
-async def get_all_emails_from_db() -> list[str]:
+async def get_all_emails_from_db() -> List[str]:
     """
     Get all user emails from database. Falls back to config.yaml if DB is empty.
     """
@@ -207,7 +208,7 @@ async def get_all_emails_from_db() -> list[str]:
     return [u["email"].lower() for u in users]
 
 
-async def get_team_emails_from_db(team_name: str) -> list[str]:
+async def get_team_emails_from_db(team_name: str) -> List[str]:
     """
     Get all emails for a specific team from database.
     """
@@ -218,7 +219,7 @@ async def get_team_emails_from_db(team_name: str) -> list[str]:
     return []
 
 
-async def get_user_team_from_db(email: str) -> str | None:
+async def get_user_team_from_db(email: str) -> Optional[str]:
     """
     Find which team a user belongs to (from database).
     """
@@ -229,7 +230,7 @@ async def get_user_team_from_db(email: str) -> str | None:
     return None
 
 
-async def get_user_by_email_from_db(email: str) -> dict | None:
+async def get_user_by_email_from_db(email: str) -> Optional[Dict]:
     """
     Get user by email from database.
     """
@@ -238,6 +239,78 @@ async def get_user_by_email_from_db(email: str) -> dict | None:
         if user["email"].lower() == email.lower():
             return user
     return None
+
+
+async def get_jira_instances_from_db() -> List[JiraInstanceConfig]:
+    """
+    Get JIRA instances from database. Falls back to config.yaml if DB is empty.
+    Returns list of JiraInstanceConfig objects ready for use with JiraClient.
+    """
+    from .cache import get_storage
+    storage = get_storage()
+    await storage.initialize()
+
+    instances = await storage.get_all_jira_instances()
+
+    # If database has instances, use them
+    if instances:
+        return [
+            JiraInstanceConfig(
+                name=inst["name"],
+                url=inst["url"],
+                email=inst["email"],
+                api_token=inst["api_token"]
+            )
+            for inst in instances
+        ]
+
+    # Fallback to config.yaml
+    try:
+        config = get_config()
+        return config.jira_instances
+    except FileNotFoundError:
+        return []
+
+
+async def get_complementary_instances_from_db() -> Dict[str, List[str]]:
+    """
+    Get complementary instance groups from database.
+    Returns a dict mapping group name to list of instance names that are complementary.
+    """
+    from .cache import get_storage
+    storage = get_storage()
+    await storage.initialize()
+
+    groups = await storage.get_all_complementary_groups()
+    result = {}
+
+    for group in groups:
+        instance_names = await storage.get_complementary_instance_names(group["id"])
+        if instance_names:
+            result[group["name"]] = instance_names
+
+    return result
+
+
+async def get_primary_instance_for_complementary_from_db(instance_name: str) -> Optional[str]:
+    """
+    Get the primary instance name for a given instance that's part of a complementary group.
+    Returns None if the instance is not part of any complementary group or is itself the primary.
+    """
+    from .cache import get_storage
+    storage = get_storage()
+    await storage.initialize()
+
+    return await storage.get_primary_instance_for_complementary(instance_name)
+
+
+async def is_instance_complementary_from_db(instance_name: str) -> bool:
+    """
+    Check if an instance is a non-primary member of a complementary group.
+    If True, hours from this instance should not be counted in 'All' view.
+    """
+    primary = await get_primary_instance_for_complementary_from_db(instance_name)
+    return primary is not None
 
 
 # Demo mode configuration - used when demo_mode is True

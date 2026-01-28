@@ -103,9 +103,9 @@ export default function Dashboard({ dateRange, selectedInstance }) {
                     }
                 />
                 <StatCard
-                    label="Epic Attive"
+                    label="Iniziative Attive"
                     value={data.top_epics.length}
-                    subtitle="Iniziative in corso"
+                    subtitle="Epic, Project e altro"
                     color="blue"
                     icon={
                         <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -168,10 +168,10 @@ export default function Dashboard({ dateRange, selectedInstance }) {
                 </ChartCard>
             </div>
 
-            {/* Epics Section */}
+            {/* Iniziative Section */}
             <div>
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-dark-100">Top Epic</h2>
+                    <h2 className="text-lg font-semibold text-dark-100">Top Iniziative</h2>
                     <button
                         onClick={() => navigate('/epics')}
                         className="text-accent-blue hover:text-accent-blue/80 text-sm font-medium transition-colors"
@@ -188,6 +188,7 @@ export default function Dashboard({ dateRange, selectedInstance }) {
                             hours={epic.total_hours}
                             contributorCount={epic.contributor_count}
                             jiraInstance={epic.jira_instance}
+                            parentType={epic.parent_type}
                             onClick={() => navigate(`/epics/${encodeURIComponent(epic.epic_key)}`)}
                         />
                     ))}

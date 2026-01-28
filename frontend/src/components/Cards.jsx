@@ -189,16 +189,32 @@ export function UserCard({ name, email, hours, teamName, onClick }) {
 }
 
 /**
- * Epic Card - clickable card showing epic summary
+ * Initiative Card - clickable card showing initiative (Epic, Project, etc.) summary
  */
-export function EpicCard({ epicKey, name, hours, contributorCount, jiraInstance, onClick }) {
+export function EpicCard({ epicKey, name, hours, contributorCount, jiraInstance, parentType, onClick }) {
+    // Badge color based on parent type
+    const getBadgeClass = () => {
+        switch (parentType) {
+            case 'Epic': return 'badge-purple'
+            case 'Project': return 'badge-blue'
+            default: return 'badge-purple'
+        }
+    }
+
     return (
         <div
             onClick={onClick}
             className="glass-card-hover p-4 animate-slide-up"
         >
             <div className="flex items-start justify-between mb-2">
-                <span className="badge-purple">{epicKey}</span>
+                <div className="flex items-center gap-2">
+                    <span className={getBadgeClass()}>{epicKey}</span>
+                    {parentType && (
+                        <span className="text-xs text-dark-500 bg-dark-700 px-2 py-0.5 rounded">
+                            {parentType}
+                        </span>
+                    )}
+                </div>
                 <span className="text-xs text-dark-500">{jiraInstance}</span>
             </div>
             <h4 className="font-medium text-dark-100 mb-2 line-clamp-2">{name}</h4>

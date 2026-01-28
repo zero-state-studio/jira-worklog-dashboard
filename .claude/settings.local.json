@@ -14,7 +14,23 @@
       "Bash(pkill:*)",
       "Bash(git init:*)",
       "Bash(git remote add:*)",
-      "Bash(git remote:*)"
+      "Bash(git remote:*)",
+      "Bash(tree:*)",
+      "Bash(rustc:*)",
+      "Bash(node:*)",
+      "Bash(npm --version)",
+      "Bash(npm install:*)",
+      "Bash(npx tauri init:*)",
+      "Bash(chmod:*)",
+      "Bash(npm run tauri:*)",
+      "Bash(cargo check:*)",
+      "Bash(python -m uvicorn:*)",
+      "Bash(brew list:*)",
+      "Bash(brew install:*)",
+      "Bash(/opt/homebrew/bin/python3.11:*)",
+      "Bash(pip install:*)",
+      "Bash(npm run tauri:dev:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }
