@@ -223,6 +223,79 @@ export function DistributionChart({ data, dataKey = 'value', nameKey = 'name', h
 }
 
 /**
+ * Multi-series Trend Area Chart - for comparing trends across JIRA instances
+ */
+export function MultiTrendChart({ series, height = 300 }) {
+    // series: [{ name: string, data: [{date, hours}], color: string }]
+    if (!series || series.length === 0) return null
+
+    // Merge all dates from all series into a single dataset
+    const dateMap = {}
+    series.forEach(s => {
+        s.data.forEach(item => {
+            const key = item.date
+            if (!dateMap[key]) {
+                dateMap[key] = { date: key, dateLabel: format(new Date(key), 'd MMM', { locale: it }) }
+            }
+            dateMap[key][s.name] = item.hours
+        })
+    })
+
+    const mergedData = Object.values(dateMap).sort((a, b) => a.date.localeCompare(b.date))
+
+    return (
+        <ResponsiveContainer width="100%" height={height}>
+            <AreaChart data={mergedData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <defs>
+                    {series.map((s, i) => (
+                        <linearGradient key={s.name} id={`multiColor${i}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={s.color} stopOpacity={0.3} />
+                            <stop offset="95%" stopColor={s.color} stopOpacity={0} />
+                        </linearGradient>
+                    ))}
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#30363d" vertical={false} />
+                <XAxis
+                    dataKey="dateLabel"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#8b949e', fontSize: 12 }}
+                    dy={10}
+                />
+                <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#8b949e', fontSize: 12 }}
+                    tickFormatter={(value) => `${value}h`}
+                    dx={-10}
+                />
+                <Tooltip
+                    content={<CustomTooltip formatter={(v) => formatHours(v)} />}
+                />
+                <Legend
+                    verticalAlign="top"
+                    height={36}
+                    wrapperStyle={{ color: '#c9d1d9', fontSize: 12 }}
+                />
+                {series.map((s, i) => (
+                    <Area
+                        key={s.name}
+                        type="monotone"
+                        dataKey={s.name}
+                        name={s.name}
+                        stroke={s.color}
+                        strokeWidth={2}
+                        fill={`url(#multiColor${i})`}
+                        dot={false}
+                        activeDot={{ r: 5, fill: s.color, stroke: '#fff', strokeWidth: 2 }}
+                    />
+                ))}
+            </AreaChart>
+        </ResponsiveContainer>
+    )
+}
+
+/**
  * Chart Card - wrapper for charts with title
  */
 export function ChartCard({ title, subtitle, children, className = '' }) {

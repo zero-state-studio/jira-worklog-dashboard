@@ -293,3 +293,44 @@ class EpicDetailResponse(BaseModel):
     contributors: list[UserHours]
     daily_trend: list[DailyHours]
     worklogs: list[Worklog]
+
+
+# ============ Multi-JIRA Overview Models ============
+
+class InstanceOverview(BaseModel):
+    """Overview metrics for a single JIRA instance."""
+    instance_name: str
+    total_hours: float
+    expected_hours: float
+    completion_percentage: float
+    initiative_count: int
+    contributor_count: int
+    daily_trend: list[DailyHours]
+
+
+class DiscrepancyItem(BaseModel):
+    """A discrepancy between complementary JIRA instances for an initiative."""
+    initiative_key: str
+    initiative_name: str
+    primary_hours: float
+    secondary_hours: float
+    delta_hours: float
+    delta_percentage: float
+
+
+class ComplementaryComparison(BaseModel):
+    """Comparison between complementary JIRA instances."""
+    group_name: str
+    primary_instance: str
+    secondary_instance: str
+    primary_total_hours: float
+    secondary_total_hours: float
+    discrepancies: list[DiscrepancyItem]
+
+
+class MultiJiraOverviewResponse(BaseModel):
+    """Response for the multi-JIRA overview page."""
+    instances: list[InstanceOverview]
+    complementary_comparisons: list[ComplementaryComparison]
+    period_start: date
+    period_end: date

@@ -97,6 +97,13 @@ export async function getEpics(startDate, endDate, jiraInstance = null) {
     })
 }
 
+export async function getMultiJiraOverview(startDate, endDate) {
+    return fetchApi('/dashboard/multi-jira-overview', {
+        start_date: formatDate(startDate),
+        end_date: formatDate(endDate)
+    })
+}
+
 export async function getEpicDetail(epicKey, startDate, endDate, jiraInstance = null) {
     return fetchApi(`/epics/${encodeURIComponent(epicKey)}`, {
         start_date: formatDate(startDate),
