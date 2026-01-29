@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getUserDetail } from '../api/client'
 import { formatHours } from '../hooks/useData'
 import { StatCard, ProgressBar, EpicCard, ErrorState, EmptyState } from '../components/Cards'
-import { TrendChart, DistributionChart, ChartCard } from '../components/Charts'
+import { TrendChart, MultiTrendChart, DistributionChart, ChartCard } from '../components/Charts'
+import { getInstanceColor } from '../components/WorklogCalendar/calendarUtils'
 import WorklogCalendar from '../components/WorklogCalendar'
 
 export default function UserView({ dateRange, selectedInstance }) {
@@ -184,7 +185,19 @@ export default function UserView({ dateRange, selectedInstance }) {
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <ChartCard title="Trend Giornaliero" subtitle="Ore registrate nel periodo">
-                    <TrendChart data={data.daily_trend} height={280} />
+                    {(() => {
+                        const byInstance = data.daily_trend_by_instance || {}
+                        const instanceNames = Object.keys(byInstance).sort()
+                        if (instanceNames.length > 1) {
+                            const series = instanceNames.map(name => ({
+                                name,
+                                data: byInstance[name],
+                                color: getInstanceColor(name, instanceNames).hex
+                            }))
+                            return <MultiTrendChart series={series} height={280} />
+                        }
+                        return <TrendChart data={data.daily_trend} height={280} />
+                    })()}
                 </ChartCard>
 
                 <ChartCard title="Distribuzione Iniziative" subtitle="Come sono distribuite le ore">

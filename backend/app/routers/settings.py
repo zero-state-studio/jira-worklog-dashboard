@@ -444,6 +444,88 @@ async def delete_jira_account(user_id: int, jira_instance: str):
     return {"success": True, "message": "JIRA account mapping deleted"}
 
 
+@router.post("/users/bulk-fetch-accounts")
+async def bulk_fetch_jira_accounts():
+    """Fetch JIRA account IDs for all users across all JIRA instances."""
+    from ..models import JiraInstanceConfig
+    storage = get_storage()
+
+    users = await storage.get_all_users()
+    instances = await storage.get_all_jira_instances()
+
+    if not users:
+        return {"results": [], "summary": {"total": 0, "success": 0, "failed": 0, "skipped": 0}}
+    if not instances:
+        return {"results": [], "summary": {"total": 0, "success": 0, "failed": 0, "skipped": 0}}
+
+    results = []
+    success_count = 0
+    failed_count = 0
+    skipped_count = 0
+
+    for user in users:
+        existing_accounts = {ja["jira_instance"] for ja in (user.get("jira_accounts") or [])}
+
+        for inst in instances:
+            instance_name = inst["name"]
+
+            # Skip if already has account ID for this instance
+            if instance_name in existing_accounts:
+                skipped_count += 1
+                continue
+
+            try:
+                instance_config = JiraInstanceConfig(
+                    name=inst["name"],
+                    url=inst["url"],
+                    email=inst["email"],
+                    api_token=inst["api_token"],
+                    tempo_api_token=inst.get("tempo_api_token")
+                )
+                client = JiraClient(instance_config)
+                account_id = await client.search_user_by_email(user["email"])
+
+                if account_id:
+                    await storage.set_user_jira_account(user["id"], instance_name, account_id)
+                    results.append({
+                        "user_email": user["email"],
+                        "user_name": f"{user['first_name']} {user['last_name']}",
+                        "jira_instance": instance_name,
+                        "success": True,
+                        "account_id": account_id
+                    })
+                    success_count += 1
+                else:
+                    results.append({
+                        "user_email": user["email"],
+                        "user_name": f"{user['first_name']} {user['last_name']}",
+                        "jira_instance": instance_name,
+                        "success": False,
+                        "error": "User not found in JIRA"
+                    })
+                    failed_count += 1
+
+            except Exception as e:
+                results.append({
+                    "user_email": user["email"],
+                    "user_name": f"{user['first_name']} {user['last_name']}",
+                    "jira_instance": instance_name,
+                    "success": False,
+                    "error": str(e)
+                })
+                failed_count += 1
+
+    return {
+        "results": results,
+        "summary": {
+            "total": success_count + failed_count + skipped_count,
+            "success": success_count,
+            "failed": failed_count,
+            "skipped": skipped_count
+        }
+    }
+
+
 # ========== Import Endpoints ==========
 
 @router.post("/import-config", response_model=ImportConfigResponse)
@@ -548,13 +630,29 @@ async def create_jira_instance(data: dict):
     )
 
     instance = await storage.get_jira_instance(instance_id)
+
+    # Try to fetch and cache issue types (non-blocking)
+    try:
+        from ..models import JiraInstanceConfig
+        inst_config = JiraInstanceConfig(
+            name=name, url=url, email=email,
+            api_token=api_token, tempo_api_token=tempo_api_token
+        )
+        client = JiraClient(inst_config)
+        issue_types = await client.get_all_issue_types()
+        if issue_types:
+            await storage.save_instance_issue_types(instance_id, issue_types)
+    except Exception:
+        pass  # Non-blocking
+
     # Don't expose credentials in response
     return {
         "id": instance["id"],
         "name": instance["name"],
         "url": instance["url"],
         "is_active": instance["is_active"],
-        "has_tempo": bool(instance.get("tempo_api_token"))
+        "has_tempo": bool(instance.get("tempo_api_token")),
+        "default_project_key": instance.get("default_project_key")
     }
 
 
@@ -573,6 +671,7 @@ async def get_jira_instance(instance_id: int, include_credentials: bool = False)
         "url": instance["url"],
         "is_active": instance["is_active"],
         "has_tempo": bool(instance.get("tempo_api_token")),
+        "default_project_key": instance.get("default_project_key"),
         "created_at": instance["created_at"],
         "updated_at": instance["updated_at"]
     }
@@ -608,7 +707,8 @@ async def update_jira_instance(instance_id: int, data: dict):
         "name": updated["name"],
         "url": updated["url"],
         "is_active": updated["is_active"],
-        "has_tempo": bool(updated.get("tempo_api_token"))
+        "has_tempo": bool(updated.get("tempo_api_token")),
+        "default_project_key": updated.get("default_project_key")
     }
 
 
@@ -648,9 +748,31 @@ async def test_jira_instance(instance_id: int):
         client = JiraClient(instance_config)
         # Try to get current user to test connection
         result = await client.test_connection()
+
+        # Fetch and cache issue types on successful test
+        try:
+            issue_types = await client.get_all_issue_types()
+            if issue_types:
+                await storage.save_instance_issue_types(instance_id, issue_types)
+        except Exception:
+            pass  # Non-blocking: don't fail test if issue type fetch fails
+
         return {"success": True, "message": "Connection successful", "user": result}
     except Exception as e:
         return {"success": False, "message": str(e)}
+
+
+@router.get("/jira-instances/{instance_id}/issue-types")
+async def get_instance_issue_types(instance_id: int):
+    """Get cached issue types for a JIRA instance."""
+    storage = get_storage()
+
+    instance = await storage.get_jira_instance(instance_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail="Instance not found")
+
+    types = await storage.get_instance_issue_types(instance_id)
+    return {"issue_types": types}
 
 
 # ========== Complementary Groups Endpoints ==========

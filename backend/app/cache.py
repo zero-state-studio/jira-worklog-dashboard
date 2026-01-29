@@ -256,6 +256,45 @@ class WorklogStorage:
                     )
                 """)
 
+                # JIRA instance issue types (cached from JIRA)
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS jira_instance_issue_types (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        instance_id INTEGER NOT NULL REFERENCES jira_instances(id) ON DELETE CASCADE,
+                        type_id TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        subtask INTEGER DEFAULT 0,
+                        UNIQUE(instance_id, type_id)
+                    )
+                """)
+
+                # Package template - JIRA instance associations
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS package_template_instances (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        template_id INTEGER NOT NULL REFERENCES package_templates(id) ON DELETE CASCADE,
+                        instance_id INTEGER NOT NULL REFERENCES jira_instances(id) ON DELETE CASCADE,
+                        UNIQUE(template_id, instance_id)
+                    )
+                """)
+
+                # Linked issues table (cross-instance package linking)
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS linked_issues (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        link_group_id TEXT NOT NULL,
+                        issue_key TEXT NOT NULL,
+                        jira_instance TEXT NOT NULL,
+                        element_name TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(issue_key, jira_instance)
+                    )
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_linked_issues_group
+                    ON linked_issues(link_group_id)
+                """)
+
                 # ========== Migrations ==========
 
                 # Add parent columns to worklogs table (migration)
@@ -269,6 +308,12 @@ class WorklogStorage:
                     pass  # Column already exists
                 try:
                     await db.execute("ALTER TABLE worklogs ADD COLUMN parent_type TEXT")
+                except Exception:
+                    pass  # Column already exists
+
+                # Add default_project_key to jira_instances (migration)
+                try:
+                    await db.execute("ALTER TABLE jira_instances ADD COLUMN default_project_key TEXT")
                 except Exception:
                     pass  # Column already exists
 
@@ -1162,7 +1207,7 @@ class WorklogStorage:
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT id, name, url, email, api_token, tempo_api_token, is_active,
-                       created_at, updated_at
+                       created_at, updated_at, default_project_key
                 FROM jira_instances WHERE id = ?
             """, (instance_id,)) as cursor:
                 row = await cursor.fetchone()
@@ -1176,7 +1221,8 @@ class WorklogStorage:
                         "tempo_api_token": row[5],
                         "is_active": bool(row[6]),
                         "created_at": row[7],
-                        "updated_at": row[8]
+                        "updated_at": row[8],
+                        "default_project_key": row[9]
                     }
         return None
 
@@ -1187,7 +1233,7 @@ class WorklogStorage:
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT id, name, url, email, api_token, tempo_api_token, is_active,
-                       created_at, updated_at
+                       created_at, updated_at, default_project_key
                 FROM jira_instances WHERE name = ?
             """, (name,)) as cursor:
                 row = await cursor.fetchone()
@@ -1201,7 +1247,8 @@ class WorklogStorage:
                         "tempo_api_token": row[5],
                         "is_active": bool(row[6]),
                         "created_at": row[7],
-                        "updated_at": row[8]
+                        "updated_at": row[8],
+                        "default_project_key": row[9]
                     }
         return None
 
@@ -1213,7 +1260,7 @@ class WorklogStorage:
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT id, name, url, email, api_token, tempo_api_token, is_active,
-                       created_at, updated_at
+                       created_at, updated_at, default_project_key
                 FROM jira_instances
                 ORDER BY name
             """) as cursor:
@@ -1224,7 +1271,8 @@ class WorklogStorage:
                         "url": row[2],
                         "is_active": bool(row[6]),
                         "created_at": row[7],
-                        "updated_at": row[8]
+                        "updated_at": row[8],
+                        "default_project_key": row[9]
                     }
                     if include_credentials:
                         instance["email"] = row[3]
@@ -1237,7 +1285,7 @@ class WorklogStorage:
         """Update JIRA instance fields. Returns True if updated."""
         await self.initialize()
 
-        allowed_fields = {"name", "url", "email", "api_token", "tempo_api_token", "is_active"}
+        allowed_fields = {"name", "url", "email", "api_token", "tempo_api_token", "is_active", "default_project_key"}
         updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
 
         if not updates:
@@ -1583,7 +1631,8 @@ class WorklogStorage:
                     "child_issue_type": row[5],
                     "created_at": row[6],
                     "updated_at": row[7],
-                    "elements": []
+                    "elements": [],
+                    "instances": []
                 }
 
             # Get elements
@@ -1598,6 +1647,21 @@ class WorklogStorage:
                         "id": erow[0],
                         "name": erow[1],
                         "sort_order": erow[2]
+                    })
+
+            # Get associated instances
+            async with db.execute("""
+                SELECT ji.id, ji.name, ji.url
+                FROM package_template_instances pti
+                JOIN jira_instances ji ON ji.id = pti.instance_id
+                WHERE pti.template_id = ?
+                ORDER BY ji.name
+            """, (template_id,)) as cursor:
+                async for irow in cursor:
+                    template["instances"].append({
+                        "id": irow[0],
+                        "name": irow[1],
+                        "url": irow[2]
                     })
 
         return template
@@ -1624,7 +1688,8 @@ class WorklogStorage:
                         "child_issue_type": row[5],
                         "created_at": row[6],
                         "updated_at": row[7],
-                        "elements": []
+                        "elements": [],
+                        "instances": []
                     })
 
             # Fetch elements for all templates
@@ -1644,6 +1709,24 @@ class WorklogStorage:
                                     "id": row[1],
                                     "name": row[2],
                                     "sort_order": row[3]
+                                })
+                                break
+
+                # Fetch instances for all templates
+                async with db.execute(f"""
+                    SELECT pti.template_id, ji.id, ji.name, ji.url
+                    FROM package_template_instances pti
+                    JOIN jira_instances ji ON ji.id = pti.instance_id
+                    WHERE pti.template_id IN ({placeholders})
+                    ORDER BY ji.name
+                """, template_ids) as cursor:
+                    async for row in cursor:
+                        for t in templates:
+                            if t["id"] == row[0]:
+                                t["instances"].append({
+                                    "id": row[1],
+                                    "name": row[2],
+                                    "url": row[3]
                                 })
                                 break
 
@@ -1708,6 +1791,191 @@ class WorklogStorage:
 
             await db.commit()
             return True
+
+    # ========== Issue Type Cache Operations ==========
+
+    async def save_instance_issue_types(self, instance_id: int, types: list[dict]) -> bool:
+        """Save (replace) cached issue types for a JIRA instance."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "DELETE FROM jira_instance_issue_types WHERE instance_id = ?",
+                (instance_id,)
+            )
+            for t in types:
+                await db.execute("""
+                    INSERT INTO jira_instance_issue_types (instance_id, type_id, name, subtask)
+                    VALUES (?, ?, ?, ?)
+                """, (instance_id, t["id"], t["name"], 1 if t.get("subtask") else 0))
+            await db.commit()
+        return True
+
+    async def get_instance_issue_types(self, instance_id: int) -> list[dict]:
+        """Get cached issue types for a JIRA instance."""
+        await self.initialize()
+
+        types = []
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT type_id, name, subtask
+                FROM jira_instance_issue_types
+                WHERE instance_id = ?
+                ORDER BY name
+            """, (instance_id,)) as cursor:
+                async for row in cursor:
+                    types.append({
+                        "id": row[0],
+                        "name": row[1],
+                        "subtask": bool(row[2])
+                    })
+        return types
+
+    # ========== Template Instance Operations ==========
+
+    async def set_template_instances(self, template_id: int, instance_ids: list[int]) -> bool:
+        """Set the JIRA instances associated with a template (replaces existing)."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "DELETE FROM package_template_instances WHERE template_id = ?",
+                (template_id,)
+            )
+            for iid in instance_ids:
+                await db.execute("""
+                    INSERT INTO package_template_instances (template_id, instance_id)
+                    VALUES (?, ?)
+                """, (template_id, iid))
+            await db.commit()
+        return True
+
+    async def get_template_instances(self, template_id: int) -> list[dict]:
+        """Get JIRA instances associated with a template."""
+        await self.initialize()
+
+        instances = []
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT ji.id, ji.name, ji.url
+                FROM package_template_instances pti
+                JOIN jira_instances ji ON ji.id = pti.instance_id
+                WHERE pti.template_id = ?
+                ORDER BY ji.name
+            """, (template_id,)) as cursor:
+                async for row in cursor:
+                    instances.append({
+                        "id": row[0],
+                        "name": row[1],
+                        "url": row[2]
+                    })
+        return instances
+
+    # ========== Linked Issues Operations ==========
+
+    async def save_linked_issues(self, links: list[dict]) -> bool:
+        """Save linked issues. Each dict has: link_group_id, issue_key, jira_instance, element_name."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            for link in links:
+                await db.execute("""
+                    INSERT OR REPLACE INTO linked_issues (link_group_id, issue_key, jira_instance, element_name)
+                    VALUES (?, ?, ?, ?)
+                """, (link["link_group_id"], link["issue_key"], link["jira_instance"], link.get("element_name")))
+            await db.commit()
+        return True
+
+    async def get_linked_issues_by_key(self, issue_key: str, jira_instance: str) -> list[dict]:
+        """Find all issues linked to a given issue (same link_group_id)."""
+        await self.initialize()
+
+        results = []
+        async with aiosqlite.connect(self.db_path) as db:
+            # First find the link_group_id(s) for this issue
+            async with db.execute("""
+                SELECT link_group_id FROM linked_issues
+                WHERE issue_key = ? AND jira_instance = ?
+            """, (issue_key, jira_instance)) as cursor:
+                group_ids = [row[0] async for row in cursor]
+
+            if not group_ids:
+                return []
+
+            # Then find all issues in those groups (excluding the original)
+            placeholders = ",".join("?" * len(group_ids))
+            async with db.execute(f"""
+                SELECT id, link_group_id, issue_key, jira_instance, element_name, created_at
+                FROM linked_issues
+                WHERE link_group_id IN ({placeholders})
+                AND NOT (issue_key = ? AND jira_instance = ?)
+                ORDER BY link_group_id, jira_instance
+            """, (*group_ids, issue_key, jira_instance)) as cursor:
+                async for row in cursor:
+                    results.append({
+                        "id": row[0],
+                        "link_group_id": row[1],
+                        "issue_key": row[2],
+                        "jira_instance": row[3],
+                        "element_name": row[4],
+                        "created_at": row[5]
+                    })
+        return results
+
+    async def get_linked_issues_by_group(self, link_group_id: str) -> list[dict]:
+        """Get all issues in a link group."""
+        await self.initialize()
+
+        results = []
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT id, link_group_id, issue_key, jira_instance, element_name, created_at
+                FROM linked_issues
+                WHERE link_group_id = ?
+                ORDER BY jira_instance
+            """, (link_group_id,)) as cursor:
+                async for row in cursor:
+                    results.append({
+                        "id": row[0],
+                        "link_group_id": row[1],
+                        "issue_key": row[2],
+                        "jira_instance": row[3],
+                        "element_name": row[4],
+                        "created_at": row[5]
+                    })
+        return results
+
+    async def get_complementary_instances_for(self, instance_name: str) -> list[str]:
+        """Given an instance name, return the other instances in its complementary group(s)."""
+        await self.initialize()
+
+        other_names = []
+        async with aiosqlite.connect(self.db_path) as db:
+            # Find groups this instance belongs to
+            async with db.execute("""
+                SELECT cgm.group_id
+                FROM complementary_group_members cgm
+                JOIN jira_instances ji ON ji.id = cgm.instance_id
+                WHERE ji.name = ?
+            """, (instance_name,)) as cursor:
+                group_ids = [row[0] async for row in cursor]
+
+            if not group_ids:
+                return []
+
+            # Find all other instances in those groups
+            placeholders = ",".join("?" * len(group_ids))
+            async with db.execute(f"""
+                SELECT DISTINCT ji.name
+                FROM complementary_group_members cgm
+                JOIN jira_instances ji ON ji.id = cgm.instance_id
+                WHERE cgm.group_id IN ({placeholders})
+                AND ji.name != ?
+                ORDER BY ji.name
+            """, (*group_ids, instance_name)) as cursor:
+                async for row in cursor:
+                    other_names.append(row[0])
+        return other_names
 
     # ========== Utility Operations ==========
 

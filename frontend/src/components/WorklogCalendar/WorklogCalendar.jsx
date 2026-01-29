@@ -6,6 +6,8 @@ import {
     generateCalendarDays,
     groupWorklogsByDate,
     calculateHoursByDate,
+    calculateHoursByDateAndInstance,
+    getUniqueInstances,
     format,
     isSameMonth,
     isToday,
@@ -51,6 +53,16 @@ export default function WorklogCalendar({ worklogs, onIssueClick }) {
     const hoursByDate = useMemo(() => {
         return calculateHoursByDate(worklogsByDate)
     }, [worklogsByDate])
+
+    // Calculate hours per day per instance
+    const hoursByDateAndInstance = useMemo(() => {
+        return calculateHoursByDateAndInstance(worklogsByDate)
+    }, [worklogsByDate])
+
+    // Get unique instances for color assignment
+    const allInstances = useMemo(() => {
+        return getUniqueInstances(worklogs)
+    }, [worklogs])
 
     // Generate calendar days for current month view
     const calendarDays = useMemo(() => {
@@ -134,6 +146,8 @@ export default function WorklogCalendar({ worklogs, onIssueClick }) {
                             date={day}
                             hours={hours}
                             maxHours={maxHoursInMonth}
+                            hoursByInstance={hoursByDateAndInstance[dateKey] || {}}
+                            allInstances={allInstances}
                             isCurrentMonth={isSameMonth(day, currentMonth)}
                             isToday={isToday(day)}
                             onClick={() => handleDayClick(day)}
@@ -148,6 +162,7 @@ export default function WorklogCalendar({ worklogs, onIssueClick }) {
                 onClose={() => setIsDrawerOpen(false)}
                 date={selectedDate}
                 worklogs={selectedDateWorklogs}
+                allInstances={allInstances}
                 onIssueClick={onIssueClick}
             />
         </div>

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { getJiraInstances, getInstanceIssueTypes } from '../../api/client'
 
 export default function PackageTemplateModal({ isOpen, onClose, onSave, template, loading }) {
     const [name, setName] = useState('')
@@ -7,7 +8,24 @@ export default function PackageTemplateModal({ isOpen, onClose, onSave, template
     const [newElement, setNewElement] = useState('')
     const [parentIssueType, setParentIssueType] = useState('Task')
     const [childIssueType, setChildIssueType] = useState('Sub-task')
+    const [selectedInstanceIds, setSelectedInstanceIds] = useState([])
 
+    const [jiraInstances, setJiraInstances] = useState([])
+    const [issueTypes, setIssueTypes] = useState([])
+    const [loadingIssueTypes, setLoadingIssueTypes] = useState(false)
+
+    const elementInputRef = useRef(null)
+
+    // Load JIRA instances on open
+    useEffect(() => {
+        if (isOpen) {
+            getJiraInstances()
+                .then(data => setJiraInstances(data.instances || []))
+                .catch(() => setJiraInstances([]))
+        }
+    }, [isOpen])
+
+    // Load template data
     useEffect(() => {
         if (template) {
             setName(template.name || '')
@@ -15,15 +33,56 @@ export default function PackageTemplateModal({ isOpen, onClose, onSave, template
             setElements(template.elements ? template.elements.map(e => typeof e === 'string' ? e : e.name) : [])
             setParentIssueType(template.parent_issue_type || 'Task')
             setChildIssueType(template.child_issue_type || 'Sub-task')
+            setSelectedInstanceIds(template.instances ? template.instances.map(i => i.id) : [])
         } else {
             setName('')
             setDescription('')
             setElements([])
             setParentIssueType('Task')
             setChildIssueType('Sub-task')
+            setSelectedInstanceIds([])
         }
         setNewElement('')
+        setIssueTypes([])
     }, [template, isOpen])
+
+    // Fetch issue types when selected instances change
+    useEffect(() => {
+        if (selectedInstanceIds.length === 0) {
+            setIssueTypes([])
+            return
+        }
+
+        const fetchIssueTypes = async () => {
+            setLoadingIssueTypes(true)
+            try {
+                const allTypes = new Map()
+                for (const instanceId of selectedInstanceIds) {
+                    const data = await getInstanceIssueTypes(instanceId)
+                    for (const t of (data.issue_types || [])) {
+                        if (!allTypes.has(t.name)) {
+                            allTypes.set(t.name, t)
+                        }
+                    }
+                }
+                setIssueTypes(Array.from(allTypes.values()))
+            } catch {
+                setIssueTypes([])
+            } finally {
+                setLoadingIssueTypes(false)
+            }
+        }
+
+        fetchIssueTypes()
+    }, [selectedInstanceIds])
+
+    const handleToggleInstance = (instanceId) => {
+        setSelectedInstanceIds(prev =>
+            prev.includes(instanceId)
+                ? prev.filter(id => id !== instanceId)
+                : [...prev, instanceId]
+        )
+    }
 
     const handleAddElement = () => {
         const trimmed = newElement.trim()
@@ -37,35 +96,35 @@ export default function PackageTemplateModal({ isOpen, onClose, onSave, template
         setElements(elements.filter((_, i) => i !== index))
     }
 
-    const handleMoveElement = (index, direction) => {
-        const newElements = [...elements]
-        const targetIndex = index + direction
-        if (targetIndex < 0 || targetIndex >= newElements.length) return
-        ;[newElements[index], newElements[targetIndex]] = [newElements[targetIndex], newElements[index]]
-        setElements(newElements)
-    }
-
-    const handleKeyDown = (e) => {
+    const handleElementKeyDown = (e) => {
         if (e.key === 'Enter') {
             e.preventDefault()
             handleAddElement()
+        }
+        // Remove last element with Backspace on empty input
+        if (e.key === 'Backspace' && newElement === '' && elements.length > 0) {
+            setElements(elements.slice(0, -1))
         }
     }
 
     const handleSubmit = (e) => {
         e.preventDefault()
-        if (name.trim() && elements.length > 0) {
+        if (name.trim() && elements.length > 0 && selectedInstanceIds.length > 0) {
             onSave({
                 name: name.trim(),
                 description: description.trim() || null,
                 elements,
                 parent_issue_type: parentIssueType,
-                child_issue_type: childIssueType
+                child_issue_type: childIssueType,
+                instance_ids: selectedInstanceIds
             })
         }
     }
 
     if (!isOpen) return null
+
+    const parentTypes = issueTypes.filter(t => !t.subtask)
+    const childTypes = issueTypes
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -122,116 +181,132 @@ export default function PackageTemplateModal({ isOpen, onClose, onSave, template
                             />
                         </div>
 
+                        {/* JIRA Instances */}
+                        <div>
+                            <label className="block text-sm font-medium text-dark-300 mb-2">
+                                Istanze JIRA *
+                            </label>
+                            {jiraInstances.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                    {jiraInstances.map(instance => {
+                                        const isSelected = selectedInstanceIds.includes(instance.id)
+                                        return (
+                                            <button
+                                                key={instance.id}
+                                                type="button"
+                                                onClick={() => handleToggleInstance(instance.id)}
+                                                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+                                                    isSelected
+                                                        ? 'bg-accent-blue/20 text-accent-blue border-accent-blue/40'
+                                                        : 'bg-dark-700 text-dark-400 border-dark-600 hover:border-dark-500 hover:text-dark-300'
+                                                }`}
+                                            >
+                                                {instance.name}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-dark-400">Nessuna istanza JIRA configurata</p>
+                            )}
+                        </div>
+
                         {/* Issue Types */}
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-sm font-medium text-dark-300 mb-2">
                                     Tipo Issue Parent
                                 </label>
-                                <input
-                                    type="text"
-                                    value={parentIssueType}
-                                    onChange={(e) => setParentIssueType(e.target.value)}
-                                    className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 placeholder-dark-400 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
-                                />
+                                {issueTypes.length > 0 ? (
+                                    <select
+                                        value={parentIssueType}
+                                        onChange={(e) => setParentIssueType(e.target.value)}
+                                        className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
+                                    >
+                                        {parentTypes.map(t => (
+                                            <option key={t.id} value={t.name}>{t.name}</option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <div className="px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-400 text-sm">
+                                        {loadingIssueTypes ? 'Caricamento...' :
+                                            selectedInstanceIds.length === 0 ? 'Seleziona un\'istanza' :
+                                            'Testa la connessione JIRA per caricare i tipi'}
+                                    </div>
+                                )}
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-dark-300 mb-2">
                                     Tipo Issue Figli
                                 </label>
-                                <input
-                                    type="text"
-                                    value={childIssueType}
-                                    onChange={(e) => setChildIssueType(e.target.value)}
-                                    className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 placeholder-dark-400 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
-                                />
+                                {issueTypes.length > 0 ? (
+                                    <select
+                                        value={childIssueType}
+                                        onChange={(e) => setChildIssueType(e.target.value)}
+                                        className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
+                                    >
+                                        {childTypes.map(t => (
+                                            <option key={t.id} value={t.name}>{t.name}</option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <div className="px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-400 text-sm">
+                                        {loadingIssueTypes ? 'Caricamento...' :
+                                            selectedInstanceIds.length === 0 ? 'Seleziona un\'istanza' :
+                                            'Testa la connessione JIRA per caricare i tipi'}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
-                        {/* Elements */}
+                        {/* Elements - Tag/Chip Input */}
                         <div>
                             <label className="block text-sm font-medium text-dark-300 mb-2">
                                 Elementi Distintivi *
                             </label>
                             <p className="text-xs text-dark-400 mb-3">
-                                Ogni elemento diventerà una issue figlia nel pacchetto
+                                Ogni elemento diventerà una issue figlia. Premi Enter per aggiungere.
                             </p>
 
-                            {/* Add element input */}
-                            <div className="flex gap-2 mb-3">
+                            <div
+                                className="min-h-[48px] px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg flex flex-wrap gap-2 items-center cursor-text focus-within:border-accent-blue focus-within:ring-1 focus-within:ring-accent-blue/50"
+                                onClick={() => elementInputRef.current?.focus()}
+                            >
+                                {elements.map((element, index) => (
+                                    <span
+                                        key={index}
+                                        className="inline-flex items-center gap-1 bg-accent-blue/20 text-accent-blue rounded-full px-3 py-1 text-sm"
+                                    >
+                                        {element}
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                handleRemoveElement(index)
+                                            }}
+                                            className="ml-0.5 hover:text-white transition-colors"
+                                        >
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </span>
+                                ))}
                                 <input
+                                    ref={elementInputRef}
                                     type="text"
                                     value={newElement}
                                     onChange={(e) => setNewElement(e.target.value)}
-                                    onKeyDown={handleKeyDown}
-                                    placeholder="Es: Analisi, Sviluppo FE, Testing..."
-                                    className="flex-1 px-4 py-2.5 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 placeholder-dark-400 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
+                                    onKeyDown={handleElementKeyDown}
+                                    placeholder={elements.length === 0 ? 'Aggiungi elemento...' : ''}
+                                    className="flex-1 min-w-[120px] bg-transparent border-none outline-none text-dark-100 placeholder-dark-400 text-sm py-1"
                                 />
-                                <button
-                                    type="button"
-                                    onClick={handleAddElement}
-                                    disabled={!newElement.trim()}
-                                    className="px-4 py-2.5 bg-accent-blue/20 text-accent-blue rounded-lg hover:bg-accent-blue/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    Aggiungi
-                                </button>
                             </div>
 
-                            {/* Element list */}
-                            {elements.length > 0 ? (
-                                <div className="space-y-1.5">
-                                    {elements.map((element, index) => (
-                                        <div
-                                            key={index}
-                                            className="flex items-center gap-2 px-3 py-2 bg-dark-700 rounded-lg border border-dark-600 group"
-                                        >
-                                            <span className="text-dark-400 text-xs font-mono w-5 text-center">
-                                                {index + 1}
-                                            </span>
-                                            <span className="flex-1 text-dark-100 text-sm">
-                                                {element}
-                                            </span>
-                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleMoveElement(index, -1)}
-                                                    disabled={index === 0}
-                                                    className="p-1 text-dark-400 hover:text-dark-200 disabled:opacity-30"
-                                                    title="Sposta su"
-                                                >
-                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                                    </svg>
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleMoveElement(index, 1)}
-                                                    disabled={index === elements.length - 1}
-                                                    className="p-1 text-dark-400 hover:text-dark-200 disabled:opacity-30"
-                                                    title="Sposta giu"
-                                                >
-                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                    </svg>
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRemoveElement(index)}
-                                                    className="p-1 text-dark-400 hover:text-accent-red"
-                                                    title="Rimuovi"
-                                                >
-                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-6 text-dark-400 text-sm">
-                                    Nessun elemento aggiunto. Aggiungi almeno un elemento distintivo.
-                                </div>
+                            {elements.length === 0 && (
+                                <p className="text-xs text-dark-500 mt-1.5">
+                                    Aggiungi almeno un elemento distintivo
+                                </p>
                             )}
                         </div>
                     </div>
@@ -247,7 +322,7 @@ export default function PackageTemplateModal({ isOpen, onClose, onSave, template
                         </button>
                         <button
                             type="submit"
-                            disabled={!name.trim() || elements.length === 0 || loading}
+                            disabled={!name.trim() || elements.length === 0 || selectedInstanceIds.length === 0 || loading}
                             className="px-5 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {loading ? 'Salvataggio...' : 'Salva'}

@@ -6,6 +6,7 @@ import {
     deleteJiraInstance,
     testJiraInstance,
     getJiraInstance,
+    getInstanceIssueTypes,
     getComplementaryGroups,
     createComplementaryGroup,
     updateComplementaryGroup,
@@ -74,7 +75,8 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
         url: '',
         email: '',
         api_token: '',
-        tempo_api_token: ''
+        tempo_api_token: '',
+        default_project_key: ''
     })
     const [showToken, setShowToken] = useState(false)
     const [showTempoToken, setShowTempoToken] = useState(false)
@@ -87,7 +89,8 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
                 url: instance.url || '',
                 email: instance.email || '',
                 api_token: instance.api_token || '',
-                tempo_api_token: instance.tempo_api_token || ''
+                tempo_api_token: instance.tempo_api_token || '',
+                default_project_key: instance.default_project_key || ''
             })
         } else {
             setFormData({
@@ -95,7 +98,8 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
                 url: '',
                 email: '',
                 api_token: '',
-                tempo_api_token: ''
+                tempo_api_token: '',
+                default_project_key: ''
             })
         }
     }, [instance])
@@ -206,6 +210,22 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
                                 {showTempoToken ? <EyeOffIcon /> : <EyeIcon />}
                             </button>
                         </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-dark-300 mb-1">
+                            Progetto Default (opzionale)
+                        </label>
+                        <input
+                            type="text"
+                            value={formData.default_project_key}
+                            onChange={(e) => setFormData({ ...formData, default_project_key: e.target.value.toUpperCase() })}
+                            className="input-field w-full"
+                            placeholder="Es: PROJ"
+                        />
+                        <p className="text-xs text-dark-500 mt-1">
+                            Project key usato come default nella creazione pacchetti
+                        </p>
                     </div>
 
                     <div className="flex justify-end gap-3 pt-4">
@@ -380,6 +400,7 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
     const [error, setError] = useState(null)
     const [deleteConfirm, setDeleteConfirm] = useState(null)
     const [testResult, setTestResult] = useState(null)
+    const [issueTypeFetch, setIssueTypeFetch] = useState(null) // { instanceId, status: 'loading'|'success'|'error', count }
 
     const handleCreateInstance = () => {
         setEditingInstance(null)
@@ -442,6 +463,26 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
             setTestResult({ instanceId, success: false, message: err.message })
         } finally {
             setLoading(false)
+        }
+    }
+
+    const handleFetchIssueTypes = async (instanceId) => {
+        try {
+            setIssueTypeFetch({ instanceId, status: 'loading' })
+            // Test connection first (which triggers issue type fetch on backend)
+            const testRes = await testJiraInstance(instanceId)
+            if (!testRes.success) {
+                setIssueTypeFetch({ instanceId, status: 'error', message: testRes.message })
+                return
+            }
+            // Now read the cached types to confirm
+            const data = await getInstanceIssueTypes(instanceId)
+            const count = (data.issue_types || []).length
+            setIssueTypeFetch({ instanceId, status: 'success', count })
+            // Auto-clear after 3 seconds
+            setTimeout(() => setIssueTypeFetch(null), 3000)
+        } catch (err) {
+            setIssueTypeFetch({ instanceId, status: 'error', message: err.message })
         }
     }
 
@@ -543,6 +584,9 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
                                             {instance.has_tempo && (
                                                 <span className="ml-2 text-xs text-accent-purple">+ Tempo</span>
                                             )}
+                                            {instance.default_project_key && (
+                                                <span className="ml-2 text-xs bg-dark-600 text-dark-300 px-2 py-0.5 rounded">{instance.default_project_key}</span>
+                                            )}
                                             {isFromConfig && (
                                                 <span className="ml-2 text-xs bg-dark-600 text-dark-300 px-2 py-0.5 rounded">config.yaml</span>
                                             )}
@@ -585,6 +629,24 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
                                                             title="Test connessione"
                                                         >
                                                             Test
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleFetchIssueTypes(instance.id)}
+                                                            disabled={loading || (issueTypeFetch?.instanceId === instance.id && issueTypeFetch?.status === 'loading')}
+                                                            className={`px-2 py-1 text-xs rounded transition-colors ${
+                                                                issueTypeFetch?.instanceId === instance.id && issueTypeFetch?.status === 'success'
+                                                                    ? 'text-green-400 bg-green-400/10'
+                                                                    : issueTypeFetch?.instanceId === instance.id && issueTypeFetch?.status === 'error'
+                                                                    ? 'text-red-400 bg-red-400/10'
+                                                                    : 'text-dark-300 hover:text-accent-purple hover:bg-dark-700'
+                                                            }`}
+                                                            title="Fetch tipi issue da JIRA"
+                                                        >
+                                                            {issueTypeFetch?.instanceId === instance.id
+                                                                ? issueTypeFetch.status === 'loading' ? 'Fetch...'
+                                                                : issueTypeFetch.status === 'success' ? `${issueTypeFetch.count} tipi`
+                                                                : 'Errore'
+                                                                : 'Issue Types'}
                                                         </button>
                                                         <button
                                                             onClick={() => handleEditInstance(instance)}

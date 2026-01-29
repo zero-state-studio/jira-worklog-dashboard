@@ -155,8 +155,22 @@ export default function PackageTemplatesSection() {
                                         </div>
                                     </div>
 
+                                    {/* Instance badges */}
+                                    {template.instances && template.instances.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5 mt-3 ml-12">
+                                            {template.instances.map((inst) => (
+                                                <span
+                                                    key={inst.id}
+                                                    className="px-2.5 py-1 text-xs font-medium bg-accent-blue/10 text-accent-blue rounded-full border border-accent-blue/20"
+                                                >
+                                                    {inst.name}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+
                                     {/* Elements badges */}
-                                    <div className="flex flex-wrap gap-1.5 mt-3 ml-12">
+                                    <div className="flex flex-wrap gap-1.5 mt-2 ml-12">
                                         {template.elements.map((element, idx) => (
                                             <span
                                                 key={idx}
@@ -168,7 +182,7 @@ export default function PackageTemplatesSection() {
                                     </div>
 
                                     {/* Issue type info */}
-                                    <div className="flex items-center gap-4 mt-3 ml-12 text-xs text-dark-400">
+                                    <div className="flex items-center gap-4 mt-2 ml-12 text-xs text-dark-400">
                                         <span>Parent: <span className="text-dark-300">{template.parent_issue_type}</span></span>
                                         <span>Figli: <span className="text-dark-300">{template.child_issue_type}</span></span>
                                         <span>{template.elements.length} elementi</span>

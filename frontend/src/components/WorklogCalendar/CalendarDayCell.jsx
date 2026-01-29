@@ -1,16 +1,20 @@
 import { format } from 'date-fns'
 import { formatHours } from '../../hooks/useData'
-import { getHoursColorIntensity } from './calendarUtils'
+import { getHoursColorIntensity, getInstanceColor } from './calendarUtils'
 
 export default function CalendarDayCell({
     date,
     hours,
     maxHours,
+    hoursByInstance,
+    allInstances,
     isCurrentMonth,
     isToday,
     onClick
 }) {
     const hasHours = hours > 0
+    const instanceEntries = Object.entries(hoursByInstance || {}).sort((a, b) => b[1] - a[1])
+    const hasMultipleInstances = instanceEntries.length > 1
 
     return (
         <button
@@ -32,12 +36,32 @@ export default function CalendarDayCell({
                 {format(date, 'd')}
             </span>
 
-            {/* Hours Badge */}
+            {/* Instance color bars + total hours */}
             {hasHours && (
-                <div className="absolute bottom-2 right-2">
-                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-accent-purple/30 text-accent-purple">
-                        {formatHours(hours)}
-                    </span>
+                <div className="absolute bottom-1.5 left-1.5 right-1.5">
+                    {/* Instance mini-bars (only if multiple instances) */}
+                    {hasMultipleInstances && (
+                        <div className="flex gap-0.5 mb-1">
+                            {instanceEntries.map(([instanceName, instHours]) => {
+                                const color = getInstanceColor(instanceName, allInstances)
+                                const widthPercent = (instHours / hours) * 100
+                                return (
+                                    <div
+                                        key={instanceName}
+                                        className={`h-1.5 rounded-full ${color.bg}`}
+                                        style={{ width: `${widthPercent}%` }}
+                                        title={`${instanceName}: ${formatHours(instHours)}`}
+                                    />
+                                )
+                            })}
+                        </div>
+                    )}
+                    {/* Total hours badge */}
+                    <div className="flex justify-end">
+                        <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-accent-purple/30 text-accent-purple">
+                            {formatHours(hours)}
+                        </span>
+                    </div>
                 </div>
             )}
         </button>

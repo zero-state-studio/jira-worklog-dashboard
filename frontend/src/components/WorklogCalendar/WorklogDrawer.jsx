@@ -1,6 +1,8 @@
+import { useMemo } from 'react'
 import { format } from 'date-fns'
 import { it } from 'date-fns/locale'
 import { formatHours } from '../../hooks/useData'
+import { getInstanceColor } from './calendarUtils'
 
 const CloseIcon = () => (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -56,11 +58,32 @@ export default function WorklogDrawer({
     onClose,
     date,
     worklogs,
+    allInstances,
     onIssueClick
 }) {
     if (!isOpen || !date) return null
 
     const totalHours = worklogs.reduce((sum, w) => sum + w.time_spent_seconds / 3600, 0)
+    const hasMultipleInstances = allInstances && allInstances.length > 1
+
+    // Group worklogs by instance
+    const groupedWorklogs = useMemo(() => {
+        if (!hasMultipleInstances) return null
+
+        const groups = {}
+        worklogs.forEach(w => {
+            const instance = w.jira_instance || 'Unknown'
+            if (!groups[instance]) groups[instance] = []
+            groups[instance].push(w)
+        })
+
+        // Sort each group by started desc
+        Object.values(groups).forEach(group => {
+            group.sort((a, b) => new Date(b.started) - new Date(a.started))
+        })
+
+        return groups
+    }, [worklogs, hasMultipleInstances])
 
     return (
         <div className="fixed inset-0 z-50 flex justify-end">
@@ -96,7 +119,42 @@ export default function WorklogDrawer({
                         <div className="text-center text-dark-400 py-8">
                             Nessun worklog in questa data
                         </div>
+                    ) : hasMultipleInstances && groupedWorklogs ? (
+                        /* Grouped by instance */
+                        Object.entries(groupedWorklogs).map(([instanceName, instanceWorklogs]) => {
+                            const color = getInstanceColor(instanceName, allInstances)
+                            const instanceHours = instanceWorklogs.reduce(
+                                (sum, w) => sum + w.time_spent_seconds / 3600, 0
+                            )
+                            return (
+                                <div key={instanceName}>
+                                    {/* Instance header */}
+                                    <div className={`flex items-center justify-between mb-3 pb-2 border-b ${color.border}`}>
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-2.5 h-2.5 rounded-full ${color.bg}`} />
+                                            <span className={`text-sm font-semibold ${color.text}`}>
+                                                {instanceName}
+                                            </span>
+                                        </div>
+                                        <span className={`text-sm font-medium ${color.text}`}>
+                                            {formatHours(instanceHours)}
+                                        </span>
+                                    </div>
+                                    {/* Instance worklogs */}
+                                    <div className="space-y-3 mb-5">
+                                        {instanceWorklogs.map(worklog => (
+                                            <WorklogItem
+                                                key={worklog.id}
+                                                worklog={worklog}
+                                                onIssueClick={onIssueClick}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            )
+                        })
                     ) : (
+                        /* Flat list (single instance) */
                         worklogs
                             .sort((a, b) => new Date(b.started) - new Date(a.started))
                             .map(worklog => (

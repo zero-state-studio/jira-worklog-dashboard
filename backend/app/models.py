@@ -275,6 +275,7 @@ class UserDetailResponse(BaseModel):
     expected_hours: float
     epics: list[EpicHours]
     daily_trend: list[DailyHours]
+    daily_trend_by_instance: dict[str, list[DailyHours]] = Field(default_factory=dict)
     worklogs: list[Worklog]
 
 
@@ -346,6 +347,7 @@ class PackageTemplateCreate(BaseModel):
     default_project_key: Optional[str] = None
     parent_issue_type: str = "Task"
     child_issue_type: str = "Sub-task"
+    instance_ids: list[int] = Field(default_factory=list)
 
 
 class PackageTemplateUpdate(BaseModel):
@@ -356,13 +358,19 @@ class PackageTemplateUpdate(BaseModel):
     default_project_key: Optional[str] = None
     parent_issue_type: Optional[str] = None
     child_issue_type: Optional[str] = None
+    instance_ids: Optional[list[int]] = None
+
+
+class PackageInstanceConfig(BaseModel):
+    """Configuration for a single instance in package creation."""
+    instance_name: str
+    project_key: str
 
 
 class PackageCreateRequest(BaseModel):
     """Request to create a package of issues on JIRA."""
     template_id: Optional[int] = None
-    jira_instances: list[str]
-    project_key: str
+    instance_configs: list[PackageInstanceConfig]
     parent_summary: str
     parent_description: Optional[str] = None
     parent_issue_type: str = "Task"
@@ -375,6 +383,7 @@ class PackageCreateResult(BaseModel):
     jira_instance: str
     parent_key: str
     children: list[dict]
+    auto_created: bool = False
 
 
 class PackageCreateResponse(BaseModel):
@@ -382,3 +391,4 @@ class PackageCreateResponse(BaseModel):
     success: bool
     results: list[PackageCreateResult]
     errors: list[str] = []
+    linked_issues: list[dict] = []

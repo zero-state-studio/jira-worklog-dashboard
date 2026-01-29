@@ -8,6 +8,7 @@ import UserView from './pages/UserView'
 import EpicView from './pages/EpicView'
 import IssueView from './pages/IssueView'
 import Settings from './pages/Settings'
+import UsersListView from './pages/UsersListView'
 
 function App() {
     // Global date range state
@@ -30,6 +31,7 @@ function App() {
                 <Route path="/" element={<Dashboard dateRange={dateRange} selectedInstance={selectedInstance} />} />
                 <Route path="/teams" element={<Navigate to="/" replace />} />
                 <Route path="/teams/:teamName" element={<TeamView dateRange={dateRange} selectedInstance={selectedInstance} />} />
+                <Route path="/users" element={<UsersListView dateRange={dateRange} selectedInstance={selectedInstance} />} />
                 <Route path="/users/:email" element={<UserView dateRange={dateRange} selectedInstance={selectedInstance} />} />
                 <Route path="/epics" element={<EpicView dateRange={dateRange} selectedInstance={selectedInstance} />} />
                 <Route path="/epics/:epicKey" element={<EpicView dateRange={dateRange} selectedInstance={selectedInstance} />} />

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createUser, updateUser, deleteUser } from '../../api/client'
+import { createUser, updateUser, deleteUser, bulkFetchJiraAccounts } from '../../api/client'
 import UserModal from './UserModal'
 import BulkUserModal from './BulkUserModal'
 
@@ -45,6 +45,12 @@ const UsersIcon = () => (
     </svg>
 )
 
+const RefreshIcon = () => (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+)
+
 export default function UsersSection({ users, teams, jiraInstances, onUsersChange }) {
     const [modalOpen, setModalOpen] = useState(false)
     const [bulkModalOpen, setBulkModalOpen] = useState(false)
@@ -52,6 +58,7 @@ export default function UsersSection({ users, teams, jiraInstances, onUsersChang
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState(null)
     const [deleteConfirm, setDeleteConfirm] = useState(null)
+    const [bulkFetchStatus, setBulkFetchStatus] = useState(null) // null | 'loading' | { summary, results }
 
     const handleCreate = () => {
         setEditingUser(null)
@@ -104,12 +111,48 @@ export default function UsersSection({ users, teams, jiraInstances, onUsersChang
         return { total, configured }
     }
 
+    const handleBulkFetchAccounts = async () => {
+        try {
+            setBulkFetchStatus('loading')
+            setError(null)
+            const result = await bulkFetchJiraAccounts()
+            setBulkFetchStatus(result)
+            await onUsersChange()
+            // Auto-clear after 8 seconds
+            setTimeout(() => setBulkFetchStatus(null), 8000)
+        } catch (err) {
+            setError(err.message)
+            setBulkFetchStatus(null)
+        }
+    }
+
     return (
         <div className="glass-card p-6">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-semibold text-dark-100">Utenti</h2>
                 <div className="flex items-center gap-3">
+                    {users.length > 0 && jiraInstances.length > 0 && (
+                        <button
+                            onClick={handleBulkFetchAccounts}
+                            disabled={bulkFetchStatus === 'loading'}
+                            className={`flex items-center gap-2 px-4 py-2 font-medium rounded-lg transition-colors ${
+                                bulkFetchStatus === 'loading'
+                                    ? 'bg-dark-700 text-dark-400 cursor-wait'
+                                    : bulkFetchStatus && bulkFetchStatus !== 'loading'
+                                    ? 'bg-green-500/10 text-green-400 border border-green-500/30'
+                                    : 'bg-dark-700 text-dark-200 hover:bg-dark-600'
+                            }`}
+                            title="Fetch Account ID JIRA per tutti gli utenti"
+                        >
+                            <RefreshIcon />
+                            {bulkFetchStatus === 'loading'
+                                ? 'Fetch in corso...'
+                                : bulkFetchStatus && bulkFetchStatus !== 'loading'
+                                ? `${bulkFetchStatus.summary.success} trovati, ${bulkFetchStatus.summary.skipped} gia configurati`
+                                : 'Fetch Account JIRA'}
+                        </button>
+                    )}
                     <button
                         onClick={() => setBulkModalOpen(true)}
                         className="flex items-center gap-2 px-4 py-2 bg-dark-700 text-dark-200 font-medium rounded-lg hover:bg-dark-600 transition-colors"
@@ -131,6 +174,20 @@ export default function UsersSection({ users, teams, jiraInstances, onUsersChang
             {error && (
                 <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
                     {error}
+                </div>
+            )}
+
+            {/* Bulk fetch results */}
+            {bulkFetchStatus && bulkFetchStatus !== 'loading' && bulkFetchStatus.summary.failed > 0 && (
+                <div className="mb-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm">
+                    <p className="text-yellow-400 font-medium mb-1">
+                        {bulkFetchStatus.summary.failed} account non trovati:
+                    </p>
+                    <div className="text-yellow-400/80 space-y-0.5">
+                        {bulkFetchStatus.results.filter(r => !r.success).map((r, i) => (
+                            <p key={i}>{r.user_name} su {r.jira_instance}: {r.error}</p>
+                        ))}
+                    </div>
                 </div>
             )}
 

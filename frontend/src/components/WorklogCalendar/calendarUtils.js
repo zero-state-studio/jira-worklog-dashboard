@@ -62,4 +62,48 @@ export function getHoursColorIntensity(hours, maxHours) {
     return 'bg-accent-purple/10'
 }
 
+/**
+ * Calculate hours by date AND instance
+ * Returns: { 'YYYY-MM-DD': { instanceName: hours } }
+ */
+export function calculateHoursByDateAndInstance(worklogsByDate) {
+    const result = {}
+    Object.entries(worklogsByDate).forEach(([date, logs]) => {
+        result[date] = {}
+        logs.forEach((log) => {
+            const instance = log.jira_instance || 'Unknown'
+            result[date][instance] = (result[date][instance] || 0) + log.time_spent_seconds / 3600
+        })
+    })
+    return result
+}
+
+/**
+ * Color palette for JIRA instances
+ */
+const INSTANCE_COLORS = [
+    { bg: 'bg-accent-blue/70', text: 'text-accent-blue', border: 'border-accent-blue/30', hex: '#60a5fa' },
+    { bg: 'bg-accent-purple/70', text: 'text-accent-purple', border: 'border-accent-purple/30', hex: '#a78bfa' },
+    { bg: 'bg-accent-green/70', text: 'text-accent-green', border: 'border-accent-green/30', hex: '#34d399' },
+    { bg: 'bg-orange-500/70', text: 'text-orange-400', border: 'border-orange-500/30', hex: '#fb923c' },
+    { bg: 'bg-pink-500/70', text: 'text-pink-400', border: 'border-pink-500/30', hex: '#f472b6' },
+    { bg: 'bg-cyan-500/70', text: 'text-cyan-400', border: 'border-cyan-500/30', hex: '#22d3ee' },
+]
+
+/**
+ * Get consistent color for a JIRA instance based on its name
+ */
+export function getInstanceColor(instanceName, allInstances) {
+    const sortedInstances = [...allInstances].sort()
+    const index = sortedInstances.indexOf(instanceName)
+    return INSTANCE_COLORS[index >= 0 ? index % INSTANCE_COLORS.length : 0]
+}
+
+/**
+ * Extract unique instance names from worklogs
+ */
+export function getUniqueInstances(worklogs) {
+    return [...new Set(worklogs.map(w => w.jira_instance).filter(Boolean))].sort()
+}
+
 export { format, isSameMonth, isToday, addMonths, subMonths }

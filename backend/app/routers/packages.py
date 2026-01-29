@@ -1,6 +1,7 @@
 """
 Packages API router - create packages of JIRA issues from templates.
 """
+import uuid
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 
@@ -44,6 +45,10 @@ async def create_template(data: PackageTemplateCreate):
     if data.elements:
         await storage.set_template_elements(template_id, data.elements)
 
+    # Set associated instances
+    if data.instance_ids:
+        await storage.set_template_instances(template_id, data.instance_ids)
+
     template = await storage.get_package_template(template_id)
     return template
 
@@ -86,6 +91,10 @@ async def update_template(template_id: int, data: PackageTemplateUpdate):
     # Update elements if provided
     if data.elements is not None:
         await storage.set_template_elements(template_id, data.elements)
+
+    # Update associated instances if provided
+    if data.instance_ids is not None:
+        await storage.set_template_instances(template_id, data.instance_ids)
 
     updated = await storage.get_package_template(template_id)
     return updated
@@ -157,19 +166,49 @@ async def get_jira_issue_types(
 
 @router.post("/create", response_model=PackageCreateResponse)
 async def create_package(data: PackageCreateRequest):
-    """Create a package of issues (parent + children) on one or more JIRA instances."""
+    """Create a package of issues (parent + children) on one or more JIRA instances.
+    Automatically detects complementary instances and creates packages on them too."""
     storage = get_storage()
 
-    if not data.jira_instances:
+    if not data.instance_configs:
         raise HTTPException(status_code=400, detail="At least one JIRA instance is required")
 
     if not data.selected_elements:
         raise HTTPException(status_code=400, detail="At least one element must be selected")
 
+    # Build a map of instance_name -> project_key from the request
+    instance_project_map = {ic.instance_name: ic.project_key for ic in data.instance_configs}
+    selected_instance_names = set(instance_project_map.keys())
+
+    # Auto-detect complementary instances
+    auto_instances = {}  # instance_name -> project_key
+    for instance_name in list(selected_instance_names):
+        complementary_names = await storage.get_complementary_instances_for(instance_name)
+        for comp_name in complementary_names:
+            if comp_name not in selected_instance_names and comp_name not in auto_instances:
+                # Use default_project_key from the DB instance
+                comp_instance = await storage.get_jira_instance_by_name(comp_name)
+                if comp_instance and comp_instance.get("default_project_key"):
+                    auto_instances[comp_name] = comp_instance["default_project_key"]
+                    logger.info(f"Auto-adding complementary instance '{comp_name}' with default project '{comp_instance['default_project_key']}'")
+                else:
+                    logger.warning(f"Complementary instance '{comp_name}' skipped: no default_project_key configured")
+
+    # Merge: selected + auto-detected
+    all_instances = []
+    for name, project_key in instance_project_map.items():
+        all_instances.append({"name": name, "project_key": project_key, "auto": False})
+    for name, project_key in auto_instances.items():
+        all_instances.append({"name": name, "project_key": project_key, "auto": True})
+
     results = []
     errors = []
 
-    for instance_name in data.jira_instances:
+    for inst in all_instances:
+        instance_name = inst["name"]
+        project_key = inst["project_key"]
+        is_auto = inst["auto"]
+
         try:
             # Get JIRA instance credentials
             db_instance = await storage.get_jira_instance_by_name(instance_name)
@@ -191,7 +230,7 @@ async def create_package(data: PackageCreateRequest):
             # Step 1: Create parent issue
             logger.info(f"Creating parent issue on {instance_name}: {data.parent_summary}")
             parent_result = await client.create_issue(
-                project_key=data.project_key,
+                project_key=project_key,
                 summary=data.parent_summary,
                 issue_type=data.parent_issue_type,
                 description=data.parent_description
@@ -202,7 +241,7 @@ async def create_package(data: PackageCreateRequest):
             # Step 2: Create child issues linked to parent
             child_issues = [
                 {
-                    "project_key": data.project_key,
+                    "project_key": project_key,
                     "summary": element,
                     "issue_type": data.child_issue_type,
                     "parent_key": parent_key
@@ -250,18 +289,69 @@ async def create_package(data: PackageCreateRequest):
             results.append(PackageCreateResult(
                 jira_instance=instance_name,
                 parent_key=parent_key,
-                children=children_created
+                children=children_created,
+                auto_created=is_auto
             ))
 
-            logger.info(f"Package created on {instance_name}: parent={parent_key}, children={len(children_created)}")
+            logger.info(f"Package created on {instance_name}: parent={parent_key}, children={len(children_created)}, auto={is_auto}")
 
         except Exception as e:
             error_msg = f"{instance_name}: {str(e)}"
             errors.append(error_msg)
             logger.error(f"Failed to create package on {instance_name}: {e}")
 
+    # Save linked issues across instances (only if we have results on multiple instances)
+    linked_issues_saved = []
+    if len(results) > 1:
+        try:
+            links_to_save = []
+
+            # Link parents across instances
+            parent_group_id = str(uuid.uuid4())
+            for result in results:
+                links_to_save.append({
+                    "link_group_id": parent_group_id,
+                    "issue_key": result.parent_key,
+                    "jira_instance": result.jira_instance,
+                    "element_name": "parent"
+                })
+
+            # Link children by element name
+            for element_idx, element_name in enumerate(data.selected_elements):
+                child_group_id = str(uuid.uuid4())
+                for result in results:
+                    if element_idx < len(result.children):
+                        child_key = result.children[element_idx].get("key")
+                        if child_key:
+                            links_to_save.append({
+                                "link_group_id": child_group_id,
+                                "issue_key": child_key,
+                                "jira_instance": result.jira_instance,
+                                "element_name": element_name
+                            })
+
+            await storage.save_linked_issues(links_to_save)
+            linked_issues_saved = links_to_save
+            logger.info(f"Saved {len(links_to_save)} linked issue records")
+
+        except Exception as e:
+            logger.error(f"Failed to save linked issues: {e}")
+            errors.append(f"Package created but failed to save issue links: {str(e)}")
+
     return PackageCreateResponse(
         success=len(results) > 0,
         results=results,
-        errors=errors
+        errors=errors,
+        linked_issues=linked_issues_saved
     )
+
+
+@router.get("/linked-issues")
+async def get_linked_issues(
+    issue_key: str = Query(..., description="Issue key"),
+    jira_instance: str = Query(..., description="JIRA instance name")
+):
+    """Get issues linked to a given issue across JIRA instances."""
+    storage = get_storage()
+    linked = await storage.get_linked_issues_by_key(issue_key, jira_instance)
+    return {"linked_issues": linked}

@@ -175,6 +175,36 @@ def calculate_daily_trend(
     return result
 
 
+def calculate_daily_trend_by_instance(
+    worklogs: list[Worklog],
+    start_date: date,
+    end_date: date
+) -> dict[str, list[DailyHours]]:
+    """Calculate hours per day grouped by JIRA instance."""
+    # Group by instance then by day
+    instance_daily: dict[str, dict] = defaultdict(lambda: defaultdict(float))
+
+    for wl in worklogs:
+        instance = wl.jira_instance or "Unknown"
+        day = wl.started.date()
+        instance_daily[instance][day] += wl.time_spent_seconds / 3600
+
+    # Build result with all days filled in
+    result = {}
+    for instance, daily in instance_daily.items():
+        days = []
+        current = start_date
+        while current <= end_date:
+            days.append(DailyHours(
+                date=current,
+                hours=round(daily.get(current, 0), 2)
+            ))
+            current += timedelta(days=1)
+        result[instance] = days
+
+    return result
+
+
 def calculate_epic_hours(worklogs: list[Worklog]) -> list[EpicHours]:
     """Calculate hours per parent initiative (Epic, Project, etc.)."""
     initiative_data = defaultdict(lambda: {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getPackageTemplates, getJiraProjects, getJiraIssueTypes, createPackage, getJiraInstances } from '../api/client'
+import { getPackageTemplates, getJiraProjects, getJiraIssueTypes, createPackage, getJiraInstances, getComplementaryInstancesForPackage } from '../api/client'
 
 const PackageIcon = () => (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -43,23 +43,25 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState(null)
 
-    // Step 1: Template & Instance selection
+    // Step 0: Template & Instance selection
     const [selectedTemplate, setSelectedTemplate] = useState(null)
     const [selectedInstances, setSelectedInstances] = useState([])
+    const [autoInstances, setAutoInstances] = useState(new Map()) // name -> group_name
+    const [complementaryInfo, setComplementaryInfo] = useState(null) // info message
 
-    // Step 2: Parent issue config
-    const [projects, setProjects] = useState([])
+    // Step 1: Per-instance project config
+    const [instanceProjects, setInstanceProjects] = useState({}) // instanceName -> projects[]
+    const [instanceProjectKeys, setInstanceProjectKeys] = useState({}) // instanceName -> selected project_key
     const [issueTypes, setIssueTypes] = useState([])
-    const [projectKey, setProjectKey] = useState('')
     const [parentSummary, setParentSummary] = useState('')
     const [parentDescription, setParentDescription] = useState('')
     const [parentIssueType, setParentIssueType] = useState('')
 
-    // Step 3: Element selection
+    // Step 2: Element selection
     const [selectedElements, setSelectedElements] = useState([])
     const [childIssueType, setChildIssueType] = useState('')
 
-    // Step 4: Result
+    // Step 3: Result
     const [result, setResult] = useState(null)
 
     const stepLabels = ['Template', 'Parent', 'Elementi', 'Risultato']
@@ -76,7 +78,10 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
         setStep(0)
         setSelectedTemplate(null)
         setSelectedInstances([])
-        setProjectKey('')
+        setAutoInstances(new Map())
+        setComplementaryInfo(null)
+        setInstanceProjects({})
+        setInstanceProjectKeys({})
         setParentSummary('')
         setParentDescription('')
         setParentIssueType('')
@@ -84,7 +89,6 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
         setChildIssueType('')
         setResult(null)
         setError(null)
-        setProjects([])
         setIssueTypes([])
     }
 
@@ -104,16 +108,54 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
         }
     }
 
-    // Load projects when instances change
-    const loadProjects = async (instanceName) => {
+    // Detect complementary instances when selection changes
+    useEffect(() => {
+        if (selectedInstances.length > 0) {
+            detectComplementary()
+        } else {
+            setAutoInstances(new Map())
+            setComplementaryInfo(null)
+        }
+    }, [selectedInstances])
+
+    const detectComplementary = async () => {
         try {
-            setLoading(true)
-            const data = await getJiraProjects(instanceName)
-            setProjects(data.projects || [])
+            const autoMap = await getComplementaryInstancesForPackage(selectedInstances)
+            setAutoInstances(autoMap)
+
+            if (autoMap.size > 0) {
+                const names = Array.from(autoMap.keys()).join(', ')
+                const groupNames = [...new Set(autoMap.values())].join(', ')
+                setComplementaryInfo(
+                    `Il pacchetto verra' creato automaticamente anche su ${names} (gruppo: ${groupNames})`
+                )
+            } else {
+                setComplementaryInfo(null)
+            }
         } catch (err) {
-            setError(`Errore caricamento progetti: ${err.message}`)
-        } finally {
-            setLoading(false)
+            console.error('Error detecting complementary instances:', err)
+        }
+    }
+
+    // Get all instances that will be used (selected + auto)
+    const getAllInstanceNames = () => {
+        const all = [...selectedInstances]
+        for (const name of autoInstances.keys()) {
+            if (!all.includes(name)) {
+                all.push(name)
+            }
+        }
+        return all
+    }
+
+    // Load projects for an instance
+    const loadProjectsForInstance = async (instanceName) => {
+        try {
+            const data = await getJiraProjects(instanceName)
+            return data.projects || []
+        } catch (err) {
+            console.error(`Error loading projects for ${instanceName}:`, err)
+            return []
         }
     }
 
@@ -154,23 +196,55 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
 
     const handleNextStep = async () => {
         if (step === 0) {
-            // Going to Step 2: load projects from first selected instance
-            if (selectedInstances.length > 0) {
-                await loadProjects(selectedInstances[0])
+            // Going to Step 1: load projects for all instances
+            setLoading(true)
+            setError(null)
+            try {
+                const allNames = getAllInstanceNames()
+                const projectsMap = {}
+                const projectKeysMap = {}
+
+                await Promise.all(allNames.map(async (name) => {
+                    const projects = await loadProjectsForInstance(name)
+                    projectsMap[name] = projects
+
+                    // Set default project key from the instance's default_project_key
+                    const inst = instances.find(i => i.name === name)
+                    if (inst?.default_project_key) {
+                        projectKeysMap[name] = inst.default_project_key
+                    } else if (projects.length > 0) {
+                        projectKeysMap[name] = ''
+                    }
+                }))
+
+                setInstanceProjects(projectsMap)
+                setInstanceProjectKeys(projectKeysMap)
+
+                // Load issue types from first instance's selected project
+                const firstName = allNames[0]
+                if (projectKeysMap[firstName]) {
+                    await loadIssueTypes(firstName, projectKeysMap[firstName])
+                }
+            } catch (err) {
+                setError(err.message)
+            } finally {
+                setLoading(false)
             }
             setStep(1)
         } else if (step === 1) {
             setStep(2)
         } else if (step === 2) {
-            // Submit
             await handleCreate()
         }
     }
 
-    const handleProjectChange = async (projKey) => {
-        setProjectKey(projKey)
-        if (projKey && selectedInstances.length > 0) {
-            await loadIssueTypes(selectedInstances[0], projKey)
+    const handleProjectChange = async (instanceName, projKey) => {
+        setInstanceProjectKeys(prev => ({ ...prev, [instanceName]: projKey }))
+
+        // Load issue types from the first instance that has a project selected
+        const allNames = getAllInstanceNames()
+        if (instanceName === allNames[0] && projKey) {
+            await loadIssueTypes(instanceName, projKey)
         }
     }
 
@@ -179,10 +253,23 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
             setLoading(true)
             setError(null)
 
+            // Build instance_configs from selected + auto instances
+            const instanceConfigs = getAllInstanceNames()
+                .filter(name => instanceProjectKeys[name]) // only those with a project key
+                .map(name => ({
+                    instance_name: name,
+                    project_key: instanceProjectKeys[name]
+                }))
+
+            if (instanceConfigs.length === 0) {
+                setError('Seleziona un progetto per almeno un\'istanza')
+                setLoading(false)
+                return
+            }
+
             const response = await createPackage({
                 template_id: selectedTemplate?.id,
-                jira_instances: selectedInstances,
-                project_key: projectKey,
+                instance_configs: instanceConfigs,
                 parent_summary: parentSummary,
                 parent_description: parentDescription || null,
                 parent_issue_type: parentIssueType,
@@ -202,7 +289,12 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
     const canGoNext = () => {
         switch (step) {
             case 0: return selectedTemplate && selectedInstances.length > 0
-            case 1: return projectKey && parentSummary.trim() && parentIssueType
+            case 1: {
+                // At least the first selected instance must have a project key
+                const allNames = getAllInstanceNames()
+                const hasAnyProject = allNames.some(name => instanceProjectKeys[name])
+                return hasAnyProject && parentSummary.trim() && parentIssueType
+            }
             case 2: return selectedElements.length > 0
             default: return false
         }
@@ -294,57 +386,90 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                     Istanze JIRA
                                 </label>
                                 <div className="space-y-2">
-                                    {instances.map(inst => (
-                                        <label
-                                            key={inst.id}
-                                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                                                selectedInstances.includes(inst.name)
-                                                    ? 'bg-accent-blue/10 border-accent-blue'
-                                                    : 'bg-dark-700 border-dark-600 hover:border-dark-500'
-                                            }`}
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedInstances.includes(inst.name)}
-                                                onChange={() => handleInstanceToggle(inst.name)}
-                                                className="w-4 h-4 rounded border-dark-500 bg-dark-700 text-accent-blue focus:ring-accent-blue/50"
-                                            />
-                                            <div>
-                                                <div className="font-medium text-dark-100">{inst.name}</div>
-                                                <div className="text-xs text-dark-400">{inst.url}</div>
-                                            </div>
-                                        </label>
-                                    ))}
+                                    {instances.map(inst => {
+                                        const isAuto = autoInstances.has(inst.name)
+                                        const isSelected = selectedInstances.includes(inst.name)
+                                        return (
+                                            <label
+                                                key={inst.id}
+                                                className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
+                                                    isAuto
+                                                        ? 'bg-accent-purple/10 border-accent-purple/40 cursor-default'
+                                                        : isSelected
+                                                            ? 'bg-accent-blue/10 border-accent-blue cursor-pointer'
+                                                            : 'bg-dark-700 border-dark-600 hover:border-dark-500 cursor-pointer'
+                                                }`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isSelected || isAuto}
+                                                    onChange={() => !isAuto && handleInstanceToggle(inst.name)}
+                                                    disabled={isAuto}
+                                                    className="w-4 h-4 rounded border-dark-500 bg-dark-700 text-accent-blue focus:ring-accent-blue/50 disabled:opacity-60"
+                                                />
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-medium text-dark-100">{inst.name}</span>
+                                                        {isAuto && (
+                                                            <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase bg-accent-purple/20 text-accent-purple rounded">
+                                                                Auto
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-xs text-dark-400">{inst.url}</div>
+                                                </div>
+                                            </label>
+                                        )
+                                    })}
                                 </div>
+
+                                {/* Complementary info message */}
+                                {complementaryInfo && (
+                                    <div className="mt-3 p-3 bg-accent-purple/10 border border-accent-purple/30 rounded-lg text-sm text-accent-purple">
+                                        {complementaryInfo}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
 
-                    {/* Step 1: Parent Issue Config */}
+                    {/* Step 1: Parent Issue Config - per-instance projects */}
                     {step === 1 && (
                         <div className="space-y-4">
-                            {/* Project */}
+                            {/* Per-instance project selectors */}
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-2">
-                                    Progetto *
+                                <label className="block text-sm font-medium text-dark-300 mb-3">
+                                    Progetto per ogni istanza *
                                 </label>
-                                {loading ? (
-                                    <div className="flex items-center gap-2 text-dark-400 text-sm py-3">
-                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-accent-blue"></div>
-                                        Caricamento progetti...
-                                    </div>
-                                ) : (
-                                    <select
-                                        value={projectKey}
-                                        onChange={(e) => handleProjectChange(e.target.value)}
-                                        className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
-                                    >
-                                        <option value="">Seleziona progetto...</option>
-                                        {projects.map(p => (
-                                            <option key={p.key} value={p.key}>{p.key} - {p.name}</option>
-                                        ))}
-                                    </select>
-                                )}
+                                <div className="space-y-3">
+                                    {getAllInstanceNames().map(name => {
+                                        const isAuto = autoInstances.has(name)
+                                        const projects = instanceProjects[name] || []
+                                        const selectedKey = instanceProjectKeys[name] || ''
+                                        return (
+                                            <div key={name} className="flex items-center gap-3">
+                                                <div className="flex items-center gap-2 min-w-[120px]">
+                                                    <span className="text-sm font-medium text-dark-200">{name}</span>
+                                                    {isAuto && (
+                                                        <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase bg-accent-purple/20 text-accent-purple rounded">
+                                                            Auto
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <select
+                                                    value={selectedKey}
+                                                    onChange={(e) => handleProjectChange(name, e.target.value)}
+                                                    className="flex-1 px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 text-sm focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
+                                                >
+                                                    <option value="">Seleziona progetto...</option>
+                                                    {projects.map(p => (
+                                                        <option key={p.key} value={p.key}>{p.key} - {p.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
                             </div>
 
                             {/* Parent Issue Type */}
@@ -482,8 +607,15 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                             <div className="mt-4 p-4 bg-dark-900 rounded-lg border border-dark-700">
                                 <h4 className="text-sm font-medium text-dark-300 mb-2">Riepilogo</h4>
                                 <div className="text-sm text-dark-200 space-y-1">
-                                    <div>Istanze: <span className="text-accent-blue">{selectedInstances.join(', ')}</span></div>
-                                    <div>Progetto: <span className="text-accent-blue">{projectKey}</span></div>
+                                    <div>Istanze: {getAllInstanceNames().map(name => (
+                                        <span key={name} className="inline-flex items-center gap-1 mr-2">
+                                            <span className="text-accent-blue">{name}</span>
+                                            {autoInstances.has(name) && (
+                                                <span className="text-[10px] text-accent-purple font-bold">(Auto)</span>
+                                            )}
+                                            <span className="text-dark-500">({instanceProjectKeys[name] || '?'})</span>
+                                        </span>
+                                    ))}</div>
                                     <div>Parent: <span className="text-dark-100">{parentSummary}</span> ({parentIssueType})</div>
                                     <div>Figli: <span className="text-accent-green">{selectedElements.length}</span> issue ({childIssueType})</div>
                                 </div>
@@ -502,6 +634,11 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                         </svg>
                                     </div>
                                     <h3 className="text-lg font-bold text-dark-100">Pacchetto Creato!</h3>
+                                    {result.linked_issues && result.linked_issues.length > 0 && (
+                                        <p className="text-sm text-dark-400 mt-1">
+                                            Le issue sono state collegate nel database
+                                        </p>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="text-center py-4">
@@ -519,6 +656,11 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                 <div key={idx} className="p-4 bg-dark-700 rounded-lg border border-dark-600">
                                     <div className="flex items-center gap-2 mb-3">
                                         <span className="text-sm font-medium text-accent-blue">{r.jira_instance}</span>
+                                        {r.auto_created && (
+                                            <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase bg-accent-purple/20 text-accent-purple rounded">
+                                                Auto
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="space-y-2">
                                         <div className="flex items-center gap-2">

@@ -75,8 +75,12 @@ export async function getTeamDetail(teamName, startDate, endDate, jiraInstance =
 
 // ============ Users API ============
 
-export async function getUsers() {
-    return fetchApi('/users')
+export async function getUsers(startDate = null, endDate = null, jiraInstance = null) {
+    const params = {}
+    if (startDate) params.start_date = formatDate(startDate)
+    if (endDate) params.end_date = formatDate(endDate)
+    if (jiraInstance) params.jira_instance = jiraInstance
+    return fetchApi('/users', params)
 }
 
 export async function getUserDetail(email, startDate, endDate, jiraInstance = null) {
@@ -313,6 +317,10 @@ export async function createUsersBulk(emails, teamId = null) {
 
 // ============ Settings API - JIRA Accounts ============
 
+export async function bulkFetchJiraAccounts() {
+    return fetchApiPost('/settings/users/bulk-fetch-accounts', {})
+}
+
 export async function fetchJiraAccountId(userId, jiraInstance) {
     return fetchApiPost(`/settings/users/${userId}/fetch-account/${encodeURIComponent(jiraInstance)}`, {})
 }
@@ -351,6 +359,10 @@ export async function deleteJiraInstance(instanceId) {
 
 export async function testJiraInstance(instanceId) {
     return fetchApiPost(`/settings/jira-instances/${instanceId}/test`, {})
+}
+
+export async function getInstanceIssueTypes(instanceId) {
+    return fetchApi(`/settings/jira-instances/${instanceId}/issue-types`)
 }
 
 // ============ Settings API - Complementary Groups ============
@@ -473,4 +485,32 @@ export async function getJiraIssueTypes(instanceName, projectKey) {
 
 export async function createPackage(data) {
     return fetchApiPost('/packages/create', data)
+}
+
+export async function getLinkedIssues(issueKey, jiraInstance) {
+    return fetchApi('/packages/linked-issues', {
+        issue_key: issueKey,
+        jira_instance: jiraInstance
+    })
+}
+
+export async function getComplementaryInstancesForPackage(instanceNames) {
+    // Fetch complementary groups and resolve which instances are complementary
+    const { groups } = await getComplementaryGroups()
+    const autoInstances = new Map() // name -> group_name
+
+    for (const name of instanceNames) {
+        for (const group of groups) {
+            const memberNames = group.members.map(m => m.name)
+            if (memberNames.includes(name)) {
+                for (const member of group.members) {
+                    if (!instanceNames.includes(member.name) && !autoInstances.has(member.name)) {
+                        autoInstances.set(member.name, group.name)
+                    }
+                }
+            }
+        }
+    }
+
+    return autoInstances
 }

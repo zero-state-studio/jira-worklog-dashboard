@@ -93,6 +93,18 @@ class JiraClient:
             print(f"Error fetching projects from {self.instance.name}: {e}")
             return []
 
+    async def get_all_issue_types(self) -> list[dict]:
+        """Get all issue types for this JIRA instance (global, no project needed)."""
+        try:
+            result = await self._request("GET", "/issuetype")
+            return [
+                {"id": it["id"], "name": it["name"], "subtask": it.get("subtask", False)}
+                for it in result
+            ]
+        except httpx.HTTPError as e:
+            print(f"Error fetching issue types from {self.instance.name}: {e}")
+            return []
+
     async def get_issue_types_for_project(self, project_key: str) -> list[dict]:
         """Get issue types available for a specific project."""
         try:
