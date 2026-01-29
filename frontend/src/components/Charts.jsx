@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
     AreaChart,
     Area,
@@ -177,48 +178,94 @@ export function ComparisonBarChart({ data, dataKey = 'total_hours', nameKey = 'n
  * Pie/Donut Chart - for distribution
  */
 export function DistributionChart({ data, dataKey = 'value', nameKey = 'name', height = 300, innerRadius = 60 }) {
-    const total = data.reduce((sum, item) => sum + item[dataKey], 0)
+    const [hiddenItems, setHiddenItems] = useState(new Set())
+
+    const toggleItem = (name) => {
+        setHiddenItems(prev => {
+            const next = new Set(prev)
+            if (next.has(name)) {
+                next.delete(name)
+            } else {
+                // Don't allow hiding all items
+                if (next.size < data.length - 1) {
+                    next.add(name)
+                }
+            }
+            return next
+        })
+    }
+
+    const visibleData = data.filter(item => !hiddenItems.has(item[nameKey]))
+    const total = visibleData.reduce((sum, item) => sum + item[dataKey], 0)
+
+    // Map each original item to its fixed color
+    const colorMap = {}
+    data.forEach((item, index) => {
+        colorMap[item[nameKey]] = chartColors[index % chartColors.length]
+    })
 
     return (
-        <ResponsiveContainer width="100%" height={height}>
-            <PieChart>
-                <Pie
-                    data={data}
-                    dataKey={dataKey}
-                    nameKey={nameKey}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={innerRadius}
-                    outerRadius={innerRadius + 40}
-                    paddingAngle={2}
-                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                    labelLine={{ stroke: '#6e7681', strokeWidth: 1 }}
-                >
-                    {data.map((entry, index) => (
-                        <Cell
-                            key={index}
-                            fill={chartColors[index % chartColors.length]}
-                            stroke="transparent"
-                        />
-                    ))}
-                </Pie>
-                <Tooltip
-                    content={({ active, payload }) => {
-                        if (!active || !payload?.length) return null
-                        const item = payload[0]
-                        return (
-                            <div className="bg-dark-800 border border-dark-600 rounded-lg p-3 shadow-xl">
-                                <p className="text-dark-200 font-medium">{item.name}</p>
-                                <p className="text-dark-300">{formatHours(item.value)}</p>
-                                <p className="text-dark-400 text-sm">
-                                    {((item.value / total) * 100).toFixed(1)}% del totale
-                                </p>
-                            </div>
-                        )
-                    }}
-                />
-            </PieChart>
-        </ResponsiveContainer>
+        <div>
+            <ResponsiveContainer width="100%" height={height}>
+                <PieChart>
+                    <Pie
+                        data={visibleData}
+                        dataKey={dataKey}
+                        nameKey={nameKey}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={innerRadius}
+                        outerRadius={innerRadius + 40}
+                        paddingAngle={2}
+                        label={false}
+                        labelLine={false}
+                    >
+                        {visibleData.map((entry) => (
+                            <Cell
+                                key={entry[nameKey]}
+                                fill={colorMap[entry[nameKey]]}
+                                stroke="transparent"
+                            />
+                        ))}
+                    </Pie>
+                    <Tooltip
+                        content={({ active, payload }) => {
+                            if (!active || !payload?.length) return null
+                            const item = payload[0]
+                            return (
+                                <div className="bg-dark-800 border border-dark-600 rounded-lg p-3 shadow-xl">
+                                    <p className="text-dark-200 font-medium">{item.payload.full_name || item.name}</p>
+                                    <p className="text-dark-300">{formatHours(item.value)}</p>
+                                    <p className="text-dark-400 text-sm">
+                                        {((item.value / total) * 100).toFixed(1)}% del totale
+                                    </p>
+                                </div>
+                            )
+                        }}
+                    />
+                </PieChart>
+            </ResponsiveContainer>
+            {/* Custom clickable legend below the chart */}
+            <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-2 px-2">
+                {data.map((item) => {
+                    const isHidden = hiddenItems.has(item[nameKey])
+                    const color = colorMap[item[nameKey]]
+                    return (
+                        <button
+                            key={item[nameKey]}
+                            onClick={() => toggleItem(item[nameKey])}
+                            className={`flex items-center gap-1.5 text-xs transition-opacity duration-200 ${isHidden ? 'opacity-30' : 'opacity-100'} hover:opacity-80`}
+                        >
+                            <span
+                                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: color }}
+                            />
+                            <span className="text-dark-300">{item.full_name || item[nameKey]}</span>
+                        </button>
+                    )
+                })}
+            </div>
+        </div>
     )
 }
 

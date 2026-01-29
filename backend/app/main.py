@@ -15,7 +15,7 @@ from starlette.responses import Response
 
 from .config import get_config, DEMO_CONFIG, get_teams_from_db, get_users_from_db
 from .cache import get_storage
-from .routers import dashboard, teams, users, epics, sync, settings, logs, issues
+from .routers import dashboard, teams, users, epics, sync, settings, logs, issues, packages
 from .logging_config import (
     setup_logging, generate_request_id, request_id_var,
     get_logger, get_db_handler
@@ -216,6 +216,7 @@ app.include_router(issues.router)
 app.include_router(sync.router)
 app.include_router(settings.router)
 app.include_router(logs.router)
+app.include_router(packages.router)
 
 
 # Global exception handler to log tracebacks

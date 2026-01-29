@@ -4,6 +4,7 @@ import TeamsSection from '../components/settings/TeamsSection'
 import UsersSection from '../components/settings/UsersSection'
 import LogsSection from '../components/settings/LogsSection'
 import JiraInstancesSection from '../components/settings/JiraInstancesSection'
+import PackageTemplatesSection from '../components/settings/PackageTemplatesSection'
 
 const SettingsIcon = () => (
     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -182,6 +183,16 @@ export default function Settings() {
                     Utenti ({users.length})
                 </button>
                 <button
+                    onClick={() => setActiveTab('packages')}
+                    className={`px-6 py-3 rounded-lg font-medium transition-all ${
+                        activeTab === 'packages'
+                            ? 'bg-gradient-primary text-white shadow-glow'
+                            : 'bg-dark-800 text-dark-300 hover:bg-dark-700 hover:text-dark-100'
+                    }`}
+                >
+                    Pacchetti
+                </button>
+                <button
                     onClick={() => setActiveTab('logs')}
                     className={`px-6 py-3 rounded-lg font-medium transition-all ${
                         activeTab === 'logs'
@@ -220,6 +231,9 @@ export default function Settings() {
                             jiraInstances={jiraInstances}
                             onUsersChange={handleUsersChange}
                         />
+                    )}
+                    {activeTab === 'packages' && (
+                        <PackageTemplatesSection />
                     )}
                     {activeTab === 'logs' && (
                         <LogsSection />

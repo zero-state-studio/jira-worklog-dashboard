@@ -84,6 +84,92 @@ class JiraClient:
             print(f"Error searching user {email}: {e}")
             return None
 
+    async def get_projects(self) -> list[dict]:
+        """Get all accessible projects from this JIRA instance."""
+        try:
+            result = await self._request("GET", "/project")
+            return [{"key": p["key"], "name": p["name"], "id": p.get("id")} for p in result]
+        except httpx.HTTPError as e:
+            print(f"Error fetching projects from {self.instance.name}: {e}")
+            return []
+
+    async def get_issue_types_for_project(self, project_key: str) -> list[dict]:
+        """Get issue types available for a specific project."""
+        try:
+            result = await self._request("GET", f"/project/{project_key}/statuses")
+            # /project/{key}/statuses returns issue types with their statuses
+            seen = {}
+            for item in result:
+                name = item.get("name", "")
+                if name and name not in seen:
+                    seen[name] = {
+                        "id": item.get("id"),
+                        "name": name,
+                        "subtask": item.get("subtask", False)
+                    }
+            return list(seen.values())
+        except httpx.HTTPError:
+            # Fallback: get all issue types
+            try:
+                result = await self._request("GET", "/issuetype")
+                return [
+                    {"id": it["id"], "name": it["name"], "subtask": it.get("subtask", False)}
+                    for it in result
+                ]
+            except httpx.HTTPError as e:
+                print(f"Error fetching issue types from {self.instance.name}: {e}")
+                return []
+
+    async def create_issue(
+        self,
+        project_key: str,
+        summary: str,
+        issue_type: str = "Task",
+        parent_key: str = None,
+        description: str = None
+    ) -> dict:
+        """Create a single issue on JIRA. Returns {"id", "key", "self"}."""
+        fields = {
+            "project": {"key": project_key},
+            "summary": summary,
+            "issuetype": {"name": issue_type},
+        }
+        if parent_key:
+            fields["parent"] = {"key": parent_key}
+        if description:
+            # Atlassian Document Format
+            fields["description"] = {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [{"type": "text", "text": description}]
+                    }
+                ]
+            }
+        result = await self._request("POST", "/issue", json={"fields": fields})
+        return result
+
+    async def create_issues_bulk(self, issues: list[dict]) -> dict:
+        """Create multiple issues at once.
+        Each item: {"project_key", "summary", "issue_type", "parent_key" (optional)}
+        Returns {"issues": [...], "errors": [...]}
+        """
+        issue_updates = []
+        for issue in issues:
+            fields = {
+                "project": {"key": issue["project_key"]},
+                "summary": issue["summary"],
+                "issuetype": {"name": issue.get("issue_type", "Sub-task")},
+            }
+            if issue.get("parent_key"):
+                fields["parent"] = {"key": issue["parent_key"]}
+            issue_updates.append({"fields": fields})
+
+        result = await self._request("POST", "/issue/bulk", json={"issueUpdates": issue_updates})
+        return result
+
     async def get_all_users(self) -> dict[str, str]:
         """
         Get all users from JIRA and return a map of accountId -> email.

@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react'
-import { format, startOfMonth } from 'date-fns'
-import { it } from 'date-fns/locale'
-import { getSyncDefaults, getSyncStatus, syncWorklogs } from '../api/client'
+import { getSyncDefaults, getSyncStatus, syncWorklogsStream } from '../api/client'
 
 export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
     const [loading, setLoading] = useState(false)
@@ -16,6 +14,10 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
     const [selectedInstances, setSelectedInstances] = useState([])
     const [dataStatus, setDataStatus] = useState(null)
 
+    // Progress state
+    const [progress, setProgress] = useState(null) // current event
+    const [instanceStatuses, setInstanceStatuses] = useState({}) // instance_name -> status object
+
     useEffect(() => {
         if (isOpen) {
             loadDefaults()
@@ -28,6 +30,8 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
             setError(null)
             setResult(null)
             setShowRefreshButton(false)
+            setProgress(null)
+            setInstanceStatuses({})
 
             const [defaults, status] = await Promise.all([
                 getSyncDefaults(),
@@ -52,11 +56,44 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
             setError(null)
             setResult(null)
             setShowRefreshButton(false)
+            setProgress(null)
+            setInstanceStatuses({})
 
-            const syncResult = await syncWorklogs(
+            const syncResult = await syncWorklogsStream(
                 new Date(startDate),
                 new Date(endDate),
-                selectedInstances.length === instances.length ? null : selectedInstances
+                selectedInstances.length === instances.length ? null : selectedInstances,
+                (event) => {
+                    setProgress(event)
+
+                    if (event.type === 'instance_start') {
+                        setInstanceStatuses(prev => ({
+                            ...prev,
+                            [event.instance]: { status: 'in_progress', message: event.message }
+                        }))
+                    } else if (event.type === 'fetching_worklogs' || event.type === 'enriching' || event.type === 'saving') {
+                        setInstanceStatuses(prev => ({
+                            ...prev,
+                            [event.instance]: { status: 'in_progress', message: event.message }
+                        }))
+                    } else if (event.type === 'worklogs_fetched') {
+                        setInstanceStatuses(prev => ({
+                            ...prev,
+                            [event.instance]: { status: 'in_progress', message: event.message, count: event.count }
+                        }))
+                    } else if (event.type === 'instance_complete') {
+                        setInstanceStatuses(prev => ({
+                            ...prev,
+                            [event.instance]: {
+                                status: 'complete',
+                                synced: event.synced,
+                                updated: event.updated,
+                                deleted: event.deleted,
+                                message: event.message
+                            }
+                        }))
+                    }
+                }
             )
 
             setResult(syncResult)
@@ -65,7 +102,6 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
             const status = await getSyncStatus()
             setDataStatus(status)
 
-            // Show refresh button after 3 seconds (instead of auto-refreshing)
             setTimeout(() => {
                 setShowRefreshButton(true)
             }, 3000)
@@ -98,16 +134,21 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
 
     if (!isOpen) return null
 
+    // Determine which instances to show in progress
+    const instancesToShow = selectedInstances.length === instances.length
+        ? instances.map(i => i.name)
+        : selectedInstances
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                onClick={onClose}
+                onClick={syncing ? undefined : onClose}
             />
 
             {/* Modal */}
-            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-dark-700 animate-fade-in">
+            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-dark-700 animate-fade-in max-h-[90vh] flex flex-col">
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-dark-700">
                     <div>
@@ -116,21 +157,110 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
                             Scarica i worklog da JIRA
                         </p>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 rounded-lg hover:bg-dark-700 transition-colors"
-                    >
-                        <svg className="w-5 h-5 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+                    {!syncing && (
+                        <button
+                            onClick={onClose}
+                            className="p-2 rounded-lg hover:bg-dark-700 transition-colors"
+                        >
+                            <svg className="w-5 h-5 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    )}
                 </div>
 
                 {/* Content */}
-                <div className="p-6 space-y-6">
+                <div className="p-6 space-y-6 overflow-y-auto flex-1">
                     {loading ? (
                         <div className="flex items-center justify-center py-8">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent-blue"></div>
+                        </div>
+                    ) : syncing ? (
+                        /* Progress UI */
+                        <div className="space-y-5">
+                            <div className="text-center">
+                                <h3 className="text-lg font-semibold text-dark-100 mb-1">
+                                    Sincronizzazione in corso...
+                                </h3>
+                                <p className="text-sm text-dark-400">
+                                    Non chiudere questa finestra
+                                </p>
+                            </div>
+
+                            {/* Progress bar */}
+                            <div>
+                                <div className="flex items-center justify-between text-sm mb-2">
+                                    <span className="text-dark-300">Progresso</span>
+                                    <span className="text-dark-100 font-mono font-medium">
+                                        {progress?.percent ?? 0}%
+                                    </span>
+                                </div>
+                                <div className="w-full h-3 bg-dark-700 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-gradient-primary rounded-full transition-all duration-500 ease-out"
+                                        style={{ width: `${progress?.percent ?? 0}%` }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Instance statuses */}
+                            <div className="space-y-3">
+                                {instancesToShow.map((instName) => {
+                                    const status = instanceStatuses[instName]
+                                    const isComplete = status?.status === 'complete'
+                                    const isInProgress = status?.status === 'in_progress'
+
+                                    return (
+                                        <div
+                                            key={instName}
+                                            className={`p-3.5 rounded-lg border transition-colors ${
+                                                isComplete
+                                                    ? 'bg-accent-green/5 border-accent-green/30'
+                                                    : isInProgress
+                                                        ? 'bg-accent-blue/5 border-accent-blue/30'
+                                                        : 'bg-dark-700/30 border-dark-600/50'
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                {/* Status icon */}
+                                                {isComplete ? (
+                                                    <div className="w-5 h-5 rounded-full bg-accent-green/20 flex items-center justify-center flex-shrink-0">
+                                                        <svg className="w-3.5 h-3.5 text-accent-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                    </div>
+                                                ) : isInProgress ? (
+                                                    <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-accent-blue/30 border-t-accent-blue"></div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-5 h-5 rounded-full border-2 border-dark-500 flex-shrink-0" />
+                                                )}
+
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`font-medium text-sm ${
+                                                            isComplete ? 'text-accent-green' :
+                                                            isInProgress ? 'text-dark-100' :
+                                                            'text-dark-400'
+                                                        }`}>
+                                                            {instName}
+                                                        </span>
+                                                    </div>
+                                                    {status?.message && (
+                                                        <p className={`text-xs mt-0.5 ${isComplete ? 'text-accent-green/70' : 'text-dark-400'}`}>
+                                                            {isComplete
+                                                                ? `${status.synced} nuovi, ${status.updated} aggiornati, ${status.deleted} eliminati`
+                                                                : status.message
+                                                            }
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
                         </div>
                     ) : (
                         <>
@@ -244,7 +374,21 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
                                         </div>
                                     </div>
 
-                                    {/* Refresh Dashboard Button - appears after 3 seconds */}
+                                    {/* Per-instance summary */}
+                                    {Object.keys(instanceStatuses).length > 0 && (
+                                        <div className="mt-4 pt-3 border-t border-accent-green/20 space-y-1.5">
+                                            {Object.entries(instanceStatuses).map(([name, st]) => (
+                                                <div key={name} className="flex items-center justify-between text-xs">
+                                                    <span className="text-dark-300">{name}</span>
+                                                    <span className="text-dark-400">
+                                                        {st.synced} nuovi, {st.updated} agg., {st.deleted} elim.
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Refresh Dashboard Button */}
                                     {showRefreshButton && (
                                         <div className="mt-4 pt-4 border-t border-accent-green/30">
                                             <button
@@ -265,33 +409,28 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-end gap-3 p-6 border-t border-dark-700">
-                    <button
-                        onClick={onClose}
-                        className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors"
-                    >
-                        {result ? 'Chiudi' : 'Annulla'}
-                    </button>
-                    <button
-                        onClick={handleSync}
-                        disabled={syncing || selectedInstances.length === 0}
-                        className="flex items-center gap-2 px-5 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {syncing ? (
-                            <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                Sincronizzazione...
-                            </>
-                        ) : (
-                            <>
+                {!syncing && (
+                    <div className="flex items-center justify-end gap-3 p-6 border-t border-dark-700">
+                        <button
+                            onClick={onClose}
+                            className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors"
+                        >
+                            {result ? 'Chiudi' : 'Annulla'}
+                        </button>
+                        {!result && (
+                            <button
+                                onClick={handleSync}
+                                disabled={selectedInstances.length === 0}
+                                className="flex items-center gap-2 px-5 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                 </svg>
                                 Sincronizza
-                            </>
+                            </button>
                         )}
-                    </button>
-                </div>
+                    </div>
+                )}
             </div>
         </div>
     )

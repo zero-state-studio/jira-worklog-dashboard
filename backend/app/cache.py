@@ -230,6 +230,32 @@ class WorklogStorage:
                     ON jira_instances(name)
                 """)
 
+                # Package templates - configurable issue creation templates
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS package_templates (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL UNIQUE,
+                        description TEXT,
+                        default_project_key TEXT,
+                        parent_issue_type TEXT DEFAULT 'Task',
+                        child_issue_type TEXT DEFAULT 'Sub-task',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # Package template elements - the distinctive elements for each template
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS package_template_elements (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        template_id INTEGER NOT NULL REFERENCES package_templates(id) ON DELETE CASCADE,
+                        name TEXT NOT NULL,
+                        sort_order INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(template_id, name)
+                    )
+                """)
+
                 # ========== Migrations ==========
 
                 # Add parent columns to worklogs table (migration)
@@ -1512,6 +1538,176 @@ class WorklogStorage:
                 if row:
                     return row[0]
         return None
+
+    # ========== Package Template Operations ==========
+
+    async def create_package_template(
+        self,
+        name: str,
+        description: Optional[str] = None,
+        default_project_key: Optional[str] = None,
+        parent_issue_type: str = "Task",
+        child_issue_type: str = "Sub-task"
+    ) -> int:
+        """Create a new package template. Returns template_id."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                INSERT INTO package_templates (name, description, default_project_key, parent_issue_type, child_issue_type)
+                VALUES (?, ?, ?, ?, ?)
+            """, (name, description, default_project_key, parent_issue_type, child_issue_type))
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_package_template(self, template_id: int) -> Optional[dict]:
+        """Get a package template with its elements."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT id, name, description, default_project_key, parent_issue_type, child_issue_type,
+                       created_at, updated_at
+                FROM package_templates WHERE id = ?
+            """, (template_id,)) as cursor:
+                row = await cursor.fetchone()
+                if not row:
+                    return None
+
+                template = {
+                    "id": row[0],
+                    "name": row[1],
+                    "description": row[2],
+                    "default_project_key": row[3],
+                    "parent_issue_type": row[4],
+                    "child_issue_type": row[5],
+                    "created_at": row[6],
+                    "updated_at": row[7],
+                    "elements": []
+                }
+
+            # Get elements
+            async with db.execute("""
+                SELECT id, name, sort_order
+                FROM package_template_elements
+                WHERE template_id = ?
+                ORDER BY sort_order, id
+            """, (template_id,)) as cursor:
+                async for erow in cursor:
+                    template["elements"].append({
+                        "id": erow[0],
+                        "name": erow[1],
+                        "sort_order": erow[2]
+                    })
+
+        return template
+
+    async def get_all_package_templates(self) -> list[dict]:
+        """Get all package templates with their elements."""
+        await self.initialize()
+
+        templates = []
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT id, name, description, default_project_key, parent_issue_type, child_issue_type,
+                       created_at, updated_at
+                FROM package_templates
+                ORDER BY name
+            """) as cursor:
+                async for row in cursor:
+                    templates.append({
+                        "id": row[0],
+                        "name": row[1],
+                        "description": row[2],
+                        "default_project_key": row[3],
+                        "parent_issue_type": row[4],
+                        "child_issue_type": row[5],
+                        "created_at": row[6],
+                        "updated_at": row[7],
+                        "elements": []
+                    })
+
+            # Fetch elements for all templates
+            if templates:
+                template_ids = [t["id"] for t in templates]
+                placeholders = ",".join("?" * len(template_ids))
+                async with db.execute(f"""
+                    SELECT template_id, id, name, sort_order
+                    FROM package_template_elements
+                    WHERE template_id IN ({placeholders})
+                    ORDER BY sort_order, id
+                """, template_ids) as cursor:
+                    async for row in cursor:
+                        for t in templates:
+                            if t["id"] == row[0]:
+                                t["elements"].append({
+                                    "id": row[1],
+                                    "name": row[2],
+                                    "sort_order": row[3]
+                                })
+                                break
+
+        return templates
+
+    async def update_package_template(self, template_id: int, **kwargs) -> bool:
+        """Update package template fields. Returns True if updated."""
+        await self.initialize()
+
+        allowed_fields = {"name", "description", "default_project_key", "parent_issue_type", "child_issue_type"}
+        updates = []
+        values = []
+
+        for field, value in kwargs.items():
+            if field in allowed_fields and value is not None:
+                updates.append(f"{field} = ?")
+                values.append(value)
+
+        if not updates:
+            return False
+
+        values.append(template_id)
+        set_clause = ", ".join(updates)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                f"UPDATE package_templates SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                values
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def delete_package_template(self, template_id: int) -> bool:
+        """Delete a package template. Returns True if deleted."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "DELETE FROM package_templates WHERE id = ?",
+                (template_id,)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def set_template_elements(self, template_id: int, elements: list[str]) -> bool:
+        """Set the elements of a package template (replaces existing)."""
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            # Remove all existing elements
+            await db.execute(
+                "DELETE FROM package_template_elements WHERE template_id = ?",
+                (template_id,)
+            )
+
+            # Add new elements with sort order
+            for idx, name in enumerate(elements):
+                await db.execute("""
+                    INSERT INTO package_template_elements (template_id, name, sort_order)
+                    VALUES (?, ?, ?)
+                """, (template_id, name, idx))
+
+            await db.commit()
+            return True
 
     # ========== Utility Operations ==========
 

@@ -334,3 +334,51 @@ class MultiJiraOverviewResponse(BaseModel):
     complementary_comparisons: list[ComplementaryComparison]
     period_start: date
     period_end: date
+
+
+# ============ Package Templates ============
+
+class PackageTemplateCreate(BaseModel):
+    """Request to create a package template."""
+    name: str
+    description: Optional[str] = None
+    elements: list[str]
+    default_project_key: Optional[str] = None
+    parent_issue_type: str = "Task"
+    child_issue_type: str = "Sub-task"
+
+
+class PackageTemplateUpdate(BaseModel):
+    """Request to update a package template."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    elements: Optional[list[str]] = None
+    default_project_key: Optional[str] = None
+    parent_issue_type: Optional[str] = None
+    child_issue_type: Optional[str] = None
+
+
+class PackageCreateRequest(BaseModel):
+    """Request to create a package of issues on JIRA."""
+    template_id: Optional[int] = None
+    jira_instances: list[str]
+    project_key: str
+    parent_summary: str
+    parent_description: Optional[str] = None
+    parent_issue_type: str = "Task"
+    child_issue_type: str = "Sub-task"
+    selected_elements: list[str]
+
+
+class PackageCreateResult(BaseModel):
+    """Result of package creation on a single JIRA instance."""
+    jira_instance: str
+    parent_key: str
+    children: list[dict]
+
+
+class PackageCreateResponse(BaseModel):
+    """Response for package creation."""
+    success: bool
+    results: list[PackageCreateResult]
+    errors: list[str] = []

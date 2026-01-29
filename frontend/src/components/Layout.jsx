@@ -5,6 +5,7 @@ import { format, subDays, startOfMonth, startOfWeek } from 'date-fns'
 import { it } from 'date-fns/locale'
 import { getConfig, getEpics } from '../api/client'
 import SyncModal from './SyncModal'
+import CreatePackageModal from './CreatePackageModal'
 import 'react-datepicker/dist/react-datepicker.css'
 
 // Icons as SVG components
@@ -67,6 +68,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
     const [sidebarOpen, setSidebarOpen] = useState(true)
     const [datePickerOpen, setDatePickerOpen] = useState(false)
     const [syncModalOpen, setSyncModalOpen] = useState(false)
+    const [packageModalOpen, setPackageModalOpen] = useState(false)
 
     useEffect(() => {
         getConfig().then(setConfig).catch(console.error)
@@ -330,6 +332,17 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                                 </div>
                             )}
 
+                            {/* Create Package button */}
+                            <button
+                                onClick={() => setPackageModalOpen(true)}
+                                className="btn-secondary flex items-center gap-2 border-accent-cyan/50 hover:border-accent-cyan text-accent-cyan hover:bg-accent-cyan/10"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                </svg>
+                                <span className="hidden sm:inline">Pacchetto</span>
+                            </button>
+
                             {/* Sync button */}
                             <button
                                 onClick={() => setSyncModalOpen(true)}
@@ -352,19 +365,6 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                         </div>
                     </div>
 
-                    {/* Instance context banner when filtered */}
-                    {selectedInstance && (
-                        <div className="mt-3 flex items-center gap-2 text-sm">
-                            <span className="text-dark-400">Visualizzando dati di:</span>
-                            <span className="font-medium text-accent-blue">{selectedInstance}</span>
-                            <button
-                                onClick={() => setSelectedInstance(null)}
-                                className="ml-2 text-dark-500 hover:text-dark-300 transition-colors"
-                            >
-                                (mostra tutti)
-                            </button>
-                        </div>
-                    )}
                 </header>
 
                 {/* Page Content */}
@@ -386,6 +386,12 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                 isOpen={syncModalOpen}
                 onClose={() => setSyncModalOpen(false)}
                 onSyncComplete={() => window.location.reload()}
+            />
+
+            {/* Create Package Modal */}
+            <CreatePackageModal
+                isOpen={packageModalOpen}
+                onClose={() => setPackageModalOpen(false)}
             />
         </div>
     )

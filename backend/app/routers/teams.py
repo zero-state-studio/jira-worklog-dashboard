@@ -7,9 +7,14 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 
 from ..models import (
     TeamDetailResponse, TeamHours, UserHours, EpicHours, DailyHours,
-    AppConfig, Worklog
+    AppConfig, Worklog,
+    MultiJiraOverviewResponse, InstanceOverview,
+    ComplementaryComparison, DiscrepancyItem
 )
-from ..config import get_config, get_teams_from_db, get_team_emails_from_db, get_users_from_db, get_complementary_instances_from_db
+from ..config import (
+    get_config, get_teams_from_db, get_team_emails_from_db, get_users_from_db,
+    get_complementary_instances_from_db, get_jira_instances_from_db
+)
 from ..cache import get_storage
 from .dashboard import calculate_expected_hours, calculate_daily_trend, calculate_epic_hours
 
@@ -126,6 +131,145 @@ async def get_team_detail(
         members=member_hours,
         epics=epic_hours,
         daily_trend=daily_trend
+    )
+
+
+@router.get("/{team_name}/multi-jira-overview", response_model=MultiJiraOverviewResponse)
+async def get_team_multi_jira_overview(
+    team_name: str,
+    start_date: date = Query(..., description="Start date for the period"),
+    end_date: date = Query(..., description="End date for the period"),
+    config: AppConfig = Depends(get_config)
+):
+    """Get multi-JIRA overview data filtered by team members."""
+    teams = await get_teams_from_db()
+    users = await get_users_from_db()
+
+    # Validate team exists
+    team_data = None
+    for t in teams:
+        if t["name"].lower() == team_name.lower():
+            team_data = t
+            break
+
+    if not team_data:
+        raise HTTPException(status_code=404, detail=f"Team '{team_name}' not found")
+
+    # Get team members
+    team_members = [
+        u for u in users
+        if u.get("team_name", "").lower() == team_name.lower()
+    ]
+    team_emails = [m["email"] for m in team_members]
+
+    jira_instances = await get_jira_instances_from_db()
+
+    # Calculate expected hours for team members
+    expected_hours = calculate_expected_hours(
+        start_date, end_date, len(team_emails), config.settings.daily_working_hours
+    )
+
+    storage = get_storage()
+    instances_overview = []
+    instance_worklogs = {}
+
+    for inst in jira_instances:
+        worklogs = await storage.get_worklogs_in_range(
+            start_date, end_date,
+            user_emails=team_emails,
+            jira_instance=inst.name
+        )
+        instance_worklogs[inst.name] = worklogs
+
+        total_seconds = sum(w.time_spent_seconds for w in worklogs)
+        total_hours = total_seconds / 3600
+        completion = (total_hours / expected_hours * 100) if expected_hours > 0 else 0
+
+        initiatives = set()
+        contributors = set()
+        for w in worklogs:
+            if w.parent_key:
+                initiatives.add(w.parent_key)
+            contributors.add(w.author_email)
+
+        daily_trend = calculate_daily_trend(worklogs, start_date, end_date)
+
+        instances_overview.append(InstanceOverview(
+            instance_name=inst.name,
+            total_hours=round(total_hours, 2),
+            expected_hours=round(expected_hours, 2),
+            completion_percentage=round(completion, 1),
+            initiative_count=len(initiatives),
+            contributor_count=len(contributors),
+            daily_trend=daily_trend
+        ))
+
+    # Build complementary comparisons
+    complementary_comparisons = []
+    complementary_groups = await get_complementary_instances_from_db()
+
+    for group_name, group_instances in complementary_groups.items():
+        if len(group_instances) < 2:
+            continue
+
+        primary_name = group_instances[0]
+        for secondary_name in group_instances[1:]:
+            primary_wls = instance_worklogs.get(primary_name, [])
+            secondary_wls = instance_worklogs.get(secondary_name, [])
+
+            primary_total = sum(w.time_spent_seconds for w in primary_wls) / 3600
+            secondary_total = sum(w.time_spent_seconds for w in secondary_wls) / 3600
+
+            primary_by_init = defaultdict(lambda: {"hours": 0, "name": ""})
+            for w in primary_wls:
+                if w.parent_key:
+                    primary_by_init[w.parent_key]["hours"] += w.time_spent_seconds / 3600
+                    primary_by_init[w.parent_key]["name"] = w.parent_name or w.parent_key
+
+            secondary_by_init = defaultdict(lambda: {"hours": 0, "name": ""})
+            for w in secondary_wls:
+                if w.parent_key:
+                    secondary_by_init[w.parent_key]["hours"] += w.time_spent_seconds / 3600
+                    secondary_by_init[w.parent_key]["name"] = w.parent_name or w.parent_key
+
+            all_keys = set(primary_by_init.keys()) | set(secondary_by_init.keys())
+            discrepancies = []
+
+            for key in all_keys:
+                p_hours = primary_by_init[key]["hours"] if key in primary_by_init else 0
+                s_hours = secondary_by_init[key]["hours"] if key in secondary_by_init else 0
+                delta = abs(p_hours - s_hours)
+                max_hours = max(p_hours, s_hours)
+                delta_pct = (delta / max_hours * 100) if max_hours > 0 else 0
+
+                if delta > 1 or delta_pct > 10:
+                    name = (primary_by_init.get(key, {}).get("name") or
+                            secondary_by_init.get(key, {}).get("name") or key)
+                    discrepancies.append(DiscrepancyItem(
+                        initiative_key=key,
+                        initiative_name=name,
+                        primary_hours=round(p_hours, 2),
+                        secondary_hours=round(s_hours, 2),
+                        delta_hours=round(delta, 2),
+                        delta_percentage=round(delta_pct, 1)
+                    ))
+
+            discrepancies.sort(key=lambda d: d.delta_hours, reverse=True)
+
+            complementary_comparisons.append(ComplementaryComparison(
+                group_name=group_name,
+                primary_instance=primary_name,
+                secondary_instance=secondary_name,
+                primary_total_hours=round(primary_total, 2),
+                secondary_total_hours=round(secondary_total, 2),
+                discrepancies=discrepancies
+            ))
+
+    return MultiJiraOverviewResponse(
+        instances=instances_overview,
+        complementary_comparisons=complementary_comparisons,
+        period_start=start_date,
+        period_end=end_date
     )
 
 

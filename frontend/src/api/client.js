@@ -104,6 +104,13 @@ export async function getMultiJiraOverview(startDate, endDate) {
     })
 }
 
+export async function getTeamMultiJiraOverview(teamName, startDate, endDate) {
+    return fetchApi(`/teams/${encodeURIComponent(teamName)}/multi-jira-overview`, {
+        start_date: formatDate(startDate),
+        end_date: formatDate(endDate)
+    })
+}
+
 export async function getEpicDetail(epicKey, startDate, endDate, jiraInstance = null) {
     return fetchApi(`/epics/${encodeURIComponent(epicKey)}`, {
         start_date: formatDate(startDate),
@@ -160,6 +167,63 @@ export async function syncWorklogs(startDate, endDate, jiraInstances = null) {
     }
 
     return response.json()
+}
+
+export async function syncWorklogsStream(startDate, endDate, jiraInstances = null, onProgress) {
+    const response = await fetch(`${API_BASE}/sync/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            start_date: formatDate(startDate),
+            end_date: formatDate(endDate),
+            jira_instances: jiraInstances
+        })
+    })
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.detail || `Sync Error: ${response.status}`)
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let finalResult = null
+    let buffer = ''
+
+    while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() // keep incomplete line in buffer
+
+        for (const line of lines) {
+            if (!line.trim()) continue
+            try {
+                const event = JSON.parse(line)
+                if (event.type === 'complete') finalResult = event
+                else if (event.type === 'error') throw new Error(event.message)
+                onProgress?.(event)
+            } catch (e) {
+                if (e.message && !e.message.startsWith('Unexpected')) throw e
+            }
+        }
+    }
+
+    // Process any remaining buffer
+    if (buffer.trim()) {
+        try {
+            const event = JSON.parse(buffer)
+            if (event.type === 'complete') finalResult = event
+            else if (event.type === 'error') throw new Error(event.message)
+            onProgress?.(event)
+        } catch (e) {
+            if (e.message && !e.message.startsWith('Unexpected')) throw e
+        }
+    }
+
+    return finalResult
 }
 
 // ============ Settings API - Helper functions ============
@@ -379,4 +443,34 @@ export async function getIssueDetail(issueKey, startDate, endDate) {
 
 export async function syncIssueWorklogs(issueKey) {
     return fetchApiPost(`/issues/${encodeURIComponent(issueKey)}/sync`, {})
+}
+
+// ============ Packages API ============
+
+export async function getPackageTemplates() {
+    return fetchApi('/packages/templates')
+}
+
+export async function createPackageTemplate(data) {
+    return fetchApiPost('/packages/templates', data)
+}
+
+export async function updatePackageTemplate(templateId, data) {
+    return fetchApiPut(`/packages/templates/${templateId}`, data)
+}
+
+export async function deletePackageTemplate(templateId) {
+    return fetchApiDelete(`/packages/templates/${templateId}`)
+}
+
+export async function getJiraProjects(instanceName) {
+    return fetchApi('/packages/jira-projects', { instance: instanceName })
+}
+
+export async function getJiraIssueTypes(instanceName, projectKey) {
+    return fetchApi('/packages/jira-issue-types', { instance: instanceName, project_key: projectKey })
+}
+
+export async function createPackage(data) {
+    return fetchApiPost('/packages/create', data)
 }
