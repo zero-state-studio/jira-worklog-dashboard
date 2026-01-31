@@ -201,6 +201,7 @@ async def get_team_multi_jira_overview(
             contributors.add(w.author_email)
 
         daily_trend = calculate_daily_trend(worklogs, start_date, end_date)
+        instance_members = calculate_member_hours_from_db(worklogs, team_members, team_data["name"])
 
         instances_overview.append(InstanceOverview(
             instance_name=inst.name,
@@ -209,7 +210,8 @@ async def get_team_multi_jira_overview(
             completion_percentage=round(completion, 1),
             initiative_count=len(initiatives),
             contributor_count=len(contributors),
-            daily_trend=daily_trend
+            daily_trend=daily_trend,
+            members=instance_members
         ))
 
     # Build complementary comparisons

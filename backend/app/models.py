@@ -334,6 +334,7 @@ class InstanceOverview(BaseModel):
     initiative_count: int
     contributor_count: int
     daily_trend: list[DailyHours]
+    members: list[UserHours] = Field(default_factory=list)
 
 
 class DiscrepancyItem(BaseModel):

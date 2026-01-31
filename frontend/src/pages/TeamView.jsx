@@ -3,7 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getTeamDetail, getTeamMultiJiraOverview } from '../api/client'
 import { formatHours } from '../hooks/useData'
 import { StatCard, UserCard, EpicCard, ProgressBar, CardSkeleton, ErrorState, EmptyState } from '../components/Cards'
-import { TrendChart, ComparisonBarChart, DistributionChart, MultiTrendChart, ChartCard } from '../components/Charts'
+import { ComparisonBarChart, DistributionChart, MultiTrendChart, ChartCard } from '../components/Charts'
+import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+} from 'recharts'
 
 const instanceColors = [
     '#667eea', '#3fb950', '#a371f7', '#58a6ff', '#d29922', '#f85149',
@@ -172,50 +175,136 @@ export default function TeamView({ dateRange, selectedInstance }) {
                     </ChartCard>
                 </div>
 
-                {/* Complementary Comparisons */}
-                {overviewData.complementary_comparisons.length > 0 && (
-                    <div className="space-y-4">
-                        <h2 className="text-lg font-semibold text-dark-100">Confronto Istanze Complementari</h2>
-                        {overviewData.complementary_comparisons.map((comp) => (
-                            <ComplementaryCard key={comp.group_name} comparison={comp} />
-                        ))}
-                    </div>
-                )}
+                {/* Members Section with per-JIRA breakdown */}
+                {data.members.length > 0 && (() => {
+                    // Build per-member per-instance hours map
+                    const memberInstanceHours = {}
+                    const instanceNames = overviewData.instances.map(inst => inst.instance_name)
+                    overviewData.instances.forEach(inst => {
+                        (inst.members || []).forEach(m => {
+                            if (!memberInstanceHours[m.email]) memberInstanceHours[m.email] = {}
+                            memberInstanceHours[m.email][inst.instance_name] = m.total_hours
+                        })
+                    })
 
-                {/* Members Section */}
-                {data.members.length > 0 && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div>
-                            <h2 className="text-lg font-semibold text-dark-100 mb-4">Membri del Team</h2>
-                            <div className="space-y-3">
-                                {data.members.map((member) => (
-                                    <UserCard
-                                        key={member.email}
-                                        name={member.full_name}
-                                        email={member.email}
-                                        hours={member.total_hours}
-                                        teamName={data.team_name}
-                                        onClick={() => navigate(`/users/${encodeURIComponent(member.email)}`)}
-                                    />
-                                ))}
+                    // Build grouped bar chart data
+                    const groupedChartData = data.members.map(m => {
+                        const row = { name: m.full_name.split(' ')[0], full_name: m.full_name }
+                        instanceNames.forEach(instName => {
+                            row[instName] = memberInstanceHours[m.email]?.[instName] || 0
+                        })
+                        return row
+                    })
+
+                    return (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <h2 className="text-lg font-semibold text-dark-100 mb-4">Membri del Team</h2>
+                                <div className="space-y-3">
+                                    {data.members.map((member) => {
+                                        const instHours = memberInstanceHours[member.email] || {}
+                                        return (
+                                            <div
+                                                key={member.email}
+                                                onClick={() => navigate(`/users/${encodeURIComponent(member.email)}`)}
+                                                className="glass-card-hover p-4 flex items-center gap-4"
+                                            >
+                                                <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center flex-shrink-0">
+                                                    <span className="text-white font-semibold">
+                                                        {(member.full_name || member.email).split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                                                    </span>
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className="font-medium text-dark-100 truncate">{member.full_name}</h4>
+                                                    <div className="flex flex-wrap gap-1.5 mt-1">
+                                                        {instanceNames.map((instName, i) => {
+                                                            const h = instHours[instName] || 0
+                                                            if (h === 0) return null
+                                                            return (
+                                                                <span
+                                                                    key={instName}
+                                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                                                                    style={{
+                                                                        backgroundColor: `${instanceColors[i % instanceColors.length]}20`,
+                                                                        color: instanceColors[i % instanceColors.length],
+                                                                    }}
+                                                                >
+                                                                    {instName}: {formatHours(h)}
+                                                                </span>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </div>
+                                                <div className="text-right flex-shrink-0">
+                                                    <p className="font-semibold text-dark-100">{formatHours(member.total_hours)}</p>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
                             </div>
-                        </div>
 
-                        <ChartCard title="Confronto Membri" subtitle="Ore per membro del team">
-                            <ComparisonBarChart
-                                data={data.members.map(m => ({
-                                    name: m.full_name.split(' ')[0],
-                                    total_hours: m.total_hours,
-                                    full_name: m.full_name,
-                                }))}
-                                dataKey="total_hours"
-                                nameKey="name"
-                                height={data.members.length * 50 + 50}
-                                horizontal
-                            />
-                        </ChartCard>
-                    </div>
-                )}
+                            <ChartCard title="Confronto Membri" subtitle="Ore per membro per istanza JIRA">
+                                <ResponsiveContainer width="100%" height={data.members.length * 50 + 50}>
+                                    <BarChart
+                                        data={groupedChartData}
+                                        layout="vertical"
+                                        margin={{ top: 10, right: 30, left: 100, bottom: 10 }}
+                                    >
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#30363d" horizontal vertical={false} />
+                                        <XAxis
+                                            type="number"
+                                            axisLine={false}
+                                            tickLine={false}
+                                            tick={{ fill: '#8b949e', fontSize: 12 }}
+                                            tickFormatter={(value) => `${value}h`}
+                                        />
+                                        <YAxis
+                                            type="category"
+                                            dataKey="name"
+                                            axisLine={false}
+                                            tickLine={false}
+                                            tick={{ fill: '#c9d1d9', fontSize: 12 }}
+                                            width={90}
+                                        />
+                                        <Tooltip
+                                            content={({ active, payload, label }) => {
+                                                if (!active || !payload?.length) return null
+                                                return (
+                                                    <div className="bg-dark-800 border border-dark-600 rounded-lg p-3 shadow-xl">
+                                                        <p className="text-dark-300 text-sm mb-2">{payload[0]?.payload?.full_name || label}</p>
+                                                        {payload.map((entry, index) => (
+                                                            <div key={index} className="flex items-center gap-2">
+                                                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
+                                                                <span className="text-dark-400 text-sm">{entry.name}:</span>
+                                                                <span className="text-dark-200 font-medium">{formatHours(entry.value)}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )
+                                            }}
+                                        />
+                                        <Legend
+                                            verticalAlign="top"
+                                            height={36}
+                                            wrapperStyle={{ color: '#c9d1d9', fontSize: 12 }}
+                                        />
+                                        {instanceNames.map((instName, i) => (
+                                            <Bar
+                                                key={instName}
+                                                dataKey={instName}
+                                                name={instName}
+                                                fill={instanceColors[i % instanceColors.length]}
+                                                radius={[0, 4, 4, 0]}
+                                                maxBarSize={20}
+                                            />
+                                        ))}
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </ChartCard>
+                        </div>
+                    )
+                })()}
             </div>
         )
     }
@@ -302,23 +391,6 @@ export default function TeamView({ dateRange, selectedInstance }) {
                 />
             </div>
 
-            {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <ChartCard title="Trend Giornaliero" subtitle="Ore registrate dal team">
-                    <TrendChart data={data.daily_trend} height={280} />
-                </ChartCard>
-
-                <ChartCard title="Distribuzione Iniziative" subtitle="Come sono distribuite le ore">
-                    {initiativePieData.length > 0 ? (
-                        <DistributionChart data={initiativePieData} height={280} />
-                    ) : (
-                        <div className="h-64 flex items-center justify-center text-dark-400">
-                            Nessuna iniziativa nel periodo selezionato
-                        </div>
-                    )}
-                </ChartCard>
-            </div>
-
             {/* Members Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
@@ -347,6 +419,17 @@ export default function TeamView({ dateRange, selectedInstance }) {
                     />
                 </ChartCard>
             </div>
+
+            {/* Distribuzione Iniziative */}
+            <ChartCard title="Distribuzione Iniziative" subtitle="Come sono distribuite le ore">
+                {initiativePieData.length > 0 ? (
+                    <DistributionChart data={initiativePieData} height={280} />
+                ) : (
+                    <div className="h-64 flex items-center justify-center text-dark-400">
+                        Nessuna iniziativa nel periodo selezionato
+                    </div>
+                )}
+            </ChartCard>
 
             {/* Iniziative Section */}
             {data.epics.length > 0 && (
@@ -410,93 +493,6 @@ function InstanceCard({ instance, color }) {
                     </p>
                 </div>
             </div>
-        </div>
-    )
-}
-
-
-function ComplementaryCard({ comparison }) {
-    const totalDelta = Math.abs(comparison.primary_total_hours - comparison.secondary_total_hours)
-
-    return (
-        <div className="glass-card p-6 space-y-4">
-            <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-accent-orange/20 flex items-center justify-center">
-                    <svg className="w-4 h-4 text-accent-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                    </svg>
-                </div>
-                <div>
-                    <h3 className="font-semibold text-dark-100">{comparison.group_name}</h3>
-                    <p className="text-xs text-dark-400">
-                        {comparison.primary_instance} vs {comparison.secondary_instance}
-                    </p>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-                <div className="bg-dark-700/50 rounded-lg p-4 text-center">
-                    <p className="text-xs text-dark-400 mb-1">{comparison.primary_instance}</p>
-                    <p className="text-xl font-bold text-accent-blue">{formatHours(comparison.primary_total_hours)}</p>
-                </div>
-                <div className="bg-dark-700/50 rounded-lg p-4 text-center">
-                    <p className="text-xs text-dark-400 mb-1">{comparison.secondary_instance}</p>
-                    <p className="text-xl font-bold text-accent-green">{formatHours(comparison.secondary_total_hours)}</p>
-                </div>
-                <div className="bg-dark-700/50 rounded-lg p-4 text-center">
-                    <p className="text-xs text-dark-400 mb-1">Delta</p>
-                    <p className={`text-xl font-bold ${totalDelta > 5 ? 'text-accent-red' : totalDelta > 1 ? 'text-accent-orange' : 'text-accent-green'}`}>
-                        {formatHours(totalDelta)}
-                    </p>
-                </div>
-            </div>
-
-            {comparison.discrepancies.length > 0 ? (
-                <div>
-                    <h4 className="text-sm font-medium text-dark-300 mb-3">
-                        Discrepanze ({comparison.discrepancies.length})
-                    </h4>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-dark-600">
-                                    <th className="text-left py-2 px-3 text-dark-400 font-medium">Iniziativa</th>
-                                    <th className="text-right py-2 px-3 text-dark-400 font-medium">{comparison.primary_instance}</th>
-                                    <th className="text-right py-2 px-3 text-dark-400 font-medium">{comparison.secondary_instance}</th>
-                                    <th className="text-right py-2 px-3 text-dark-400 font-medium">Delta</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {comparison.discrepancies.map((disc) => {
-                                    const severity = disc.delta_hours > 8 ? 'high' : disc.delta_hours > 2 ? 'medium' : 'low'
-                                    const badgeClass = severity === 'high'
-                                        ? 'bg-red-500/20 text-red-400'
-                                        : severity === 'medium'
-                                            ? 'bg-orange-500/20 text-orange-400'
-                                            : 'bg-yellow-500/20 text-yellow-400'
-                                    return (
-                                        <tr key={disc.initiative_key} className="border-b border-dark-700/50 hover:bg-dark-700/30 transition-colors">
-                                            <td className="py-2 px-3">
-                                                <span className="text-dark-200 font-medium">{disc.initiative_key}</span>
-                                                <span className="text-dark-400 ml-2 truncate">{disc.initiative_name}</span>
-                                            </td>
-                                            <td className="text-right py-2 px-3 text-dark-200">{formatHours(disc.primary_hours)}</td>
-                                            <td className="text-right py-2 px-3 text-dark-200">{formatHours(disc.secondary_hours)}</td>
-                                            <td className="text-right py-2 px-3">
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badgeClass}`}>
-                                                    {formatHours(disc.delta_hours)} ({disc.delta_percentage}%)
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    )
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            ) : (
-                <p className="text-dark-400 text-sm text-center py-2">Nessuna discrepanza significativa</p>
-            )}
         </div>
     )
 }
