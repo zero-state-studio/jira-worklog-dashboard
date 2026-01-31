@@ -295,6 +295,27 @@ class WorklogStorage:
                     ON linked_issues(link_group_id)
                 """)
 
+                # Holidays table
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS holidays (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        holiday_date TEXT NOT NULL,
+                        holiday_type TEXT NOT NULL,
+                        month INTEGER,
+                        day INTEGER,
+                        country TEXT DEFAULT 'IT',
+                        is_active INTEGER DEFAULT 1,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(holiday_date, country)
+                    )
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_holidays_date
+                    ON holidays(holiday_date)
+                """)
+
                 # ========== Migrations ==========
 
                 # Add parent columns to worklogs table (migration)
@@ -1988,6 +2009,111 @@ class WorklogStorage:
             await db.execute("DELETE FROM epics")
             await db.execute("DELETE FROM sync_history")
             await db.commit()
+
+    # ========== Holiday Operations ==========
+
+    async def get_holidays_for_year(self, year: int, country: str = "IT") -> list[dict]:
+        """Get all holidays for a given year and country."""
+        await self.initialize()
+        start = f"{year}-01-01"
+        end = f"{year}-12-31"
+        holidays = []
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT id, name, holiday_date, holiday_type, month, day,
+                       country, is_active, created_at, updated_at
+                FROM holidays
+                WHERE holiday_date >= ? AND holiday_date <= ? AND country = ?
+                ORDER BY holiday_date
+            """, (start, end, country)) as cursor:
+                async for row in cursor:
+                    holidays.append({
+                        "id": row[0], "name": row[1], "holiday_date": row[2],
+                        "holiday_type": row[3], "month": row[4], "day": row[5],
+                        "country": row[6], "is_active": bool(row[7]),
+                        "created_at": row[8], "updated_at": row[9]
+                    })
+        return holidays
+
+    async def get_active_holiday_dates(self, start_date: str, end_date: str, country: str = "IT") -> set[str]:
+        """Get set of active holiday date strings (ISO format) in a date range.
+        Auto-seeds holidays for years in range if none exist."""
+        await self.initialize()
+
+        # Auto-seed holidays for each year in the range
+        start_year = int(start_date[:4])
+        end_year = int(end_date[:4])
+        for y in range(start_year, end_year + 1):
+            existing = await self.get_holidays_for_year(y, country)
+            if not existing:
+                await self.seed_holidays_for_year(y, country)
+
+        dates = set()
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT holiday_date FROM holidays
+                WHERE holiday_date >= ? AND holiday_date <= ?
+                AND country = ? AND is_active = 1
+            """, (start_date, end_date, country)) as cursor:
+                async for row in cursor:
+                    dates.add(row[0])
+        return dates
+
+    async def seed_holidays_for_year(self, year: int, country: str = "IT") -> int:
+        """Seed default holidays for a year. Skips existing dates. Returns count inserted."""
+        await self.initialize()
+        from .holidays import generate_holidays_for_year
+        holidays = generate_holidays_for_year(year, country)
+        inserted = 0
+        async with aiosqlite.connect(self.db_path) as db:
+            for h in holidays:
+                try:
+                    await db.execute("""
+                        INSERT INTO holidays (name, holiday_date, holiday_type, month, day, country, is_active)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (h["name"], h["holiday_date"], h["holiday_type"],
+                          h["month"], h["day"], h["country"], h["is_active"]))
+                    inserted += 1
+                except Exception:
+                    pass  # UNIQUE constraint - already exists
+            await db.commit()
+        return inserted
+
+    async def create_holiday(self, name: str, holiday_date: str, country: str = "IT") -> int:
+        """Create a custom holiday. Returns holiday_id."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                INSERT INTO holidays (name, holiday_date, holiday_type, country, is_active)
+                VALUES (?, ?, 'custom', ?, 1)
+            """, (name, holiday_date, country))
+            await db.commit()
+            return cursor.lastrowid
+
+    async def update_holiday(self, holiday_id: int, **kwargs) -> bool:
+        """Update holiday fields (name, is_active)."""
+        await self.initialize()
+        allowed = {"name", "is_active"}
+        updates = {k: v for k, v in kwargs.items() if k in allowed}
+        if not updates:
+            return False
+        set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
+        values = list(updates.values()) + [holiday_id]
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                f"UPDATE holidays SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                values
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def delete_holiday(self, holiday_id: int) -> bool:
+        """Delete a holiday."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("DELETE FROM holidays WHERE id = ?", (holiday_id,))
+            await db.commit()
+            return cursor.rowcount > 0
 
 
 # Global storage instance

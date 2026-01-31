@@ -10,7 +10,8 @@ from ..models import (
     UserCreate, UserUpdate, UserInDB,
     FetchAccountIdRequest, FetchAccountIdResponse,
     ImportConfigResponse,
-    BulkUserCreateRequest, BulkUserCreateResult, BulkUserCreateResponse
+    BulkUserCreateRequest, BulkUserCreateResult, BulkUserCreateResponse,
+    HolidayCreate, HolidayUpdate,
 )
 from ..config import get_config
 from ..cache import get_storage
@@ -896,3 +897,82 @@ async def remove_member_from_group(group_id: int, instance_id: int):
         raise HTTPException(status_code=404, detail="Instance not in group")
 
     return {"success": True, "message": "Instance removed from group"}
+
+
+# ========== Holidays Endpoints ==========
+
+@router.get("/holidays/{year}")
+async def get_holidays(year: int, country: str = "IT"):
+    """Get holidays for a year. Auto-seeds defaults if none exist."""
+    storage = get_storage()
+
+    holidays = await storage.get_holidays_for_year(year, country)
+
+    # Auto-seed if empty for this year
+    if not holidays:
+        inserted = await storage.seed_holidays_for_year(year, country)
+        if inserted > 0:
+            holidays = await storage.get_holidays_for_year(year, country)
+
+    active_count = sum(1 for h in holidays if h["is_active"])
+
+    return {
+        "year": year,
+        "country": country,
+        "holidays": holidays,
+        "total": len(holidays),
+        "active": active_count
+    }
+
+
+@router.post("/holidays")
+async def create_holiday(data: HolidayCreate):
+    """Create a custom holiday."""
+    storage = get_storage()
+
+    try:
+        holiday_id = await storage.create_holiday(
+            data.name, data.holiday_date.isoformat(), data.country
+        )
+    except Exception:
+        raise HTTPException(status_code=400, detail="Holiday already exists for this date")
+
+    return {"id": holiday_id, "success": True}
+
+
+@router.put("/holidays/{holiday_id}")
+async def update_holiday(holiday_id: int, data: HolidayUpdate):
+    """Update a holiday (name, is_active)."""
+    storage = get_storage()
+
+    update_fields = {}
+    if data.name is not None:
+        update_fields["name"] = data.name
+    if data.is_active is not None:
+        update_fields["is_active"] = 1 if data.is_active else 0
+
+    updated = await storage.update_holiday(holiday_id, **update_fields)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Holiday not found")
+
+    return {"success": True}
+
+
+@router.delete("/holidays/{holiday_id}")
+async def delete_holiday(holiday_id: int):
+    """Delete a holiday."""
+    storage = get_storage()
+
+    deleted = await storage.delete_holiday(holiday_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Holiday not found")
+
+    return {"success": True}
+
+
+@router.post("/holidays/{year}/seed")
+async def seed_holidays(year: int, country: str = "IT"):
+    """Re-seed default holidays for a year (won't duplicate existing)."""
+    storage = get_storage()
+    inserted = await storage.seed_holidays_for_year(year, country)
+    return {"inserted": inserted, "year": year, "country": country}

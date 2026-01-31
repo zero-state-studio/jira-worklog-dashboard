@@ -101,9 +101,12 @@ async def list_users(
         if wl.parent_key:
             user_initiatives[email_lower].add(wl.parent_key)
 
-    # Expected hours per user
+    # Expected hours per user (excluding holidays)
+    holiday_dates = await storage.get_active_holiday_dates(
+        start_date.isoformat(), end_date.isoformat()
+    )
     expected_hours_per_user = calculate_expected_hours(
-        start_date, end_date, 1, config.settings.daily_working_hours
+        start_date, end_date, 1, config.settings.daily_working_hours, holiday_dates
     )
 
     result = []
@@ -182,12 +185,16 @@ async def get_user_detail(
     total_seconds = sum(w.time_spent_seconds for w in filtered_worklogs)
     total_hours = total_seconds / 3600
 
-    # Expected hours for single user
+    # Expected hours for single user (excluding holidays)
+    holiday_dates = await storage.get_active_holiday_dates(
+        start_date.isoformat(), end_date.isoformat()
+    )
     expected_hours = calculate_expected_hours(
         start_date,
         end_date,
         1,
-        config.settings.daily_working_hours
+        config.settings.daily_working_hours,
+        holiday_dates
     )
 
     # Hours per epic (filtered)

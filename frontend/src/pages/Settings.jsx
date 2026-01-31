@@ -5,6 +5,7 @@ import UsersSection from '../components/settings/UsersSection'
 import LogsSection from '../components/settings/LogsSection'
 import JiraInstancesSection from '../components/settings/JiraInstancesSection'
 import PackageTemplatesSection from '../components/settings/PackageTemplatesSection'
+import HolidaysSection from '../components/settings/HolidaysSection'
 
 const SettingsIcon = () => (
     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -193,6 +194,16 @@ export default function Settings() {
                     Pacchetti
                 </button>
                 <button
+                    onClick={() => setActiveTab('holidays')}
+                    className={`px-6 py-3 rounded-lg font-medium transition-all ${
+                        activeTab === 'holidays'
+                            ? 'bg-gradient-primary text-white shadow-glow'
+                            : 'bg-dark-800 text-dark-300 hover:bg-dark-700 hover:text-dark-100'
+                    }`}
+                >
+                    Festivita'
+                </button>
+                <button
                     onClick={() => setActiveTab('logs')}
                     className={`px-6 py-3 rounded-lg font-medium transition-all ${
                         activeTab === 'logs'
@@ -234,6 +245,9 @@ export default function Settings() {
                     )}
                     {activeTab === 'packages' && (
                         <PackageTemplatesSection />
+                    )}
+                    {activeTab === 'holidays' && (
+                        <HolidaysSection />
                     )}
                     {activeTab === 'logs' && (
                         <LogsSection />

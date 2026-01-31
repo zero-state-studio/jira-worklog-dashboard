@@ -13,7 +13,10 @@ const API_BASE = isTauri() ? 'http://localhost:8000/api' : '/api'
  * Format a date for API requests
  */
 function formatDate(date) {
-    return date.toISOString().split('T')[0]
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
 }
 
 /**
@@ -513,4 +516,26 @@ export async function getComplementaryInstancesForPackage(instanceNames) {
     }
 
     return autoInstances
+}
+
+// ============ Settings API - Holidays ============
+
+export async function getHolidays(year, country = 'IT') {
+    return fetchApi(`/settings/holidays/${year}`, { country })
+}
+
+export async function createHoliday(data) {
+    return fetchApiPost('/settings/holidays', data)
+}
+
+export async function updateHoliday(holidayId, data) {
+    return fetchApiPut(`/settings/holidays/${holidayId}`, data)
+}
+
+export async function deleteHoliday(holidayId) {
+    return fetchApiDelete(`/settings/holidays/${holidayId}`)
+}
+
+export async function seedHolidays(year, country = 'IT') {
+    return fetchApiPost(`/settings/holidays/${year}/seed`, { country })
 }

@@ -107,12 +107,16 @@ async def get_team_detail(
     total_seconds = sum(w.time_spent_seconds for w in worklogs)
     total_hours = total_seconds / 3600
 
-    # Expected hours
+    # Expected hours (excluding holidays)
+    holiday_dates = await storage.get_active_holiday_dates(
+        start_date.isoformat(), end_date.isoformat()
+    )
     expected_hours = calculate_expected_hours(
         start_date,
         end_date,
         len(team_emails),
-        config.settings.daily_working_hours
+        config.settings.daily_working_hours,
+        holiday_dates
     )
 
     # Hours per member
@@ -164,12 +168,16 @@ async def get_team_multi_jira_overview(
 
     jira_instances = await get_jira_instances_from_db()
 
-    # Calculate expected hours for team members
-    expected_hours = calculate_expected_hours(
-        start_date, end_date, len(team_emails), config.settings.daily_working_hours
-    )
-
     storage = get_storage()
+
+    # Calculate expected hours for team members (excluding holidays)
+    holiday_dates = await storage.get_active_holiday_dates(
+        start_date.isoformat(), end_date.isoformat()
+    )
+    expected_hours = calculate_expected_hours(
+        start_date, end_date, len(team_emails), config.settings.daily_working_hours,
+        holiday_dates
+    )
     instances_overview = []
     instance_worklogs = {}
 

@@ -63,12 +63,16 @@ async def get_dashboard(
     total_seconds = sum(w.time_spent_seconds for w in worklogs)
     total_hours = total_seconds / 3600
 
-    # Calculate expected hours (working days only)
+    # Calculate expected hours (working days only, excluding holidays)
+    holiday_dates = await storage.get_active_holiday_dates(
+        start_date.isoformat(), end_date.isoformat()
+    )
     expected_hours = calculate_expected_hours(
         start_date,
         end_date,
         len(all_emails),
-        config.settings.daily_working_hours
+        config.settings.daily_working_hours,
+        holiday_dates
     )
 
     # Hours per team (with total member count from configuration)
@@ -97,19 +101,23 @@ async def get_dashboard(
 
 
 def calculate_expected_hours(
-    start_date: date, 
-    end_date: date, 
+    start_date: date,
+    end_date: date,
     num_users: int,
-    daily_hours: int
+    daily_hours: int,
+    holiday_dates: set[str] = None
 ) -> float:
-    """Calculate expected working hours for the period."""
+    """Calculate expected working hours for the period, excluding holidays."""
+    if holiday_dates is None:
+        holiday_dates = set()
+
     working_days = 0
     current = start_date
     while current <= end_date:
-        if current.weekday() < 5:  # Monday-Friday
+        if current.weekday() < 5 and current.isoformat() not in holiday_dates:
             working_days += 1
         current += timedelta(days=1)
-    
+
     return working_days * num_users * daily_hours
 
 
@@ -253,9 +261,13 @@ async def get_multi_jira_overview(
     all_emails = [u["email"] for u in users]
     jira_instances = await get_jira_instances_from_db()
 
-    # Calculate expected hours (shared across all instances)
+    # Calculate expected hours (shared across all instances, excluding holidays)
+    holiday_dates = await storage.get_active_holiday_dates(
+        start_date.isoformat(), end_date.isoformat()
+    )
     expected_hours = calculate_expected_hours(
-        start_date, end_date, len(all_emails), config.settings.daily_working_hours
+        start_date, end_date, len(all_emails), config.settings.daily_working_hours,
+        holiday_dates
     )
 
     # Gather per-instance data

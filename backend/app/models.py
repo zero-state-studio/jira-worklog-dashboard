@@ -211,6 +211,33 @@ class BulkUserCreateResponse(BaseModel):
     results: list[BulkUserCreateResult]
 
 
+# ============ Holiday Models ============
+
+class HolidayCreate(BaseModel):
+    """Model for creating a custom holiday."""
+    name: str
+    holiday_date: date
+    country: str = "IT"
+
+class HolidayUpdate(BaseModel):
+    """Model for updating a holiday."""
+    name: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class HolidayInDB(BaseModel):
+    """Holiday model with database fields."""
+    id: int
+    name: str
+    holiday_date: str
+    holiday_type: str
+    month: Optional[int] = None
+    day: Optional[int] = None
+    country: str = "IT"
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
 # ============ API Response Models ============
 
 class DailyHours(BaseModel):
