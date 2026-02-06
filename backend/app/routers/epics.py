@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 
 from ..models import (
     EpicListResponse, EpicDetailResponse, EpicHours, UserHours,
-    DailyHours, Worklog, AppConfig
+    DailyHours, Worklog, AppConfig, IssueListResponse, IssueListItem
 )
 from ..config import get_config, get_users_from_db, get_complementary_instances_from_db
 from ..cache import get_storage
@@ -60,6 +60,72 @@ async def list_epics(
     return EpicListResponse(
         epics=epic_hours,
         total_hours=round(total_hours, 2)
+    )
+
+
+@router.get("/issues", response_model=IssueListResponse)
+async def list_issues(
+    start_date: date = Query(..., description="Start date for the period"),
+    end_date: date = Query(..., description="End date for the period"),
+    jira_instance: str = Query(None, description="Filter by JIRA instance name"),
+    config: AppConfig = Depends(get_config)
+):
+    """List all issues with logged hours in the given period."""
+    storage = get_storage()
+
+    users = await get_users_from_db()
+    all_emails = [u["email"] for u in users]
+
+    worklogs = await storage.get_worklogs_in_range(
+        start_date, end_date,
+        user_emails=all_emails,
+        jira_instance=jira_instance
+    )
+
+    # No complementary instance filtering - show ALL instances for "Tutti"
+
+    # Aggregate by issue_key
+    issue_data = defaultdict(lambda: {
+        "summary": "Unknown",
+        "instance": "",
+        "hours": 0,
+        "contributors": set(),
+        "parent_key": None,
+        "parent_name": None,
+        "parent_type": None,
+    })
+
+    for wl in worklogs:
+        key = wl.issue_key
+        issue_data[key]["summary"] = wl.issue_summary or "Unknown"
+        issue_data[key]["instance"] = wl.jira_instance
+        issue_data[key]["hours"] += wl.time_spent_seconds / 3600
+        issue_data[key]["contributors"].add(wl.author_email)
+        if wl.parent_key:
+            issue_data[key]["parent_key"] = wl.parent_key
+            issue_data[key]["parent_name"] = wl.parent_name
+            issue_data[key]["parent_type"] = wl.parent_type
+
+    result = []
+    for issue_key, data in issue_data.items():
+        result.append(IssueListItem(
+            issue_key=issue_key,
+            issue_summary=data["summary"],
+            jira_instance=data["instance"],
+            total_hours=round(data["hours"], 2),
+            contributor_count=len(data["contributors"]),
+            parent_key=data["parent_key"],
+            parent_name=data["parent_name"],
+            parent_type=data["parent_type"],
+        ))
+
+    result.sort(key=lambda x: x.total_hours, reverse=True)
+    total_hours = sum(i.total_hours for i in result)
+
+    return IssueListResponse(
+        issues=result,
+        total_hours=round(total_hours, 2),
+        total_count=len(result)
     )
 
 

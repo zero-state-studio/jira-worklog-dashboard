@@ -40,7 +40,8 @@
       "Read(//private/tmp/**)",
       "Bash(./venv/bin/python -m uvicorn:*)",
       "Bash(npm run dev:*)",
-      "Bash(npx vite build)"
+      "Bash(npx vite build)",
+      "Bash(grep:*)"
     ]
   }
 }

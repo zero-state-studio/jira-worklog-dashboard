@@ -312,6 +312,25 @@ class EpicListResponse(BaseModel):
     total_hours: float
 
 
+class IssueListItem(BaseModel):
+    """An individual issue with aggregated worklog hours."""
+    issue_key: str
+    issue_summary: str
+    jira_instance: str
+    total_hours: float
+    contributor_count: int
+    parent_key: Optional[str] = None
+    parent_name: Optional[str] = None
+    parent_type: Optional[str] = None
+
+
+class IssueListResponse(BaseModel):
+    """Response for issue list view."""
+    issues: list[IssueListItem]
+    total_hours: float
+    total_count: int
+
+
 class EpicDetailResponse(BaseModel):
     """Response for epic detail view."""
     epic_key: str
@@ -420,3 +439,194 @@ class PackageCreateResponse(BaseModel):
     results: list[PackageCreateResult]
     errors: list[str] = []
     linked_issues: list[dict] = []
+
+
+# ============ Billing Models ============
+
+class BillingClientCreate(BaseModel):
+    """Request to create a billing client."""
+    name: str
+    billing_currency: str = "EUR"
+    default_hourly_rate: Optional[float] = None
+
+
+class BillingClientUpdate(BaseModel):
+    """Request to update a billing client."""
+    name: Optional[str] = None
+    billing_currency: Optional[str] = None
+    default_hourly_rate: Optional[float] = None
+
+
+class BillingClientInDB(BaseModel):
+    """Billing client with database fields."""
+    id: int
+    name: str
+    billing_currency: str = "EUR"
+    default_hourly_rate: Optional[float] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class BillingProjectCreate(BaseModel):
+    """Request to create a billing project."""
+    client_id: int
+    name: str
+    default_hourly_rate: Optional[float] = None
+
+
+class BillingProjectUpdate(BaseModel):
+    """Request to update a billing project."""
+    name: Optional[str] = None
+    default_hourly_rate: Optional[float] = None
+
+
+class BillingProjectInDB(BaseModel):
+    """Billing project with database fields."""
+    id: int
+    client_id: int
+    name: str
+    default_hourly_rate: Optional[float] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    mappings: list[dict] = Field(default_factory=list)
+
+
+class BillingProjectMappingCreate(BaseModel):
+    """Request to map a JIRA project to a billing project."""
+    jira_instance: str
+    jira_project_key: str
+
+
+class BillingProjectMappingInDB(BaseModel):
+    """Billing project mapping with database fields."""
+    id: int
+    billing_project_id: int
+    jira_instance: str
+    jira_project_key: str
+    created_at: Optional[str] = None
+
+
+class BillingRateCreate(BaseModel):
+    """Request to create a billing rate override."""
+    billing_project_id: int
+    user_email: Optional[str] = None
+    issue_type: Optional[str] = None
+    hourly_rate: float
+    valid_from: Optional[date] = None
+    valid_to: Optional[date] = None
+
+
+class BillingRateInDB(BaseModel):
+    """Billing rate with database fields."""
+    id: int
+    billing_project_id: int
+    user_email: Optional[str] = None
+    issue_type: Optional[str] = None
+    hourly_rate: float
+    valid_from: Optional[str] = None
+    valid_to: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class BillingClassificationCreate(BaseModel):
+    """Request to classify a worklog as billable/non-billable."""
+    worklog_id: str
+    is_billable: bool
+    override_hourly_rate: Optional[float] = None
+    note: Optional[str] = None
+
+
+class BillingClassificationBulk(BaseModel):
+    """Request to bulk classify worklogs."""
+    worklog_ids: list[str]
+    is_billable: bool
+    note: Optional[str] = None
+
+
+class BillingClassificationInDB(BaseModel):
+    """Billing worklog classification with database fields."""
+    id: int
+    worklog_id: str
+    is_billable: bool
+    override_hourly_rate: Optional[float] = None
+    note: Optional[str] = None
+    classified_by: Optional[str] = None
+    classified_at: Optional[str] = None
+
+
+class BillingPreviewLineItem(BaseModel):
+    """A line item in the billing preview."""
+    description: str
+    quantity_hours: float
+    hourly_rate: float
+    amount: float
+    group_key: Optional[str] = None
+    metadata: Optional[dict] = None
+
+
+class BillingPreviewResponse(BaseModel):
+    """Response for billing preview."""
+    client_id: int
+    client_name: str
+    billing_project_id: Optional[int] = None
+    billing_project_name: Optional[str] = None
+    period_start: date
+    period_end: date
+    currency: str
+    group_by: str
+    line_items: list[BillingPreviewLineItem]
+    subtotal_amount: float
+    billable_hours: float
+    non_billable_hours: float
+
+
+class InvoiceCreate(BaseModel):
+    """Request to create an invoice from preview."""
+    client_id: int
+    billing_project_id: Optional[int] = None
+    period_start: date
+    period_end: date
+    group_by: str = "project"
+    taxes_amount: float = 0
+    notes: Optional[str] = None
+
+
+class InvoiceLineItemInDB(BaseModel):
+    """Invoice line item with database fields."""
+    id: int
+    invoice_id: int
+    line_type: str
+    description: str
+    quantity_hours: float
+    hourly_rate: float
+    amount: float
+    metadata_json: Optional[str] = None
+    sort_order: int = 0
+
+
+class InvoiceInDB(BaseModel):
+    """Invoice with database fields."""
+    id: int
+    client_id: int
+    client_name: Optional[str] = None
+    billing_project_id: Optional[int] = None
+    billing_project_name: Optional[str] = None
+    period_start: str
+    period_end: str
+    status: str = "DRAFT"
+    currency: str = "EUR"
+    subtotal_amount: float = 0
+    taxes_amount: float = 0
+    total_amount: float = 0
+    group_by: str = "project"
+    notes: Optional[str] = None
+    created_by: Optional[str] = None
+    created_at: Optional[str] = None
+    issued_at: Optional[str] = None
+    line_items: list[InvoiceLineItemInDB] = Field(default_factory=list)
+
+
+class InvoiceListResponse(BaseModel):
+    """Response for invoice list."""
+    invoices: list[InvoiceInDB]
+    total_count: int

@@ -316,6 +316,125 @@ class WorklogStorage:
                     ON holidays(holiday_date)
                 """)
 
+                # ========== Billing Tables ==========
+
+                # Billing clients
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS billing_clients (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL UNIQUE,
+                        billing_currency TEXT NOT NULL DEFAULT 'EUR',
+                        default_hourly_rate REAL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # Billing projects (belong to a client)
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS billing_projects (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        client_id INTEGER NOT NULL REFERENCES billing_clients(id) ON DELETE CASCADE,
+                        name TEXT NOT NULL,
+                        default_hourly_rate REAL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # Billing project mappings (link JIRA projects to billing projects)
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS billing_project_mappings (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        billing_project_id INTEGER NOT NULL REFERENCES billing_projects(id) ON DELETE CASCADE,
+                        jira_instance TEXT NOT NULL,
+                        jira_project_key TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(billing_project_id, jira_instance, jira_project_key)
+                    )
+                """)
+
+                # Billing rates (override rates per project/user/issue_type)
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS billing_rates (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        billing_project_id INTEGER NOT NULL REFERENCES billing_projects(id) ON DELETE CASCADE,
+                        user_email TEXT,
+                        issue_type TEXT,
+                        hourly_rate REAL NOT NULL,
+                        valid_from TEXT,
+                        valid_to TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # Billing worklog classifications (billable/non-billable)
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS billing_worklog_classifications (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        worklog_id TEXT NOT NULL UNIQUE,
+                        is_billable INTEGER NOT NULL DEFAULT 1,
+                        override_hourly_rate REAL,
+                        note TEXT,
+                        classified_by TEXT,
+                        classified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # Invoices
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS invoices (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        client_id INTEGER NOT NULL REFERENCES billing_clients(id),
+                        billing_project_id INTEGER REFERENCES billing_projects(id),
+                        period_start TEXT NOT NULL,
+                        period_end TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'DRAFT',
+                        currency TEXT NOT NULL DEFAULT 'EUR',
+                        subtotal_amount REAL NOT NULL DEFAULT 0,
+                        taxes_amount REAL NOT NULL DEFAULT 0,
+                        total_amount REAL NOT NULL DEFAULT 0,
+                        group_by TEXT NOT NULL DEFAULT 'project',
+                        notes TEXT,
+                        created_by TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        issued_at TIMESTAMP
+                    )
+                """)
+
+                # Invoice line items (snapshot at creation time)
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS invoice_line_items (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+                        line_type TEXT NOT NULL DEFAULT 'work',
+                        description TEXT NOT NULL,
+                        quantity_hours REAL NOT NULL DEFAULT 0,
+                        hourly_rate REAL NOT NULL DEFAULT 0,
+                        amount REAL NOT NULL DEFAULT 0,
+                        metadata_json TEXT,
+                        sort_order INTEGER DEFAULT 0
+                    )
+                """)
+
+                # Billing indexes
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_billing_project_mappings
+                    ON billing_project_mappings(billing_project_id, jira_project_key)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_invoices_client
+                    ON invoices(client_id, status)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_invoice_lines
+                    ON invoice_line_items(invoice_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_billing_classifications_worklog
+                    ON billing_worklog_classifications(worklog_id)
+                """)
+
                 # ========== Migrations ==========
 
                 # Add parent columns to worklogs table (migration)
@@ -1997,6 +2116,413 @@ class WorklogStorage:
                 async for row in cursor:
                     other_names.append(row[0])
         return other_names
+
+    # ========== Billing Client Operations ==========
+
+    async def create_billing_client(self, name: str, billing_currency: str = "EUR", default_hourly_rate: Optional[float] = None) -> int:
+        """Create a billing client. Returns client_id."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "INSERT INTO billing_clients (name, billing_currency, default_hourly_rate) VALUES (?, ?, ?)",
+                (name, billing_currency, default_hourly_rate)
+            )
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_billing_client(self, client_id: int) -> Optional[dict]:
+        """Get a billing client by ID."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                "SELECT id, name, billing_currency, default_hourly_rate, created_at, updated_at FROM billing_clients WHERE id = ?",
+                (client_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return {"id": row[0], "name": row[1], "billing_currency": row[2], "default_hourly_rate": row[3], "created_at": row[4], "updated_at": row[5]}
+        return None
+
+    async def get_all_billing_clients(self) -> list[dict]:
+        """Get all billing clients."""
+        await self.initialize()
+        clients = []
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                "SELECT id, name, billing_currency, default_hourly_rate, created_at, updated_at FROM billing_clients ORDER BY name"
+            ) as cursor:
+                async for row in cursor:
+                    clients.append({"id": row[0], "name": row[1], "billing_currency": row[2], "default_hourly_rate": row[3], "created_at": row[4], "updated_at": row[5]})
+        return clients
+
+    async def update_billing_client(self, client_id: int, **kwargs) -> bool:
+        """Update billing client fields."""
+        await self.initialize()
+        allowed = {"name", "billing_currency", "default_hourly_rate"}
+        updates = {k: v for k, v in kwargs.items() if k in allowed}
+        if not updates:
+            return False
+        set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
+        values = list(updates.values()) + [client_id]
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                f"UPDATE billing_clients SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?", values
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def delete_billing_client(self, client_id: int) -> bool:
+        """Delete a billing client (cascades to projects, mappings, rates)."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("DELETE FROM billing_clients WHERE id = ?", (client_id,))
+            await db.commit()
+            return cursor.rowcount > 0
+
+    # ========== Billing Project Operations ==========
+
+    async def create_billing_project(self, client_id: int, name: str, default_hourly_rate: Optional[float] = None) -> int:
+        """Create a billing project. Returns project_id."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "INSERT INTO billing_projects (client_id, name, default_hourly_rate) VALUES (?, ?, ?)",
+                (client_id, name, default_hourly_rate)
+            )
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_billing_project(self, project_id: int) -> Optional[dict]:
+        """Get a billing project by ID with mappings."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                "SELECT id, client_id, name, default_hourly_rate, created_at, updated_at FROM billing_projects WHERE id = ?",
+                (project_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if not row:
+                    return None
+                project = {"id": row[0], "client_id": row[1], "name": row[2], "default_hourly_rate": row[3], "created_at": row[4], "updated_at": row[5], "mappings": []}
+
+            async with db.execute(
+                "SELECT id, billing_project_id, jira_instance, jira_project_key, created_at FROM billing_project_mappings WHERE billing_project_id = ?",
+                (project_id,)
+            ) as cursor:
+                async for row in cursor:
+                    project["mappings"].append({"id": row[0], "billing_project_id": row[1], "jira_instance": row[2], "jira_project_key": row[3], "created_at": row[4]})
+        return project
+
+    async def get_billing_projects_by_client(self, client_id: int) -> list[dict]:
+        """Get all billing projects for a client with mappings."""
+        await self.initialize()
+        projects = []
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                "SELECT id, client_id, name, default_hourly_rate, created_at, updated_at FROM billing_projects WHERE client_id = ? ORDER BY name",
+                (client_id,)
+            ) as cursor:
+                async for row in cursor:
+                    projects.append({"id": row[0], "client_id": row[1], "name": row[2], "default_hourly_rate": row[3], "created_at": row[4], "updated_at": row[5], "mappings": []})
+
+            if projects:
+                project_ids = [p["id"] for p in projects]
+                placeholders = ",".join("?" * len(project_ids))
+                async with db.execute(f"""
+                    SELECT id, billing_project_id, jira_instance, jira_project_key, created_at
+                    FROM billing_project_mappings WHERE billing_project_id IN ({placeholders})
+                """, project_ids) as cursor:
+                    async for row in cursor:
+                        for p in projects:
+                            if p["id"] == row[1]:
+                                p["mappings"].append({"id": row[0], "billing_project_id": row[1], "jira_instance": row[2], "jira_project_key": row[3], "created_at": row[4]})
+                                break
+        return projects
+
+    async def get_all_billing_projects(self) -> list[dict]:
+        """Get all billing projects with mappings and client info."""
+        await self.initialize()
+        projects = []
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT bp.id, bp.client_id, bp.name, bp.default_hourly_rate, bp.created_at, bp.updated_at,
+                       bc.name as client_name
+                FROM billing_projects bp
+                JOIN billing_clients bc ON bc.id = bp.client_id
+                ORDER BY bc.name, bp.name
+            """) as cursor:
+                async for row in cursor:
+                    projects.append({"id": row[0], "client_id": row[1], "name": row[2], "default_hourly_rate": row[3], "created_at": row[4], "updated_at": row[5], "client_name": row[6], "mappings": []})
+
+            if projects:
+                project_ids = [p["id"] for p in projects]
+                placeholders = ",".join("?" * len(project_ids))
+                async with db.execute(f"""
+                    SELECT id, billing_project_id, jira_instance, jira_project_key, created_at
+                    FROM billing_project_mappings WHERE billing_project_id IN ({placeholders})
+                """, project_ids) as cursor:
+                    async for row in cursor:
+                        for p in projects:
+                            if p["id"] == row[1]:
+                                p["mappings"].append({"id": row[0], "billing_project_id": row[1], "jira_instance": row[2], "jira_project_key": row[3], "created_at": row[4]})
+                                break
+        return projects
+
+    async def update_billing_project(self, project_id: int, **kwargs) -> bool:
+        """Update billing project fields."""
+        await self.initialize()
+        allowed = {"name", "default_hourly_rate"}
+        updates = {k: v for k, v in kwargs.items() if k in allowed}
+        if not updates:
+            return False
+        set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
+        values = list(updates.values()) + [project_id]
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                f"UPDATE billing_projects SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?", values
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def delete_billing_project(self, project_id: int) -> bool:
+        """Delete a billing project (cascades to mappings, rates)."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("DELETE FROM billing_projects WHERE id = ?", (project_id,))
+            await db.commit()
+            return cursor.rowcount > 0
+
+    # ========== Billing Project Mapping Operations ==========
+
+    async def add_billing_project_mapping(self, billing_project_id: int, jira_instance: str, jira_project_key: str) -> int:
+        """Add a JIRA project mapping to a billing project. Returns mapping_id."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "INSERT INTO billing_project_mappings (billing_project_id, jira_instance, jira_project_key) VALUES (?, ?, ?)",
+                (billing_project_id, jira_instance, jira_project_key)
+            )
+            await db.commit()
+            return cursor.lastrowid
+
+    async def delete_billing_project_mapping(self, mapping_id: int) -> bool:
+        """Delete a billing project mapping."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("DELETE FROM billing_project_mappings WHERE id = ?", (mapping_id,))
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def get_billing_project_for_worklog(self, jira_instance: str, issue_key: str) -> Optional[dict]:
+        """Find the billing project that maps to a given JIRA issue (by project key prefix)."""
+        await self.initialize()
+        project_key = issue_key.split("-")[0] if "-" in issue_key else issue_key
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT bp.id, bp.client_id, bp.name, bp.default_hourly_rate
+                FROM billing_project_mappings bpm
+                JOIN billing_projects bp ON bp.id = bpm.billing_project_id
+                WHERE bpm.jira_instance = ? AND bpm.jira_project_key = ?
+            """, (jira_instance, project_key)) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return {"id": row[0], "client_id": row[1], "name": row[2], "default_hourly_rate": row[3]}
+        return None
+
+    # ========== Billing Rate Operations ==========
+
+    async def create_billing_rate(self, billing_project_id: int, hourly_rate: float, user_email: Optional[str] = None, issue_type: Optional[str] = None, valid_from: Optional[str] = None, valid_to: Optional[str] = None) -> int:
+        """Create a billing rate override. Returns rate_id."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "INSERT INTO billing_rates (billing_project_id, user_email, issue_type, hourly_rate, valid_from, valid_to) VALUES (?, ?, ?, ?, ?, ?)",
+                (billing_project_id, user_email, issue_type, hourly_rate, valid_from, valid_to)
+            )
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_billing_rates(self, billing_project_id: int) -> list[dict]:
+        """Get all billing rates for a project."""
+        await self.initialize()
+        rates = []
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                "SELECT id, billing_project_id, user_email, issue_type, hourly_rate, valid_from, valid_to, created_at FROM billing_rates WHERE billing_project_id = ? ORDER BY created_at DESC",
+                (billing_project_id,)
+            ) as cursor:
+                async for row in cursor:
+                    rates.append({"id": row[0], "billing_project_id": row[1], "user_email": row[2], "issue_type": row[3], "hourly_rate": row[4], "valid_from": row[5], "valid_to": row[6], "created_at": row[7]})
+        return rates
+
+    async def delete_billing_rate(self, rate_id: int) -> bool:
+        """Delete a billing rate."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("DELETE FROM billing_rates WHERE id = ?", (rate_id,))
+            await db.commit()
+            return cursor.rowcount > 0
+
+    # ========== Billing Classification Operations ==========
+
+    async def set_worklog_classification(self, worklog_id: str, is_billable: bool, override_hourly_rate: Optional[float] = None, note: Optional[str] = None, classified_by: Optional[str] = None) -> int:
+        """Set or update worklog billing classification. Returns classification_id."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                INSERT INTO billing_worklog_classifications (worklog_id, is_billable, override_hourly_rate, note, classified_by)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(worklog_id)
+                DO UPDATE SET is_billable = ?, override_hourly_rate = ?, note = ?, classified_by = ?, classified_at = CURRENT_TIMESTAMP
+            """, (worklog_id, int(is_billable), override_hourly_rate, note, classified_by,
+                  int(is_billable), override_hourly_rate, note, classified_by))
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_worklog_classifications(self, worklog_ids: list[str]) -> dict[str, dict]:
+        """Get classifications for a list of worklog IDs. Returns {worklog_id: classification_dict}."""
+        await self.initialize()
+        if not worklog_ids:
+            return {}
+        result = {}
+        async with aiosqlite.connect(self.db_path) as db:
+            placeholders = ",".join("?" * len(worklog_ids))
+            async with db.execute(f"""
+                SELECT id, worklog_id, is_billable, override_hourly_rate, note, classified_by, classified_at
+                FROM billing_worklog_classifications WHERE worklog_id IN ({placeholders})
+            """, worklog_ids) as cursor:
+                async for row in cursor:
+                    result[row[1]] = {"id": row[0], "worklog_id": row[1], "is_billable": bool(row[2]), "override_hourly_rate": row[3], "note": row[4], "classified_by": row[5], "classified_at": row[6]}
+        return result
+
+    # ========== Invoice Operations ==========
+
+    async def create_invoice(self, client_id: int, period_start: str, period_end: str, currency: str = "EUR", billing_project_id: Optional[int] = None, subtotal_amount: float = 0, taxes_amount: float = 0, total_amount: float = 0, group_by: str = "project", notes: Optional[str] = None, created_by: Optional[str] = None) -> int:
+        """Create an invoice. Returns invoice_id."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                INSERT INTO invoices (client_id, billing_project_id, period_start, period_end, status, currency, subtotal_amount, taxes_amount, total_amount, group_by, notes, created_by)
+                VALUES (?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?, ?)
+            """, (client_id, billing_project_id, period_start, period_end, currency, subtotal_amount, taxes_amount, total_amount, group_by, notes, created_by))
+            await db.commit()
+            return cursor.lastrowid
+
+    async def add_invoice_line_item(self, invoice_id: int, line_type: str, description: str, quantity_hours: float, hourly_rate: float, amount: float, metadata_json: Optional[str] = None, sort_order: int = 0) -> int:
+        """Add a line item to an invoice. Returns line_item_id."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                INSERT INTO invoice_line_items (invoice_id, line_type, description, quantity_hours, hourly_rate, amount, metadata_json, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (invoice_id, line_type, description, quantity_hours, hourly_rate, amount, metadata_json, sort_order))
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_invoice(self, invoice_id: int) -> Optional[dict]:
+        """Get an invoice by ID with line items."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT i.id, i.client_id, i.billing_project_id, i.period_start, i.period_end,
+                       i.status, i.currency, i.subtotal_amount, i.taxes_amount, i.total_amount,
+                       i.group_by, i.notes, i.created_by, i.created_at, i.issued_at,
+                       bc.name as client_name, bp.name as project_name
+                FROM invoices i
+                JOIN billing_clients bc ON bc.id = i.client_id
+                LEFT JOIN billing_projects bp ON bp.id = i.billing_project_id
+                WHERE i.id = ?
+            """, (invoice_id,)) as cursor:
+                row = await cursor.fetchone()
+                if not row:
+                    return None
+                invoice = {
+                    "id": row[0], "client_id": row[1], "billing_project_id": row[2],
+                    "period_start": row[3], "period_end": row[4], "status": row[5],
+                    "currency": row[6], "subtotal_amount": row[7], "taxes_amount": row[8],
+                    "total_amount": row[9], "group_by": row[10], "notes": row[11],
+                    "created_by": row[12], "created_at": row[13], "issued_at": row[14],
+                    "client_name": row[15], "billing_project_name": row[16],
+                    "line_items": []
+                }
+
+            async with db.execute("""
+                SELECT id, invoice_id, line_type, description, quantity_hours, hourly_rate, amount, metadata_json, sort_order
+                FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order
+            """, (invoice_id,)) as cursor:
+                async for row in cursor:
+                    invoice["line_items"].append({
+                        "id": row[0], "invoice_id": row[1], "line_type": row[2],
+                        "description": row[3], "quantity_hours": row[4], "hourly_rate": row[5],
+                        "amount": row[6], "metadata_json": row[7], "sort_order": row[8]
+                    })
+        return invoice
+
+    async def get_invoices(self, client_id: Optional[int] = None, status: Optional[str] = None) -> list[dict]:
+        """Get invoices with optional filters."""
+        await self.initialize()
+        conditions = []
+        params = []
+        if client_id:
+            conditions.append("i.client_id = ?")
+            params.append(client_id)
+        if status:
+            conditions.append("i.status = ?")
+            params.append(status)
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+        invoices = []
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(f"""
+                SELECT i.id, i.client_id, i.billing_project_id, i.period_start, i.period_end,
+                       i.status, i.currency, i.subtotal_amount, i.taxes_amount, i.total_amount,
+                       i.group_by, i.notes, i.created_by, i.created_at, i.issued_at,
+                       bc.name as client_name, bp.name as project_name
+                FROM invoices i
+                JOIN billing_clients bc ON bc.id = i.client_id
+                LEFT JOIN billing_projects bp ON bp.id = i.billing_project_id
+                WHERE {where_clause}
+                ORDER BY i.created_at DESC
+            """, params) as cursor:
+                async for row in cursor:
+                    invoices.append({
+                        "id": row[0], "client_id": row[1], "billing_project_id": row[2],
+                        "period_start": row[3], "period_end": row[4], "status": row[5],
+                        "currency": row[6], "subtotal_amount": row[7], "taxes_amount": row[8],
+                        "total_amount": row[9], "group_by": row[10], "notes": row[11],
+                        "created_by": row[12], "created_at": row[13], "issued_at": row[14],
+                        "client_name": row[15], "billing_project_name": row[16],
+                        "line_items": []
+                    })
+        return invoices
+
+    async def update_invoice_status(self, invoice_id: int, status: str) -> bool:
+        """Update invoice status. Sets issued_at when status is ISSUED."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            if status == "ISSUED":
+                cursor = await db.execute(
+                    "UPDATE invoices SET status = ?, issued_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (status, invoice_id)
+                )
+            else:
+                cursor = await db.execute(
+                    "UPDATE invoices SET status = ? WHERE id = ?",
+                    (status, invoice_id)
+                )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def delete_invoice(self, invoice_id: int) -> bool:
+        """Delete a draft invoice (cascades to line items)."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "DELETE FROM invoices WHERE id = ? AND status = 'DRAFT'",
+                (invoice_id,)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
 
     # ========== Utility Operations ==========
 

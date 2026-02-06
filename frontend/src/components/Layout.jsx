@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import DatePicker from 'react-datepicker'
 import { format, subDays, startOfMonth, startOfWeek } from 'date-fns'
@@ -69,12 +69,22 @@ const ProjectIcon = () => (
 )
 
 export default function Layout({ children, dateRange, setDateRange, selectedInstance, setSelectedInstance }) {
+    const location = useLocation()
+    const isSettingsPage = location.pathname === '/settings' || location.pathname === '/billing'
     const [config, setConfig] = useState(null)
     const [epics, setEpics] = useState([])
     const [sidebarOpen, setSidebarOpen] = useState(true)
     const [datePickerOpen, setDatePickerOpen] = useState(false)
     const [syncModalOpen, setSyncModalOpen] = useState(false)
     const [packageModalOpen, setPackageModalOpen] = useState(false)
+    const [selectionRange, setSelectionRange] = useState(dateRange)
+
+    // Sync selection range when opening date picker
+    useEffect(() => {
+        if (datePickerOpen) {
+            setSelectionRange(dateRange)
+        }
+    }, [datePickerOpen, dateRange])
 
     useEffect(() => {
         getConfig().then(setConfig).catch(console.error)
@@ -99,8 +109,9 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
 
     const handleDateChange = (dates) => {
         const [start, end] = dates
-        setDateRange({ startDate: start, endDate: end || start })
+        setSelectionRange({ startDate: start, endDate: end })
         if (start && end) {
+            setDateRange({ startDate: start, endDate: end })
             setDatePickerOpen(false)
         }
     }
@@ -227,6 +238,22 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                         </NavLink>
                     </div>
 
+                    {/* Billing Link */}
+                    <div className="pt-4">
+                        {sidebarOpen && <p className="px-4 text-xs font-semibold text-dark-500 uppercase tracking-wider mb-2">Amministrazione</p>}
+                        <NavLink
+                            to="/billing"
+                            className={({ isActive }) =>
+                                `nav-link ${isActive ? 'nav-link-active' : ''}`
+                            }
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z" />
+                            </svg>
+                            {sidebarOpen && <span>Fatturazione</span>}
+                        </NavLink>
+                    </div>
+
                     {/* Settings Link */}
                     <div className="pt-4">
                         {sidebarOpen && <p className="px-4 text-xs font-semibold text-dark-500 uppercase tracking-wider mb-2">Configurazione</p>}
@@ -265,138 +292,140 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col">
-                {/* Header */}
-                <header className="bg-dark-800/50 backdrop-blur-xl border-b border-dark-700 px-6 py-4">
-                    <div className="flex items-center justify-between">
-                        {/* Date Range Picker */}
-                        <div className="relative">
-                            <button
-                                onClick={() => setDatePickerOpen(!datePickerOpen)}
-                                className="flex items-center gap-3 glass-card px-4 py-2.5 hover:bg-dark-700/50 transition-colors"
-                            >
-                                <CalendarIcon />
-                                <span className="text-dark-200">
-                                    {format(dateRange.startDate, 'd MMM', { locale: it })} - {format(dateRange.endDate, 'd MMM yyyy', { locale: it })}
-                                </span>
-                            </button>
-
-                            {datePickerOpen && (
-                                <div className="absolute top-full left-0 mt-2 z-50 bg-dark-800 border border-dark-600 rounded-xl shadow-xl p-4 animate-slide-up">
-                                    {/* Presets */}
-                                    <div className="flex gap-2 mb-4 flex-wrap">
-                                        {datePresets.map((preset) => (
-                                            <button
-                                                key={preset.label}
-                                                onClick={() => applyPreset(preset)}
-                                                className="px-3 py-1.5 text-xs font-medium text-dark-300 bg-dark-700 rounded-lg hover:bg-dark-600 transition-colors"
-                                            >
-                                                {preset.label}
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    <DatePicker
-                                        selected={dateRange.startDate}
-                                        onChange={handleDateChange}
-                                        startDate={dateRange.startDate}
-                                        endDate={dateRange.endDate}
-                                        selectsRange
-                                        inline
-                                        locale={it}
-                                        maxDate={new Date()}
-                                    />
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Center: JIRA Instance Tabs */}
-                        {config?.jira_instances && config.jira_instances.length > 1 && (
-                            <div className="flex items-center gap-1 bg-dark-800 rounded-xl p-1 border border-dark-600">
-                                {/* All Instances tab */}
+                {/* Header - hidden on settings page */}
+                {!isSettingsPage && (
+                    <header className="bg-dark-800/50 backdrop-blur-xl border-b border-dark-700 px-6 py-4 relative z-50">
+                        <div className="flex items-center justify-between">
+                            {/* Date Range Picker */}
+                            <div className="relative">
                                 <button
-                                    onClick={() => setSelectedInstance(null)}
-                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${selectedInstance === null
-                                        ? 'bg-gradient-primary text-white shadow-glow'
-                                        : 'text-dark-400 hover:text-dark-200 hover:bg-dark-700'
-                                        }`}
+                                    onClick={() => setDatePickerOpen(!datePickerOpen)}
+                                    className="flex items-center gap-3 glass-card px-4 py-2.5 hover:bg-dark-700/50 transition-colors"
                                 >
-                                    Tutti
+                                    <CalendarIcon />
+                                    <span className="text-dark-200">
+                                        {format(dateRange.startDate, 'd MMM', { locale: it })} - {format(dateRange.endDate, 'd MMM yyyy', { locale: it })}
+                                    </span>
                                 </button>
-                                {/* Individual instance tabs */}
-                                {config.jira_instances.map((inst, index) => (
+
+                                {datePickerOpen && (
+                                    <>
+                                        {/* Backdrop */}
+                                        <div
+                                            className="fixed inset-0 z-[100]"
+                                            onClick={() => setDatePickerOpen(false)}
+                                        />
+                                        {/* Calendar Dropdown */}
+                                        <div className="fixed top-20 left-6 z-[101] bg-dark-800 border border-dark-600 rounded-xl shadow-xl p-4 animate-slide-up">
+                                            {/* Presets */}
+                                            <div className="flex gap-2 mb-4 flex-wrap">
+                                                {datePresets.map((preset) => (
+                                                    <button
+                                                        key={preset.label}
+                                                        onClick={() => applyPreset(preset)}
+                                                        className="px-3 py-1.5 text-xs font-medium text-dark-300 bg-dark-700 rounded-lg hover:bg-dark-600 transition-colors"
+                                                    >
+                                                        {preset.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            <DatePicker
+                                                selected={selectionRange.startDate}
+                                                onChange={handleDateChange}
+                                                startDate={selectionRange.startDate}
+                                                endDate={selectionRange.endDate}
+                                                selectsRange
+                                                inline
+                                                locale={it}
+                                                maxDate={new Date()}
+                                            />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
+                            {/* Center: JIRA Instance Tabs */}
+                            {config?.jira_instances && config.jira_instances.length > 1 && (
+                                <div className="flex items-center gap-1 bg-dark-800 rounded-xl p-1 border border-dark-600">
+                                    {/* All Instances tab */}
                                     <button
-                                        key={inst.name}
-                                        onClick={() => setSelectedInstance(inst.name)}
-                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${selectedInstance === inst.name
-                                            ? index === 0
-                                                ? 'bg-gradient-to-r from-accent-blue to-blue-600 text-white shadow-glow'
-                                                : 'bg-gradient-to-r from-accent-green to-emerald-600 text-white shadow-glow-green'
+                                        onClick={() => setSelectedInstance(null)}
+                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${selectedInstance === null
+                                            ? 'bg-gradient-primary text-white shadow-glow'
                                             : 'text-dark-400 hover:text-dark-200 hover:bg-dark-700'
                                             }`}
                                     >
-                                        {inst.name}
+                                        Tutti
                                     </button>
-                                ))}
-                            </div>
-                        )}
-
-                        {/* Right side actions */}
-                        <div className="flex items-center gap-3">
-                            {/* Current instance indicator (when only one) */}
-                            {config?.jira_instances && config.jira_instances.length === 1 && (
-                                <div className="badge-blue">
-                                    {config.jira_instances[0].name}
+                                    {/* Individual instance tabs */}
+                                    {config.jira_instances.map((inst, index) => (
+                                        <button
+                                            key={inst.name}
+                                            onClick={() => setSelectedInstance(inst.name)}
+                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${selectedInstance === inst.name
+                                                ? index === 0
+                                                    ? 'bg-gradient-to-r from-accent-blue to-blue-600 text-white shadow-glow'
+                                                    : 'bg-gradient-to-r from-accent-green to-emerald-600 text-white shadow-glow-green'
+                                                : 'text-dark-400 hover:text-dark-200 hover:bg-dark-700'
+                                                }`}
+                                        >
+                                            {inst.name}
+                                        </button>
+                                    ))}
                                 </div>
                             )}
 
-                            {/* Create Package button */}
-                            <button
-                                onClick={() => setPackageModalOpen(true)}
-                                className="btn-secondary flex items-center gap-2 border-accent-cyan/50 hover:border-accent-cyan text-accent-cyan hover:bg-accent-cyan/10"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                                </svg>
-                                <span className="hidden sm:inline">Pacchetto</span>
-                            </button>
+                            {/* Right side actions */}
+                            <div className="flex items-center gap-3">
+                                {/* Current instance indicator (when only one) */}
+                                {config?.jira_instances && config.jira_instances.length === 1 && (
+                                    <div className="badge-blue">
+                                        {config.jira_instances[0].name}
+                                    </div>
+                                )}
 
-                            {/* Sync button */}
-                            <button
-                                onClick={() => setSyncModalOpen(true)}
-                                className="btn-secondary flex items-center gap-2 border-accent-purple/50 hover:border-accent-purple text-accent-purple hover:bg-accent-purple/10"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                                </svg>
-                                <span className="hidden sm:inline">Sincronizza</span>
-                            </button>
+                                {/* Create Package button */}
+                                <button
+                                    onClick={() => setPackageModalOpen(true)}
+                                    className="btn-secondary flex items-center gap-2 border-accent-cyan/50 hover:border-accent-cyan text-accent-cyan hover:bg-accent-cyan/10"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                    </svg>
+                                    <span className="hidden sm:inline">Pacchetto</span>
+                                </button>
 
-                            {/* Refresh button */}
-                            <button
-                                onClick={() => window.location.reload()}
-                                className="btn-secondary flex items-center gap-2"
-                            >
-                                <RefreshIcon />
-                                <span className="hidden sm:inline">Aggiorna</span>
-                            </button>
+                                {/* Sync button */}
+                                <button
+                                    onClick={() => setSyncModalOpen(true)}
+                                    className="btn-secondary flex items-center gap-2 border-accent-purple/50 hover:border-accent-purple text-accent-purple hover:bg-accent-purple/10"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                    </svg>
+                                    <span className="hidden sm:inline">Sincronizza</span>
+                                </button>
+
+                                {/* Refresh button */}
+                                <button
+                                    onClick={() => window.location.reload()}
+                                    className="btn-secondary flex items-center gap-2"
+                                >
+                                    <RefreshIcon />
+                                    <span className="hidden sm:inline">Aggiorna</span>
+                                </button>
+                            </div>
                         </div>
-                    </div>
 
-                </header>
+                    </header>
+                )}
 
                 {/* Page Content */}
                 <main className="flex-1 p-6 overflow-auto">
                     {children}
                 </main>
             </div>
-
-            {/* Click outside to close date picker */}
-            {datePickerOpen && (
-                <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setDatePickerOpen(false)}
-                />
-            )}
 
             {/* Sync Modal */}
             <SyncModal

@@ -1,22 +1,33 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { getEpics, getEpicDetail } from '../api/client'
+import { getIssues, getEpicDetail } from '../api/client'
 import { formatHours } from '../hooks/useData'
-import { EpicCard, UserCard, StatCard, ErrorState, CardSkeleton, EmptyState } from '../components/Cards'
+import { UserCard, StatCard, ErrorState, CardSkeleton, EmptyState } from '../components/Cards'
 import { TrendChart, ComparisonBarChart, ChartCard } from '../components/Charts'
 import WorklogCalendar from '../components/WorklogCalendar'
+
+const instanceColors = [
+    '#667eea', '#3fb950', '#a371f7', '#58a6ff', '#d29922', '#f85149',
+]
 
 export default function EpicView({ dateRange, selectedInstance }) {
     const { epicKey } = useParams()
     const navigate = useNavigate()
-    const [searchParams, setSearchParams] = useSearchParams()
     const [listData, setListData] = useState(null)
     const [detailData, setDetailData] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
-
-    // Get type filter from URL
+    const [searchQuery, setSearchQuery] = useState('')
+    const [searchParams, setSearchParams] = useSearchParams()
     const typeFilter = searchParams.get('type') || 'all'
+
+    const setTypeFilter = (type) => {
+        if (type === 'all') {
+            setSearchParams({})
+        } else {
+            setSearchParams({ type })
+        }
+    }
 
     const fetchData = useCallback(async () => {
         try {
@@ -29,8 +40,8 @@ export default function EpicView({ dateRange, selectedInstance }) {
                 setDetailData(result)
                 setListData(null)
             } else {
-                // Fetch epic list
-                const result = await getEpics(dateRange.startDate, dateRange.endDate, selectedInstance)
+                // Fetch issue list
+                const result = await getIssues(dateRange.startDate, dateRange.endDate, selectedInstance)
                 setListData(result)
                 setDetailData(null)
             }
@@ -68,27 +79,35 @@ export default function EpicView({ dateRange, selectedInstance }) {
         return <EpicDetailView data={detailData} navigate={navigate} />
     }
 
-    // Epic List View
+    // Issue List View
     if (listData) {
-        // Count by type
-        const projectCount = listData.epics.filter(e => e.parent_type === 'Project').length
-        const epicCount = listData.epics.filter(e => e.parent_type === 'Epic').length
+        // Build unique instance list for color assignment
+        const uniqueInstances = [...new Set(listData.issues.map(i => i.jira_instance))].sort()
 
-        // Filter epics based on selected type
-        const filteredEpics = typeFilter === 'all'
-            ? listData.epics
-            : listData.epics.filter(epic => epic.parent_type === typeFilter)
-
-        // Calculate filtered hours
-        const filteredHours = filteredEpics.reduce((sum, e) => sum + e.total_hours, 0)
-
-        const setTypeFilter = (type) => {
-            if (type === 'all') {
-                setSearchParams({})
-            } else {
-                setSearchParams({ type })
-            }
+        // Count by parent_type
+        const typeCounts = {}
+        for (const issue of listData.issues) {
+            const t = issue.parent_type || 'Other'
+            typeCounts[t] = (typeCounts[t] || 0) + 1
         }
+
+        // Apply type filter, then search filter
+        const typeFiltered = typeFilter === 'all'
+            ? listData.issues
+            : listData.issues.filter(i => (i.parent_type || 'Other') === typeFilter)
+
+        const filteredIssues = typeFiltered.filter(issue => {
+            if (!searchQuery) return true
+            const query = searchQuery.toLowerCase()
+            return (
+                issue.issue_key.toLowerCase().includes(query) ||
+                issue.issue_summary.toLowerCase().includes(query) ||
+                (issue.parent_key && issue.parent_key.toLowerCase().includes(query)) ||
+                (issue.parent_name && issue.parent_name.toLowerCase().includes(query))
+            )
+        })
+
+        const filteredHours = filteredIssues.reduce((sum, i) => sum + i.total_hours, 0)
 
         return (
             <div className="space-y-6 animate-fade-in">
@@ -96,9 +115,12 @@ export default function EpicView({ dateRange, selectedInstance }) {
                 <div className="glass-card p-6">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h1 className="text-2xl font-bold text-dark-100">Iniziative</h1>
+                            <h1 className="text-2xl font-bold text-dark-100">Issues</h1>
                             <p className="text-dark-400">
-                                {filteredEpics.length} iniziative con ore registrate nel periodo
+                                {searchQuery || typeFilter !== 'all'
+                                    ? `${filteredIssues.length} di ${listData.total_count} issues`
+                                    : `${listData.total_count} issues con ore registrate nel periodo`
+                                }
                             </p>
                         </div>
                         <div className="text-right">
@@ -109,70 +131,141 @@ export default function EpicView({ dateRange, selectedInstance }) {
                         </div>
                     </div>
 
-                    {/* Filter Tabs */}
-                    <div className="flex gap-2 mt-4">
-                        <button
-                            onClick={() => setTypeFilter('all')}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                                typeFilter === 'all'
-                                    ? 'bg-gradient-primary text-white shadow-glow'
-                                    : 'text-dark-400 hover:text-dark-200 hover:bg-dark-700 bg-dark-800'
-                            }`}
-                        >
-                            Tutti ({listData.epics.length})
-                        </button>
-                        {projectCount > 0 && (
+                    {/* Type Filter Tabs */}
+                    {Object.keys(typeCounts).length > 1 && (
+                        <div className="flex gap-2 mt-4 flex-wrap">
                             <button
-                                onClick={() => setTypeFilter('Project')}
+                                onClick={() => setTypeFilter('all')}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                                    typeFilter === 'Project'
-                                        ? 'bg-accent-blue text-white'
+                                    typeFilter === 'all'
+                                        ? 'bg-gradient-primary text-white shadow-glow'
                                         : 'text-dark-400 hover:text-dark-200 hover:bg-dark-700 bg-dark-800'
                                 }`}
                             >
-                                Projects ({projectCount})
+                                Tutti ({listData.total_count})
                             </button>
-                        )}
-                        {epicCount > 0 && (
+                            {Object.entries(typeCounts).sort(([a], [b]) => a.localeCompare(b)).map(([type, count]) => (
+                                <button
+                                    key={type}
+                                    onClick={() => setTypeFilter(type)}
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                        typeFilter === type
+                                            ? type === 'Project' ? 'bg-accent-blue text-white'
+                                            : type === 'Epic' ? 'bg-accent-purple text-white'
+                                            : 'bg-accent-green text-white'
+                                            : 'text-dark-400 hover:text-dark-200 hover:bg-dark-700 bg-dark-800'
+                                    }`}
+                                >
+                                    {type} ({count})
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Search Bar */}
+                    <div className="relative mt-4">
+                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input
+                            type="text"
+                            placeholder="Cerca per codice issue, titolo o iniziativa..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-10 pr-10 py-2.5 bg-dark-800 border border-dark-600 rounded-lg text-dark-100 placeholder-dark-500 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue"
+                        />
+                        {searchQuery && (
                             <button
-                                onClick={() => setTypeFilter('Epic')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                                    typeFilter === 'Epic'
-                                        ? 'bg-accent-purple text-white'
-                                        : 'text-dark-400 hover:text-dark-200 hover:bg-dark-700 bg-dark-800'
-                                }`}
+                                onClick={() => setSearchQuery('')}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-400 hover:text-dark-200"
                             >
-                                Epics ({epicCount})
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
                             </button>
                         )}
                     </div>
                 </div>
 
-                {/* Epic Cards Grid */}
-                {filteredEpics.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {filteredEpics.map((epic) => (
-                            <EpicCard
-                                key={epic.epic_key}
-                                epicKey={epic.epic_key}
-                                name={epic.epic_name}
-                                hours={epic.total_hours}
-                                contributorCount={epic.contributor_count}
-                                jiraInstance={epic.jira_instance}
-                                parentType={epic.parent_type}
-                                onClick={() => navigate(`/epics/${encodeURIComponent(epic.epic_key)}`)}
-                            />
-                        ))}
+                {/* Issues Table */}
+                {filteredIssues.length > 0 ? (
+                    <div className="glass-card overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b border-dark-700">
+                                        <th className="text-left px-4 py-3 text-sm font-medium text-dark-400">Issue</th>
+                                        <th className="text-left px-4 py-3 text-sm font-medium text-dark-400">Titolo</th>
+                                        <th className="text-left px-4 py-3 text-sm font-medium text-dark-400">Iniziativa</th>
+                                        <th className="text-left px-4 py-3 text-sm font-medium text-dark-400">Istanza</th>
+                                        <th className="text-right px-4 py-3 text-sm font-medium text-dark-400">Ore</th>
+                                        <th className="text-right px-4 py-3 text-sm font-medium text-dark-400">Contributori</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredIssues.map((issue) => {
+                                        const instIdx = uniqueInstances.indexOf(issue.jira_instance)
+                                        const instColor = instanceColors[instIdx >= 0 ? instIdx % instanceColors.length : 0]
+                                        return (
+                                            <tr
+                                                key={issue.issue_key}
+                                                onClick={() => navigate(`/issues/${encodeURIComponent(issue.issue_key)}`)}
+                                                className="border-b border-dark-800 hover:bg-dark-700/50 cursor-pointer transition-colors"
+                                            >
+                                                <td className="px-4 py-3">
+                                                    <span className="badge-purple text-xs">{issue.issue_key}</span>
+                                                </td>
+                                                <td className="px-4 py-3 text-dark-200 max-w-md">
+                                                    <span className="block truncate">{issue.issue_summary}</span>
+                                                </td>
+                                                <td className="px-4 py-3 text-dark-400 text-sm max-w-xs">
+                                                    <span className="block truncate">{issue.parent_name || '-'}</span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span
+                                                        className="text-xs px-2 py-0.5 rounded-full font-medium"
+                                                        style={{
+                                                            backgroundColor: `${instColor}20`,
+                                                            color: instColor,
+                                                        }}
+                                                    >
+                                                        {issue.jira_instance}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-semibold text-dark-100">{formatHours(issue.total_hours)}</td>
+                                                <td className="px-4 py-3 text-right text-dark-400">{issue.contributor_count}</td>
+                                            </tr>
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ) : searchQuery ? (
+                    <div className="glass-card p-12 text-center">
+                        <div className="w-16 h-16 rounded-2xl bg-dark-700 flex items-center justify-center mx-auto mb-4">
+                            <svg className="w-8 h-8 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-lg font-semibold text-dark-200 mb-2">Nessun risultato</h3>
+                        <p className="text-dark-400 mb-4">Nessuna issue trovata per &ldquo;{searchQuery}&rdquo;</p>
+                        <button
+                            onClick={() => setSearchQuery('')}
+                            className="px-4 py-2 rounded-lg text-sm font-medium bg-dark-700 text-dark-200 hover:bg-dark-600 transition-colors"
+                        >
+                            Cancella ricerca
+                        </button>
                     </div>
                 ) : (
                     <div className="glass-card p-12 text-center">
                         <div className="w-16 h-16 rounded-2xl bg-dark-700 flex items-center justify-center mx-auto mb-4">
                             <svg className="w-8 h-8 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                             </svg>
                         </div>
-                        <h3 className="text-lg font-semibold text-dark-200 mb-2">Nessuna Iniziativa</h3>
-                        <p className="text-dark-400">Non ci sono iniziative con ore registrate nel periodo selezionato</p>
+                        <h3 className="text-lg font-semibold text-dark-200 mb-2">Nessuna Issue</h3>
+                        <p className="text-dark-400">Non ci sono issues con ore registrate nel periodo selezionato</p>
                     </div>
                 )}
             </div>

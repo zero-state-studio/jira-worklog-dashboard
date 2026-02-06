@@ -104,6 +104,14 @@ export async function getEpics(startDate, endDate, jiraInstance = null) {
     })
 }
 
+export async function getIssues(startDate, endDate, jiraInstance = null) {
+    return fetchApi('/epics/issues', {
+        start_date: formatDate(startDate),
+        end_date: formatDate(endDate),
+        jira_instance: jiraInstance
+    })
+}
+
 export async function getMultiJiraOverview(startDate, endDate) {
     return fetchApi('/dashboard/multi-jira-overview', {
         start_date: formatDate(startDate),
@@ -538,4 +546,137 @@ export async function deleteHoliday(holidayId) {
 
 export async function seedHolidays(year, country = 'IT') {
     return fetchApiPost(`/settings/holidays/${year}/seed`, { country })
+}
+
+// ============ Billing API ============
+
+// Clients
+export async function getBillingClients() {
+    return fetchApi('/billing/clients')
+}
+
+export async function createBillingClient(data) {
+    return fetchApiPost('/billing/clients', data)
+}
+
+export async function updateBillingClient(clientId, data) {
+    return fetchApiPut(`/billing/clients/${clientId}`, data)
+}
+
+export async function deleteBillingClient(clientId) {
+    return fetchApiDelete(`/billing/clients/${clientId}`)
+}
+
+// Projects
+export async function getBillingProjects(clientId = null) {
+    const params = {}
+    if (clientId) params.client_id = clientId
+    return fetchApi('/billing/projects', params)
+}
+
+export async function createBillingProject(data) {
+    return fetchApiPost('/billing/projects', data)
+}
+
+export async function updateBillingProject(projectId, data) {
+    return fetchApiPut(`/billing/projects/${projectId}`, data)
+}
+
+export async function deleteBillingProject(projectId) {
+    return fetchApiDelete(`/billing/projects/${projectId}`)
+}
+
+// Project Mappings
+export async function addBillingProjectMapping(projectId, data) {
+    return fetchApiPost(`/billing/projects/${projectId}/mappings`, data)
+}
+
+export async function removeBillingProjectMapping(projectId, mappingId) {
+    return fetchApiDelete(`/billing/projects/${projectId}/mappings/${mappingId}`)
+}
+
+// Rates
+export async function getBillingRates(billingProjectId) {
+    return fetchApi('/billing/rates', { billing_project_id: billingProjectId })
+}
+
+export async function createBillingRate(data) {
+    return fetchApiPost('/billing/rates', data)
+}
+
+export async function deleteBillingRate(rateId) {
+    return fetchApiDelete(`/billing/rates/${rateId}`)
+}
+
+// Classifications
+export async function classifyWorklog(data) {
+    return fetchApiPost('/billing/classifications', data)
+}
+
+export async function bulkClassifyWorklogs(data) {
+    return fetchApiPost('/billing/classifications/bulk', data)
+}
+
+// Preview
+export async function getBillingPreview(clientId, periodStart, periodEnd, groupBy = 'project', billingProjectId = null) {
+    const params = {
+        client_id: clientId,
+        period_start: formatDate(periodStart),
+        period_end: formatDate(periodEnd),
+        group_by: groupBy
+    }
+    if (billingProjectId) params.billing_project_id = billingProjectId
+    return fetchApi('/billing/preview', params)
+}
+
+// Invoices
+export async function createInvoice(data) {
+    return fetchApiPost('/billing/invoices', {
+        ...data,
+        period_start: formatDate(data.period_start),
+        period_end: formatDate(data.period_end)
+    })
+}
+
+export async function getInvoices(clientId = null, status = null) {
+    const params = {}
+    if (clientId) params.client_id = clientId
+    if (status) params.status = status
+    return fetchApi('/billing/invoices', params)
+}
+
+export async function getInvoice(invoiceId) {
+    return fetchApi(`/billing/invoices/${invoiceId}`)
+}
+
+export async function issueInvoice(invoiceId) {
+    return fetchApiPost(`/billing/invoices/${invoiceId}/issue`, {})
+}
+
+export async function voidInvoice(invoiceId) {
+    return fetchApiPost(`/billing/invoices/${invoiceId}/void`, {})
+}
+
+export async function deleteInvoice(invoiceId) {
+    return fetchApiDelete(`/billing/invoices/${invoiceId}`)
+}
+
+export async function exportInvoiceExcel(invoiceId) {
+    const baseUrl = buildApiUrl(`/billing/invoices/${invoiceId}/export.xlsx`)
+    const url = new URL(baseUrl, isTauri() ? undefined : window.location.origin)
+
+    const response = await fetch(url)
+    if (!response.ok) {
+        throw new Error(`Export failed: ${response.status}`)
+    }
+
+    const blob = await response.blob()
+    const contentDisposition = response.headers.get('Content-Disposition')
+    const filename = contentDisposition?.match(/filename="?(.+?)"?$/)?.[1] || `fattura_${invoiceId}.xlsx`
+
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = filename
+    link.click()
+    URL.revokeObjectURL(link.href)
 }

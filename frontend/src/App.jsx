@@ -9,6 +9,7 @@ import EpicView from './pages/EpicView'
 import IssueView from './pages/IssueView'
 import Settings from './pages/Settings'
 import UsersListView from './pages/UsersListView'
+import Billing from './pages/Billing'
 
 function App() {
     // Global date range state
@@ -36,6 +37,7 @@ function App() {
                 <Route path="/epics" element={<EpicView dateRange={dateRange} selectedInstance={selectedInstance} />} />
                 <Route path="/epics/:epicKey" element={<EpicView dateRange={dateRange} selectedInstance={selectedInstance} />} />
                 <Route path="/issues/:issueKey" element={<IssueView dateRange={dateRange} />} />
+                <Route path="/billing" element={<Billing dateRange={dateRange} />} />
                 <Route path="/settings" element={<Settings />} />
             </Routes>
         </Layout>
