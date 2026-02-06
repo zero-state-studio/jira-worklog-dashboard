@@ -4,6 +4,7 @@ import { subDays, startOfMonth } from 'date-fns'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import TeamView from './pages/TeamView'
+import TeamsListView from './pages/TeamsListView'
 import UserView from './pages/UserView'
 import EpicView from './pages/EpicView'
 import IssueView from './pages/IssueView'
@@ -30,7 +31,7 @@ function App() {
         >
             <Routes>
                 <Route path="/" element={<Dashboard dateRange={dateRange} selectedInstance={selectedInstance} />} />
-                <Route path="/teams" element={<Navigate to="/" replace />} />
+                <Route path="/teams" element={<TeamsListView dateRange={dateRange} selectedInstance={selectedInstance} />} />
                 <Route path="/teams/:teamName" element={<TeamView dateRange={dateRange} selectedInstance={selectedInstance} />} />
                 <Route path="/users" element={<UsersListView dateRange={dateRange} selectedInstance={selectedInstance} />} />
                 <Route path="/users/:email" element={<UserView dateRange={dateRange} selectedInstance={selectedInstance} />} />

@@ -23,7 +23,7 @@ const TeamIcon = () => (
 
 const UserIcon = () => (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
     </svg>
 )
 
@@ -155,6 +155,35 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                         {sidebarOpen && <span>Dashboard</span>}
                     </NavLink>
 
+                    {/* Tutti i Team - between Dashboard and Utenti */}
+                    {config?.teams && config.teams.length > 0 ? (
+                        <NavLink
+                            to="/teams"
+                            end
+                            className={({ isActive }) =>
+                                `nav-link ${isActive ? 'nav-link-active' : ''}`
+                            }
+                        >
+                            <TeamIcon />
+                            {sidebarOpen && (
+                                <>
+                                    <span>Tutti i Team</span>
+                                    <span className="ml-auto text-xs text-dark-500">{config.teams.length}</span>
+                                </>
+                            )}
+                        </NavLink>
+                    ) : (
+                        <div className="nav-link opacity-50 cursor-not-allowed">
+                            <TeamIcon />
+                            {sidebarOpen && (
+                                <>
+                                    <span>Tutti i Team</span>
+                                    <span className="ml-auto text-xs text-dark-500">0</span>
+                                </>
+                            )}
+                        </div>
+                    )}
+
                     <NavLink
                         to="/users"
                         end
@@ -166,8 +195,8 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                         {sidebarOpen && <span>Utenti</span>}
                     </NavLink>
 
-                    {/* Teams Section */}
-                    {config?.teams && config.teams.length > 0 && sidebarOpen && (
+                    {/* Individual Teams Section */}
+                    {sidebarOpen && config?.teams && config.teams.length > 0 && (
                         <div className="pt-4">
                             <p className="px-4 text-xs font-semibold text-dark-500 uppercase tracking-wider mb-2">Teams</p>
                             {config.teams.map((team) => (
@@ -175,10 +204,9 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                                     key={team.name}
                                     to={`/teams/${encodeURIComponent(team.name)}`}
                                     className={({ isActive }) =>
-                                        `nav-link ${isActive ? 'nav-link-active' : ''}`
+                                        `nav-link pl-8 ${isActive ? 'nav-link-active' : ''}`
                                     }
                                 >
-                                    <TeamIcon />
                                     <span className="truncate">{team.name}</span>
                                     <span className="ml-auto text-xs text-dark-500">{team.member_count}</span>
                                 </NavLink>

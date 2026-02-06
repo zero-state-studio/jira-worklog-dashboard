@@ -250,7 +250,10 @@ class TeamHours(BaseModel):
     """Hours logged by a team."""
     team_name: str
     total_hours: float
+    expected_hours: float
     member_count: int
+    name: str = ""  # Alias for team_name, for frontend compatibility
+    hours_by_instance: dict[str, float] = Field(default_factory=dict)  # Hours per JIRA instance
 
 
 class UserHours(BaseModel):

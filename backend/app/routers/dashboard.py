@@ -45,6 +45,9 @@ async def get_dashboard(
         jira_instance=jira_instance
     )
 
+    # Preserve ALL worklogs for per-instance breakdown (before filtering)
+    all_worklogs = worklogs
+
     # Handle complementary instances when no specific instance filter
     if not jira_instance:
         # Build set of secondary instances to exclude (from database)
@@ -55,7 +58,7 @@ async def get_dashboard(
                 # First instance is primary, rest are secondary
                 secondary_instances.update(instances[1:])
 
-        # Filter out worklogs from secondary instances
+        # Filter out worklogs from secondary instances (for totals only)
         if secondary_instances:
             worklogs = [w for w in worklogs if w.jira_instance not in secondary_instances]
 
@@ -76,7 +79,14 @@ async def get_dashboard(
     )
 
     # Hours per team (with total member count from configuration)
-    team_hours = calculate_team_hours(worklogs, email_to_team, users)
+    team_hours = calculate_team_hours(
+        worklogs, email_to_team, users,
+        start_date=start_date,
+        end_date=end_date,
+        daily_working_hours=config.settings.daily_working_hours,
+        holiday_dates=holiday_dates,
+        all_worklogs=all_worklogs  # Pass all worklogs for per-instance breakdown
+    )
 
     # Daily trend
     daily_trend = calculate_daily_trend(worklogs, start_date, end_date)
@@ -124,7 +134,12 @@ def calculate_expected_hours(
 def calculate_team_hours(
     worklogs: list[Worklog],
     email_to_team: dict[str, str],
-    users: list[dict]
+    users: list[dict],
+    start_date: date = None,
+    end_date: date = None,
+    daily_working_hours: int = 8,
+    holiday_dates: set[str] = None,
+    all_worklogs: list[Worklog] = None
 ) -> list[TeamHours]:
     """Calculate hours per team. Member count shows ALL team members, not just those who logged hours."""
     # First, calculate total members per team from all users
@@ -134,7 +149,7 @@ def calculate_team_hours(
         if team_name:
             team_member_count[team_name] += 1
 
-    # Then calculate hours from worklogs
+    # Then calculate hours from worklogs (filtered for totals)
     team_hours = defaultdict(float)
     teams_with_worklogs = set()
 
@@ -144,15 +159,39 @@ def calculate_team_hours(
             team_hours[team_name] += wl.time_spent_seconds / 3600
             teams_with_worklogs.add(team_name)
 
+    # Calculate hours per instance (from ALL worklogs, including secondary instances)
+    team_instance_hours: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    source_worklogs = all_worklogs if all_worklogs else worklogs
+    for wl in source_worklogs:
+        team_name = email_to_team.get(wl.author_email.lower())
+        if team_name and wl.jira_instance:
+            team_instance_hours[team_name][wl.jira_instance] += wl.time_spent_seconds / 3600
+
+    # Calculate expected hours per team (based on member count)
+    working_days = 0
+    if start_date and end_date:
+        current = start_date
+        while current <= end_date:
+            if current.weekday() < 5 and (not holiday_dates or current.isoformat() not in holiday_dates):
+                working_days += 1
+            current += timedelta(days=1)
+
     # Build result: include all teams that have members or worklogs
     all_teams = set(team_member_count.keys()) | teams_with_worklogs
 
     result = []
     for team_name in sorted(all_teams):
+        member_count = team_member_count.get(team_name, 0)
+        expected = working_days * member_count * daily_working_hours
+        instance_hours = {k: round(v, 2) for k, v in team_instance_hours.get(team_name, {}).items()}
+
         result.append(TeamHours(
             team_name=team_name,
+            name=team_name,  # Alias for frontend compatibility
             total_hours=round(team_hours.get(team_name, 0), 2),
-            member_count=team_member_count.get(team_name, 0)
+            expected_hours=round(expected, 2),
+            member_count=member_count,
+            hours_by_instance=instance_hours
         ))
 
     return result
