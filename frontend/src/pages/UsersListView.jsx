@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getUsers } from '../api/client'
+import { getUsers, getMultiJiraOverview } from '../api/client'
+import { MultiJiraOverview, MultiJiraCharts, ComplementaryComparisons } from '../components/MultiJiraStats'
 import { formatHours } from '../hooks/useData'
-import { StatCard, ProgressBar, CardSkeleton, ErrorState, EmptyState } from '../components/Cards'
+import { StatCard, ProgressBar, MultiProgressBar, CardSkeleton, ErrorState, EmptyState } from '../components/Cards'
 
 export default function UsersListView({ dateRange, selectedInstance }) {
     const navigate = useNavigate()
     const [users, setUsers] = useState([])
+    const [overviewData, setOverviewData] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
     const [sortField, setSortField] = useState('total_hours')
@@ -19,6 +21,22 @@ export default function UsersListView({ dateRange, selectedInstance }) {
             setError(null)
             const result = await getUsers(dateRange.startDate, dateRange.endDate, selectedInstance)
             setUsers(result)
+
+            // Fetch overview if no instance selected
+            if (!selectedInstance) {
+                try {
+                    const overview = await getMultiJiraOverview(dateRange.startDate, dateRange.endDate)
+                    if (overview.instances.length > 1) {
+                        setOverviewData(overview)
+                    } else {
+                        setOverviewData(null)
+                    }
+                } catch {
+                    setOverviewData(null)
+                }
+            } else {
+                setOverviewData(null)
+            }
         } catch (err) {
             setError(err.message)
         } finally {
@@ -116,52 +134,64 @@ export default function UsersListView({ dateRange, selectedInstance }) {
                 </div>
             </div>
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard
-                    label="Utenti Totali"
-                    value={users.length}
-                    subtitle={`${activeUsers} attivi nel periodo`}
-                    color="primary"
-                    icon={
-                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                        </svg>
-                    }
-                />
-                <StatCard
-                    label="Ore Totali"
-                    value={formatHours(totalHours)}
-                    subtitle={`su ${formatHours(totalExpected)} previste`}
-                    color="blue"
-                    icon={
-                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    }
-                />
-                <StatCard
-                    label="Completamento Medio"
-                    value={`${Math.round(avgCompletion)}%`}
-                    subtitle={avgCompletion >= 90 ? 'Ottimo!' : avgCompletion >= 70 ? 'Buono' : 'In corso'}
-                    color={avgCompletion >= 90 ? 'green' : avgCompletion >= 70 ? 'blue' : 'orange'}
-                    icon={
-                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    }
-                />
-                <StatCard
-                    label="Team"
-                    value={teams.length}
-                    color="purple"
-                    icon={
-                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                    }
-                />
-            </div>
+            {/* Multi-JIRA Overview & Charts */}
+            {overviewData && (
+                <div className="space-y-8 mb-8">
+                    <MultiJiraOverview overview={overviewData} />
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <MultiJiraCharts overview={overviewData} users={users} />
+                    </div>
+                </div>
+            )}
+
+            {/* Stats Grid - Show only if NOT in Multi-Jira mode */}
+            {!overviewData && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <StatCard
+                        label="Utenti Totali"
+                        value={users.length}
+                        subtitle={`${activeUsers} attivi nel periodo`}
+                        color="primary"
+                        icon={
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                            </svg>
+                        }
+                    />
+                    <StatCard
+                        label="Ore Totali"
+                        value={formatHours(totalHours)}
+                        subtitle={`su ${formatHours(totalExpected)} previste`}
+                        color="blue"
+                        icon={
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        }
+                    />
+                    <StatCard
+                        label="Completamento Medio"
+                        value={`${Math.round(avgCompletion)}%`}
+                        subtitle={avgCompletion >= 90 ? 'Ottimo!' : avgCompletion >= 70 ? 'Buono' : 'In corso'}
+                        color={avgCompletion >= 90 ? 'green' : avgCompletion >= 70 ? 'blue' : 'orange'}
+                        icon={
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        }
+                    />
+                    <StatCard
+                        label="Team"
+                        value={teams.length}
+                        color="purple"
+                        icon={
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                        }
+                    />
+                </div>
+            )}
 
             {/* Filter */}
             {teams.length > 1 && (
@@ -170,11 +200,10 @@ export default function UsersListView({ dateRange, selectedInstance }) {
                     <div className="flex gap-2 flex-wrap">
                         <button
                             onClick={() => setFilterTeam('')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                                !filterTeam
-                                    ? 'bg-gradient-primary text-white shadow-glow'
-                                    : 'text-dark-300 bg-dark-700 hover:bg-dark-600'
-                            }`}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${!filterTeam
+                                ? 'bg-gradient-primary text-white shadow-glow'
+                                : 'text-dark-300 bg-dark-700 hover:bg-dark-600'
+                                }`}
                         >
                             Tutti
                         </button>
@@ -182,11 +211,10 @@ export default function UsersListView({ dateRange, selectedInstance }) {
                             <button
                                 key={team}
                                 onClick={() => setFilterTeam(team)}
-                                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                                    filterTeam === team
-                                        ? 'bg-gradient-primary text-white shadow-glow'
-                                        : 'text-dark-300 bg-dark-700 hover:bg-dark-600'
-                                }`}
+                                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${filterTeam === team
+                                    ? 'bg-gradient-primary text-white shadow-glow'
+                                    : 'text-dark-300 bg-dark-700 hover:bg-dark-600'
+                                    }`}
                             >
                                 {team}
                             </button>
@@ -288,7 +316,27 @@ export default function UsersListView({ dateRange, selectedInstance }) {
                                             <span className="text-dark-500 text-xs ml-1">/ {formatHours(user.expected_hours)}</span>
                                         </td>
                                         <td className="py-3 px-4">
-                                            <ProgressBar value={user.total_hours} max={user.expected_hours} size="sm" />
+                                            {overviewData && user.hours_by_instance ? (
+                                                <MultiProgressBar
+                                                    segments={Object.entries(user.hours_by_instance).map(([inst, hours], i) => {
+                                                        const instColor = overviewData.instances.find(o => o.instance_name === inst)
+                                                            ? ['#667eea', '#3fb950', '#a371f7', '#58a6ff', '#d29922', '#f85149'][
+                                                            overviewData.instances.findIndex(o => o.instance_name === inst) % 6
+                                                            ]
+                                                            : '#888'
+
+                                                        return {
+                                                            value: hours,
+                                                            color: instColor,
+                                                            label: inst
+                                                        }
+                                                    })}
+                                                    max={user.expected_hours}
+                                                    size="sm"
+                                                />
+                                            ) : (
+                                                <ProgressBar value={user.total_hours} max={user.expected_hours} size="sm" />
+                                            )}
                                         </td>
                                         <td className="text-right py-3 px-4">
                                             <span className={`font-semibold ${completionColor}`}>
@@ -308,6 +356,13 @@ export default function UsersListView({ dateRange, selectedInstance }) {
                     </table>
                 </div>
             </div>
+
+            {/* Complementary Comparisons (now at the bottom) */}
+            {overviewData && (
+                <div className="mt-8 pt-8 border-t border-dark-700">
+                    <ComplementaryComparisons overview={overviewData} />
+                </div>
+            )}
         </div>
     )
 }

@@ -175,6 +175,71 @@ export function ComparisonBarChart({ data, dataKey = 'total_hours', nameKey = 'n
 }
 
 /**
+ * Grouped Bar Chart - for comparing multiple series (e.g. instances) per category (e.g. user)
+ */
+export function GroupedBarChart({ data, keys, height = 300, colors = chartColors }) {
+    return (
+        <ResponsiveContainer width="100%" height={height}>
+            <BarChart
+                data={data}
+                layout="vertical"
+                margin={{ top: 10, right: 30, left: 100, bottom: 10 }}
+            >
+                <CartesianGrid strokeDasharray="3 3" stroke="#30363d" horizontal vertical={false} />
+                <XAxis
+                    type="number"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#8b949e', fontSize: 12 }}
+                    tickFormatter={(value) => `${value}h`}
+                />
+                <YAxis
+                    type="category"
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#c9d1d9', fontSize: 12 }}
+                    width={90}
+                />
+                <Tooltip
+                    content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null
+                        return (
+                            <div className="bg-dark-800 border border-dark-600 rounded-lg p-3 shadow-xl">
+                                <p className="text-dark-300 text-sm mb-2">{payload[0]?.payload?.full_name || label}</p>
+                                {payload.map((entry, index) => (
+                                    <div key={index} className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
+                                        <span className="text-dark-400 text-sm">{entry.name}:</span>
+                                        <span className="text-dark-200 font-medium">{formatHours(entry.value)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )
+                    }}
+                />
+                <Legend
+                    verticalAlign="top"
+                    height={36}
+                    wrapperStyle={{ color: '#c9d1d9', fontSize: 12 }}
+                />
+                {keys.map((key, i) => (
+                    <Bar
+                        key={key}
+                        dataKey={key}
+                        name={key}
+                        fill={colors[i % colors.length]}
+                        radius={[0, 4, 4, 0]}
+                        maxBarSize={20}
+                    />
+                ))}
+            </BarChart>
+        </ResponsiveContainer>
+    )
+}
+
+
+/**
  * Pie/Donut Chart - for distribution
  */
 export function DistributionChart({ data, dataKey = 'value', nameKey = 'name', height = 300, innerRadius = 60 }) {

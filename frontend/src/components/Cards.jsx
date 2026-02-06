@@ -78,6 +78,47 @@ export function ProgressBar({ value, max, label, size = 'md' }) {
 }
 
 /**
+ * MultiProgressBar - stacked progress bar for multiple segments (e.g. instances)
+ */
+export function MultiProgressBar({ segments, max, size = 'md' }) {
+    // segments: [{ value: number, color: string, label: string }]
+    const totalValue = segments.reduce((acc, seg) => acc + seg.value, 0)
+
+    // Ensure we don't exceed 100% width visually if total > max
+    // But usually max is expected hours, so total can exceed max. 
+    // If total > max, we cap the bar at 100% width but maybe show overload?
+    // For now, let's normalize everything to max.
+
+    const sizeClasses = {
+        sm: 'h-1.5',
+        md: 'h-2.5',
+        lg: 'h-4',
+    }
+
+    return (
+        <div className="w-full">
+            <div className={`w-full bg-dark-700 rounded-full ${sizeClasses[size]} overflow-hidden flex`}>
+                {segments.map((segment, index) => {
+                    const percentage = max > 0 ? (segment.value / max) * 100 : 0
+                    if (percentage <= 0) return null
+                    return (
+                        <div
+                            key={index}
+                            className="h-full transition-all duration-500 ease-out first:rounded-l-full last:rounded-r-full relative group"
+                            style={{
+                                width: `${percentage}%`,
+                                backgroundColor: segment.color
+                            }}
+                            title={`${segment.label}: ${formatHours(segment.value)}`}
+                        />
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
+/**
  * CircularProgress - ring-style progress indicator
  */
 export function CircularProgress({ value, max, size = 120, strokeWidth = 8 }) {

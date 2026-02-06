@@ -79,7 +79,10 @@ async def list_users(
         jira_instance=jira_instance
     )
 
-    # Filter out complementary (secondary) instances to avoid double-counting
+    # Preserve all worklogs for instance breakdown
+    all_worklogs = worklogs
+
+    # Filter out complementary (secondary) instances to avoid double-counting in Totals
     if not jira_instance:
         complementary_groups = await get_complementary_instances_from_db()
         secondary_instances = set()
@@ -91,12 +94,24 @@ async def list_users(
 
     # Build per-user stats
     user_hours = defaultdict(float)
+    user_instance_hours = defaultdict(lambda: defaultdict(float))
     user_worklog_count = defaultdict(int)
     user_initiatives = defaultdict(set)
 
+    # Calculate Totals from FILTERED worklogs (deduplicated)
     for wl in worklogs:
         email_lower = wl.author_email.lower()
-        user_hours[email_lower] += wl.time_spent_seconds / 3600
+        hours = wl.time_spent_seconds / 3600
+        user_hours[email_lower] += hours
+        user_worklog_count[email_lower] += 1
+        if wl.parent_key:
+            user_initiatives[email_lower].add(wl.parent_key)
+            
+    # Calculate Instance Breakdown from ALL worklogs (complete view)
+    for wl in all_worklogs:
+        email_lower = wl.author_email.lower()
+        hours = wl.time_spent_seconds / 3600
+        user_instance_hours[email_lower][wl.jira_instance] += hours
         user_worklog_count[email_lower] += 1
         if wl.parent_key:
             user_initiatives[email_lower].add(wl.parent_key)
@@ -114,12 +129,16 @@ async def list_users(
         email_lower = u["email"].lower()
         total_hours = round(user_hours.get(email_lower, 0), 2)
         completion = round((total_hours / expected_hours_per_user * 100), 1) if expected_hours_per_user > 0 else 0
+        
+        # Round instance hours
+        instance_hours = {k: round(v, 2) for k, v in user_instance_hours.get(email_lower, {}).items()}
 
         result.append({
             "email": u["email"],
             "full_name": f"{u['first_name']} {u['last_name']}",
             "team_name": u.get("team_name"),
             "total_hours": total_hours,
+            "hours_by_instance": instance_hours,
             "expected_hours": round(expected_hours_per_user, 2),
             "completion_percentage": completion,
             "worklog_count": user_worklog_count.get(email_lower, 0),

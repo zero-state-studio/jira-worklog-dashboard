@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getUserDetail } from '../api/client'
+import { getUserDetail, getComplementaryGroups } from '../api/client'
+import MultiJiraSection from '../components/MultiJiraStats'
 import { formatHours } from '../hooks/useData'
 import { StatCard, ProgressBar, EpicCard, ErrorState, EmptyState } from '../components/Cards'
 import { TrendChart, MultiTrendChart, DistributionChart, ChartCard } from '../components/Charts'
@@ -14,6 +15,7 @@ export default function UserView({ dateRange, selectedInstance }) {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
     const [initiativesOpen, setInitiativesOpen] = useState(false)
+    const [compGroups, setCompGroups] = useState([])
 
     const fetchData = useCallback(async () => {
         try {
@@ -21,6 +23,15 @@ export default function UserView({ dateRange, selectedInstance }) {
             setError(null)
             const result = await getUserDetail(email, dateRange.startDate, dateRange.endDate, selectedInstance)
             setData(result)
+
+            if (!selectedInstance) {
+                try {
+                    const groups = await getComplementaryGroups()
+                    setCompGroups(groups.groups || [])
+                } catch (e) {
+                    console.error("Failed to fetch groups", e)
+                }
+            }
         } catch (err) {
             setError(err.message)
         } finally {
@@ -113,6 +124,102 @@ export default function UserView({ dateRange, selectedInstance }) {
         full_name: e.epic_name,
     }))
 
+    // Compute Multi-Jira Overview if needed
+    let overviewData = null
+    if (!selectedInstance && data.daily_trend_by_instance) {
+        const instanceNames = Object.keys(data.daily_trend_by_instance)
+        if (instanceNames.length > 1) {
+            // Build instances list
+            const instances = instanceNames.map(name => {
+                const instanceLogs = data.worklogs.filter(w => w.jira_instance === name)
+                const totalHours = instanceLogs.reduce((sum, w) => sum + w.time_spent_seconds / 3600, 0)
+
+                // Calculate expected hours approximation (splitting simply by ratio or just using total expected? 
+                // For user view, showing total expected vs instance hours is fine, or we can just hide expected per instance if unknown)
+                // Actually, InstanceCard expects 'expected_hours' and 'completion_percentage'.
+                // We'll calculate completion based on the ratio of total expected hours * (instance_hours / total_hours)
+                // This is an approximation but visually consistent.
+                // Use total expected hours for the period as the reference capacity for each instance
+                const instanceExpected = data.expected_hours
+                const completion = instanceExpected > 0 ? (totalHours / instanceExpected) * 100 : 0
+
+                const uniqueEpics = new Set(instanceLogs.map(w => w.epic_key).filter(Boolean))
+
+                return {
+                    instance_name: name,
+                    total_hours: totalHours,
+                    expected_hours: instanceExpected,
+                    completion_percentage: completion,
+                    daily_trend: data.daily_trend_by_instance[name],
+                    initiative_count: uniqueEpics.size,
+                    contributor_count: 1 // It's a single user view
+                }
+            })
+
+            // Build complementary comparisons
+            const comparisons = []
+            compGroups.forEach(group => {
+                if (group.members.length === 2) {
+                    const primary = group.members[0].name
+                    const secondary = group.members[1].name
+                    const primaryInst = instances.find(i => i.instance_name === primary)
+                    const secondaryInst = instances.find(i => i.instance_name === secondary)
+
+                    if (primaryInst && secondaryInst) {
+                        // Find discrepancies (same epic, large diff)
+                        const discrepancies = []
+                        // We need epic hours per instance.
+                        const primaryEpics = {}
+                        const secondaryEpics = {}
+
+                        data.worklogs.forEach(w => {
+                            if (w.jira_instance === primary && w.epic_key) primaryEpics[w.epic_key] = (primaryEpics[w.epic_key] || 0) + w.time_spent_seconds / 3600
+                            if (w.jira_instance === secondary && w.epic_key) secondaryEpics[w.epic_key] = (secondaryEpics[w.epic_key] || 0) + w.time_spent_seconds / 3600
+                        })
+
+                        const allEpicKeys = new Set([...Object.keys(primaryEpics), ...Object.keys(secondaryEpics)])
+                        allEpicKeys.forEach(key => {
+                            const p = primaryEpics[key] || 0
+                            const s = secondaryEpics[key] || 0
+                            const delta = Math.abs(p - s)
+                            // Threshold for discrepancy: > 1 hour and > 20% diff
+                            if (delta > 1 && (p > 0 || s > 0)) {
+                                const max = Math.max(p, s)
+                                if (delta / max > 0.2) {
+                                    const epicName = data.epics.find(e => e.epic_key === key)?.epic_name || key
+                                    discrepancies.push({
+                                        initiative_key: key,
+                                        initiative_name: epicName,
+                                        primary_hours: p,
+                                        secondary_hours: s,
+                                        delta_hours: delta,
+                                        delta_percentage: Math.round((delta / max) * 100)
+                                    })
+                                }
+                            }
+                        })
+
+                        discrepancies.sort((a, b) => b.delta_hours - a.delta_hours)
+
+                        comparisons.push({
+                            group_name: group.name,
+                            primary_instance: primary,
+                            secondary_instance: secondary,
+                            primary_total_hours: primaryInst.total_hours,
+                            secondary_total_hours: secondaryInst.total_hours,
+                            discrepancies: discrepancies.slice(0, 5)
+                        })
+                    }
+                }
+            })
+
+            overviewData = {
+                instances,
+                complementary_comparisons: comparisons
+            }
+        }
+    }
+
     return (
         <div className="space-y-6 animate-fade-in">
             {/* Header */}
@@ -149,68 +256,81 @@ export default function UserView({ dateRange, selectedInstance }) {
                 </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <StatCard
-                    label="Completamento"
-                    value={`${Math.round(completionPercentage)}%`}
-                    color={completionPercentage >= 90 ? 'green' : completionPercentage >= 70 ? 'blue' : 'orange'}
-                    icon={
-                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    }
-                />
-                <StatCard
-                    label="Iniziative Lavorate"
-                    value={data.epics.length}
-                    color="purple"
-                    icon={
-                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                    }
-                />
-                <StatCard
-                    label="Worklog Registrati"
-                    value={data.worklogs.length}
-                    color="blue"
-                    icon={
-                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                    }
-                />
-            </div>
+            {/* Multi-JIRA Stats */}
+            {overviewData && (
+                <div className="mb-8">
+                    <MultiJiraSection overview={overviewData} navigate={navigate} />
+                    <div className="h-px bg-dark-700 my-8" />
+                </div>
+            )}
 
-            {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <ChartCard title="Trend Giornaliero" subtitle="Ore registrate nel periodo">
-                    {(() => {
-                        const byInstance = data.daily_trend_by_instance || {}
-                        const instanceNames = Object.keys(byInstance).sort()
-                        if (instanceNames.length > 1) {
-                            const series = instanceNames.map(name => ({
-                                name,
-                                data: byInstance[name],
-                                color: getInstanceColor(name, instanceNames).hex
-                            }))
-                            return <MultiTrendChart series={series} height={280} />
-                        }
-                        return <TrendChart data={data.daily_trend} height={280} />
-                    })()}
-                </ChartCard>
+            {/* Show specific Stats and Charts only if NOT in Multi-Jira mode (or if overviewData is null) */}
+            {!overviewData && (
+                <>
+                    {/* Stats */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <StatCard
+                            label="Completamento"
+                            value={`${Math.round(completionPercentage)}%`}
+                            color={completionPercentage >= 90 ? 'green' : completionPercentage >= 70 ? 'blue' : 'orange'}
+                            icon={
+                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            }
+                        />
+                        <StatCard
+                            label="Iniziative Lavorate"
+                            value={data.epics.length}
+                            color="purple"
+                            icon={
+                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                            }
+                        />
+                        <StatCard
+                            label="Worklog Registrati"
+                            value={data.worklogs.length}
+                            color="blue"
+                            icon={
+                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                            }
+                        />
+                    </div>
 
-                <ChartCard title="Distribuzione Iniziative" subtitle="Come sono distribuite le ore">
-                    {initiativePieData.length > 0 ? (
-                        <DistributionChart data={initiativePieData} height={280} />
-                    ) : (
-                        <div className="h-64 flex items-center justify-center text-dark-400">
-                            Nessuna iniziativa nel periodo selezionato
-                        </div>
-                    )}
-                </ChartCard>
-            </div>
+                    {/* Charts */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <ChartCard title="Trend Giornaliero" subtitle="Ore registrate nel periodo">
+                            {(() => {
+                                const byInstance = data.daily_trend_by_instance || {}
+                                const instanceNames = Object.keys(byInstance).sort()
+                                if (instanceNames.length > 1) {
+                                    const series = instanceNames.map(name => ({
+                                        name,
+                                        data: byInstance[name],
+                                        color: getInstanceColor(name, instanceNames).hex
+                                    }))
+                                    return <MultiTrendChart series={series} height={280} />
+                                }
+                                return <TrendChart data={data.daily_trend} height={280} />
+                            })()}
+                        </ChartCard>
+
+                        <ChartCard title="Distribuzione Iniziative" subtitle="Come sono distribuite le ore">
+                            {initiativePieData.length > 0 ? (
+                                <DistributionChart data={initiativePieData} height={280} />
+                            ) : (
+                                <div className="h-64 flex items-center justify-center text-dark-400">
+                                    Nessuna iniziativa nel periodo selezionato
+                                </div>
+                            )}
+                        </ChartCard>
+                    </div>
+                </>
+            )}
 
             {/* Initiative Cards */}
             {data.epics.length > 0 && (
