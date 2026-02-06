@@ -13,6 +13,7 @@ export default function UserView({ dateRange, selectedInstance }) {
     const [data, setData] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
+    const [initiativesOpen, setInitiativesOpen] = useState(false)
 
     const fetchData = useCallback(async () => {
         try {
@@ -213,30 +214,58 @@ export default function UserView({ dateRange, selectedInstance }) {
 
             {/* Initiative Cards */}
             {data.epics.length > 0 && (
-                <div>
-                    <h2 className="text-lg font-semibold text-dark-100 mb-4">Iniziative Lavorate</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {data.epics.map((epic) => (
-                            <EpicCard
-                                key={epic.epic_key}
-                                epicKey={epic.epic_key}
-                                name={epic.epic_name}
-                                hours={epic.total_hours}
-                                contributorCount={epic.contributor_count}
-                                jiraInstance={epic.jira_instance}
-                                parentType={epic.parent_type}
-                                onClick={() => navigate(`/epics/${encodeURIComponent(epic.epic_key)}`)}
-                            />
-                        ))}
-                    </div>
+                <div className="glass-card p-4">
+                    <button
+                        onClick={() => setInitiativesOpen(!initiativesOpen)}
+                        className="flex items-center justify-between w-full group focus:outline-none"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg bg-dark-700 group-hover:bg-dark-600 transition-colors ${initiativesOpen ? 'text-accent-blue' : 'text-dark-400'}`}>
+                                <svg
+                                    className={`w-6 h-6 transition-transform duration-200 ${initiativesOpen ? 'rotate-180' : ''}`}
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-semibold text-dark-100 group-hover:text-accent-blue transition-colors">Iniziative Lavorate</h2>
+                                <p className="text-sm text-dark-400 text-left">
+                                    {data.epics.length} iniziativ{data.epics.length === 1 ? 'a' : 'e'} lavorat{data.epics.length === 1 ? 'a' : 'e'} nel periodo
+                                </p>
+                            </div>
+                        </div>
+                    </button>
+
+                    {initiativesOpen && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up mt-6 pt-4 border-t border-dark-700">
+                            {data.epics.map((epic) => (
+                                <EpicCard
+                                    key={epic.epic_key}
+                                    epicKey={epic.epic_key}
+                                    name={epic.epic_name}
+                                    hours={epic.total_hours}
+                                    contributorCount={epic.contributor_count}
+                                    jiraInstance={epic.jira_instance}
+                                    parentType={epic.parent_type}
+                                    onClick={() => navigate(`/epics/${encodeURIComponent(epic.epic_key)}`)}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
 
             {/* Calendario Worklog */}
-            <WorklogCalendar
-                worklogs={data.worklogs}
-                onUserClick={(email) => navigate(`/users/${encodeURIComponent(email)}`)}
-            />
+            <div>
+                <h2 className="text-lg font-semibold text-dark-100 mb-4 px-1">Calendario</h2>
+                <WorklogCalendar
+                    worklogs={data.worklogs}
+                    onUserClick={(email) => navigate(`/users/${encodeURIComponent(email)}`)}
+                />
+            </div>
         </div>
     )
 }

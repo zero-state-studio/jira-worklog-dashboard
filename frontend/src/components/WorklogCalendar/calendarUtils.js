@@ -107,3 +107,53 @@ export function getUniqueInstances(worklogs) {
 }
 
 export { format, isSameMonth, isToday, addMonths, subMonths }
+
+/**
+ * Calculate Easter Sunday for a given year (Western)
+ */
+function getEaster(year) {
+    const f = Math.floor
+    const G = year % 19
+    const C = f(year / 100)
+    const H = (C - f(C / 4) - f((8 * C + 13) / 25) + 19 * G + 15) % 30
+    const I = H - f(H / 28) * (1 - f(29 / (H + 1)) * f((21 - G) / 11))
+    const J = (year + f(year / 4) + I + 2 - C + f(C / 4)) % 7
+    const L = I - J
+    const month = 3 + f((L + 40) / 44)
+    const day = L + 28 - 31 * f(month / 4)
+    return { month, day }
+}
+
+/**
+ * Get holiday name if date is an Italian holiday
+ */
+export function getHoliday(date) {
+    const day = date.getDate()
+    const month = date.getMonth() + 1 // 1-indexed
+    const year = date.getFullYear()
+
+    // Fixed holidays
+    if (day === 1 && month === 1) return 'Capodanno'
+    if (day === 6 && month === 1) return 'Epifania'
+    if (day === 25 && month === 4) return 'Liberazione'
+    if (day === 1 && month === 5) return 'Festa del Lavoro'
+    if (day === 2 && month === 6) return 'Festa della Repubblica'
+    if (day === 15 && month === 8) return 'Ferragosto'
+    if (day === 1 && month === 11) return 'Ognissanti'
+    if (day === 8 && month === 12) return 'Immacolata'
+    if (day === 25 && month === 12) return 'Natale'
+    if (day === 26 && month === 12) return 'Santo Stefano'
+
+    // Easter (Pasqua)
+    const easter = getEaster(year)
+    if (day === easter.day && month === easter.month) return 'Pasqua'
+
+    // Easter Monday (Pasquetta) - day after Easter
+    const easterDate = new Date(year, easter.month - 1, easter.day)
+    const pasquettaDate = new Date(easterDate)
+    pasquettaDate.setDate(easterDate.getDate() + 1)
+
+    if (day === pasquettaDate.getDate() && month === pasquettaDate.getMonth() + 1) return 'Pasquetta'
+
+    return null
+}

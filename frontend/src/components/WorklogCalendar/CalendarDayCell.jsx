@@ -10,6 +10,7 @@ export default function CalendarDayCell({
     allInstances,
     isCurrentMonth,
     isToday,
+    holiday,
     onClick
 }) {
     const hasHours = hours > 0
@@ -20,25 +21,39 @@ export default function CalendarDayCell({
         <button
             onClick={hasHours ? onClick : undefined}
             className={`
-                relative min-h-[80px] p-2 rounded-lg border transition-all duration-200
-                ${isCurrentMonth ? 'bg-dark-800 border-dark-700' : 'bg-dark-900/50 border-dark-800'}
+                relative min-h-[80px] p-2 rounded-lg border transition-all duration-200 flex flex-col items-start justify-between
+                ${isCurrentMonth ? (holiday ? 'bg-red-900/10 border-red-900/30' : 'bg-dark-800 border-dark-700') : 'bg-dark-900/50 border-dark-800'}
                 ${isToday ? 'ring-2 ring-accent-blue' : ''}
                 ${hasHours ? 'hover:border-accent-purple/50 cursor-pointer' : 'cursor-default'}
-                ${getHoursColorIntensity(hours, maxHours)}
+                ${!holiday ? getHoursColorIntensity(hours, maxHours) : ''}
             `}
         >
-            {/* Day Number */}
-            <span className={`
-                text-sm font-medium
-                ${isCurrentMonth ? 'text-dark-200' : 'text-dark-500'}
-                ${isToday ? 'text-accent-blue font-bold' : ''}
-            `}>
-                {format(date, 'd')}
-            </span>
+            <div className="flex justify-between w-full">
+                {/* Day Number */}
+                <span className={`
+                    text-sm font-medium
+                    ${isCurrentMonth ? (holiday ? 'text-red-400' : 'text-dark-200') : 'text-dark-500'}
+                    ${isToday ? 'text-accent-blue font-bold' : ''}
+                `}>
+                    {format(date, 'd')}
+                </span>
+
+                {/* Holiday Label (Desktop) */}
+                {holiday && (
+                    <span className="hidden sm:block text-[10px] font-medium text-red-400 uppercase tracking-wider truncate max-w-[80px]" title={holiday}>
+                        {holiday}
+                    </span>
+                )}
+            </div>
+
+            {/* Holiday Dot (Mobile) */}
+            {holiday && (
+                <div className="sm:hidden absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-red-400" />
+            )}
 
             {/* Instance color bars + total hours */}
             {hasHours && (
-                <div className="absolute bottom-1.5 left-1.5 right-1.5">
+                <div className="w-full mt-auto">
                     {/* Instance mini-bars (only if multiple instances) */}
                     {hasMultipleInstances && (
                         <div className="flex gap-0.5 mb-1">

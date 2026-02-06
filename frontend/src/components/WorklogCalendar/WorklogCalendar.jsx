@@ -12,7 +12,8 @@ import {
     isSameMonth,
     isToday,
     addMonths,
-    subMonths
+    subMonths,
+    getHoliday
 } from './calendarUtils'
 
 const ChevronLeftIcon = () => (
@@ -139,6 +140,7 @@ export default function WorklogCalendar({ worklogs, onIssueClick }) {
                 {calendarDays.map(day => {
                     const dateKey = format(day, 'yyyy-MM-dd')
                     const hours = hoursByDate[dateKey] || 0
+                    const holiday = getHoliday(day)
 
                     return (
                         <CalendarDayCell
@@ -150,6 +152,7 @@ export default function WorklogCalendar({ worklogs, onIssueClick }) {
                             allInstances={allInstances}
                             isCurrentMonth={isSameMonth(day, currentMonth)}
                             isToday={isToday(day)}
+                            holiday={holiday}
                             onClick={() => handleDayClick(day)}
                         />
                     )
