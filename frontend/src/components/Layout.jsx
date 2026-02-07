@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import DatePicker from 'react-datepicker'
-import { format, subDays, startOfMonth, startOfWeek } from 'date-fns'
+import { format, subDays, startOfMonth, startOfWeek, endOfMonth } from 'date-fns'
 import { it } from 'date-fns/locale'
 import { getConfig, getEpics } from '../api/client'
 import SyncModal from './SyncModal'
@@ -119,6 +119,19 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
     const applyPreset = (preset) => {
         const { start, end } = preset.getRange()
         setDateRange({ startDate: start, endDate: end })
+        setDatePickerOpen(false)
+    }
+
+    const selectWholeMonth = (date) => {
+        const start = startOfMonth(date)
+        const end = endOfMonth(date)
+        const today = new Date()
+
+        // If the month is current or future, cap the end date to today
+        const actualEnd = end > today ? today : end
+
+        setDateRange({ startDate: start, endDate: actualEnd })
+        setSelectionRange({ startDate: start, endDate: actualEnd })
         setDatePickerOpen(false)
     }
 
@@ -367,6 +380,41 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                                                 inline
                                                 locale={it}
                                                 maxDate={new Date()}
+                                                renderCustomHeader={({
+                                                    date,
+                                                    decreaseMonth,
+                                                    increaseMonth,
+                                                    prevMonthButtonDisabled,
+                                                    nextMonthButtonDisabled,
+                                                }) => (
+                                                    <div className="flex items-center justify-between px-2 py-2">
+                                                        <button
+                                                            onClick={decreaseMonth}
+                                                            disabled={prevMonthButtonDisabled}
+                                                            className="p-1 hover:bg-dark-700 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                                        >
+                                                            <svg className="w-5 h-5 text-dark-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                                            </svg>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => selectWholeMonth(date)}
+                                                            className="text-sm font-semibold text-dark-200 hover:text-white hover:bg-dark-700 px-3 py-1.5 rounded-lg transition-all"
+                                                            title="Clicca per selezionare l'intero mese"
+                                                        >
+                                                            {format(date, 'MMMM yyyy', { locale: it })}
+                                                        </button>
+                                                        <button
+                                                            onClick={increaseMonth}
+                                                            disabled={nextMonthButtonDisabled}
+                                                            className="p-1 hover:bg-dark-700 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                                        >
+                                                            <svg className="w-5 h-5 text-dark-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                )}
                                             />
                                         </div>
                                     </>
