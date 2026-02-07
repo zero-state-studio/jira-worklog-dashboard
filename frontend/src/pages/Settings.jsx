@@ -6,6 +6,7 @@ import LogsSection from '../components/settings/LogsSection'
 import JiraInstancesSection from '../components/settings/JiraInstancesSection'
 import PackageTemplatesSection from '../components/settings/PackageTemplatesSection'
 import HolidaysSection from '../components/settings/HolidaysSection'
+import FactorialSection from '../components/settings/FactorialSection'
 
 const SettingsIcon = () => (
     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -213,6 +214,16 @@ export default function Settings() {
                 >
                     Log Applicazione
                 </button>
+                <button
+                    onClick={() => setActiveTab('factorial')}
+                    className={`px-6 py-3 rounded-lg font-medium transition-all ${
+                        activeTab === 'factorial'
+                            ? 'bg-gradient-primary text-white shadow-glow'
+                            : 'bg-dark-800 text-dark-300 hover:bg-dark-700 hover:text-dark-100'
+                    }`}
+                >
+                    Factorial
+                </button>
             </div>
 
             {/* Content */}
@@ -251,6 +262,9 @@ export default function Settings() {
                     )}
                     {activeTab === 'logs' && (
                         <LogsSection />
+                    )}
+                    {activeTab === 'factorial' && (
+                        <FactorialSection />
                     )}
                 </>
             )}

@@ -11,11 +11,14 @@ export default function CalendarDayCell({
     isCurrentMonth,
     isToday,
     holiday,
+    leaves,
     onClick
 }) {
     const hasHours = hours > 0
     const instanceEntries = Object.entries(hoursByInstance || {}).sort((a, b) => b[1] - a[1])
     const hasMultipleInstances = instanceEntries.length > 1
+    const hasLeave = leaves && leaves.length > 0
+    const approvedLeave = leaves?.find(l => l.status === 'approved')
 
     return (
         <button
@@ -26,6 +29,7 @@ export default function CalendarDayCell({
                 ${isToday ? 'ring-2 ring-accent-blue' : ''}
                 ${hasHours ? 'hover:border-accent-purple/50 cursor-pointer' : 'cursor-default'}
                 ${!holiday ? getHoursColorIntensity(hours, maxHours) : ''}
+                ${hasLeave && approvedLeave ? 'border-yellow-500/40' : ''}
             `}
         >
             <div className="flex justify-between w-full">
@@ -49,6 +53,15 @@ export default function CalendarDayCell({
             {/* Holiday Dot (Mobile) */}
             {holiday && (
                 <div className="sm:hidden absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-red-400" />
+            )}
+
+            {/* Leave Indicator */}
+            {hasLeave && (
+                <div className="absolute top-1 right-1">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/30 text-yellow-300 font-medium">
+                        {approvedLeave ? approvedLeave.leave_type_name.slice(0, 4).toUpperCase() : 'PEND'}
+                    </span>
+                </div>
             )}
 
             {/* Instance color bars + total hours */}

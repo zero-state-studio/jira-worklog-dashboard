@@ -58,6 +58,7 @@ export default function WorklogDrawer({
     onClose,
     date,
     worklogs,
+    leaves,
     allInstances,
     onIssueClick
 }) {
@@ -65,6 +66,7 @@ export default function WorklogDrawer({
 
     const totalHours = worklogs.reduce((sum, w) => sum + w.time_spent_seconds / 3600, 0)
     const hasMultipleInstances = allInstances && allInstances.length > 1
+    const hasLeaves = leaves && leaves.length > 0
 
     // Group worklogs by instance
     const groupedWorklogs = useMemo(() => {
@@ -112,6 +114,37 @@ export default function WorklogDrawer({
                         <CloseIcon />
                     </button>
                 </div>
+
+                {/* Leaves Section */}
+                {hasLeaves && (
+                    <div className="px-6 pt-6 pb-0">
+                        <div className="p-4 bg-yellow-900/10 border border-yellow-500/30 rounded-lg">
+                            <h4 className="text-sm font-semibold text-yellow-400 mb-2">
+                                Ferie/Permessi
+                            </h4>
+                            {leaves.map(leave => (
+                                <div key={leave.id} className="text-sm text-yellow-300 mb-1">
+                                    <span className="font-medium">{leave.leave_type_name}</span>
+                                    {leave.status !== 'approved' && (
+                                        <span className="ml-2 text-xs text-yellow-500">
+                                            ({leave.status})
+                                        </span>
+                                    )}
+                                    {leave.half_day !== 'no' && (
+                                        <span className="ml-2 text-xs">
+                                            (mezza giornata)
+                                        </span>
+                                    )}
+                                    {leave.description && (
+                                        <div className="text-xs text-yellow-400/70 mt-0.5">
+                                            {leave.description}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Worklog List */}
                 <div className="p-6 space-y-4 overflow-y-auto flex-1">

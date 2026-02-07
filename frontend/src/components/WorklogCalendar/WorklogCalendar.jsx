@@ -30,7 +30,7 @@ const ChevronRightIcon = () => (
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom']
 
-export default function WorklogCalendar({ worklogs, onIssueClick }) {
+export default function WorklogCalendar({ worklogs, leaves, onIssueClick }) {
     // Default to current month, or month of most recent worklog
     const getInitialMonth = () => {
         if (worklogs.length > 0) {
@@ -49,6 +49,25 @@ export default function WorklogCalendar({ worklogs, onIssueClick }) {
     const worklogsByDate = useMemo(() => {
         return groupWorklogsByDate(worklogs)
     }, [worklogs])
+
+    // Group leaves by date (span multi-day leaves across all days)
+    const leavesByDate = useMemo(() => {
+        const grouped = {}
+        leaves?.forEach(leave => {
+            const start = new Date(leave.start_date)
+            const end = new Date(leave.finish_date)
+
+            // Per ogni giorno nel range del leave
+            let current = new Date(start)
+            while (current <= end) {
+                const key = format(current, 'yyyy-MM-dd')
+                if (!grouped[key]) grouped[key] = []
+                grouped[key].push(leave)
+                current.setDate(current.getDate() + 1)
+            }
+        })
+        return grouped
+    }, [leaves])
 
     // Calculate hours per day
     const hoursByDate = useMemo(() => {
@@ -102,6 +121,13 @@ export default function WorklogCalendar({ worklogs, onIssueClick }) {
         return worklogsByDate[dateKey] || []
     }, [selectedDate, worklogsByDate])
 
+    // Get leaves for selected date
+    const selectedDateLeaves = useMemo(() => {
+        if (!selectedDate) return []
+        const dateKey = format(selectedDate, 'yyyy-MM-dd')
+        return leavesByDate[dateKey] || []
+    }, [selectedDate, leavesByDate])
+
     return (
         <div className="space-y-4">
             {/* Month Navigation Header */}
@@ -153,6 +179,7 @@ export default function WorklogCalendar({ worklogs, onIssueClick }) {
                             isCurrentMonth={isSameMonth(day, currentMonth)}
                             isToday={isToday(day)}
                             holiday={holiday}
+                            leaves={leavesByDate[dateKey]}
                             onClick={() => handleDayClick(day)}
                         />
                     )
@@ -165,6 +192,7 @@ export default function WorklogCalendar({ worklogs, onIssueClick }) {
                 onClose={() => setIsDrawerOpen(false)}
                 date={selectedDate}
                 worklogs={selectedDateWorklogs}
+                leaves={selectedDateLeaves}
                 allInstances={allInstances}
                 onIssueClick={onIssueClick}
             />

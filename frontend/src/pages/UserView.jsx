@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getUserDetail, getComplementaryGroups } from '../api/client'
+import { getUserDetail, getComplementaryGroups, getFactorialLeaves } from '../api/client'
 import MultiJiraSection from '../components/MultiJiraStats'
 import { formatHours } from '../hooks/useData'
 import { StatCard, ProgressBar, EpicCard, ErrorState, EmptyState } from '../components/Cards'
@@ -16,6 +16,7 @@ export default function UserView({ dateRange, selectedInstance }) {
     const [error, setError] = useState(null)
     const [initiativesOpen, setInitiativesOpen] = useState(false)
     const [compGroups, setCompGroups] = useState([])
+    const [leaves, setLeaves] = useState([])
 
     const fetchData = useCallback(async () => {
         try {
@@ -31,6 +32,20 @@ export default function UserView({ dateRange, selectedInstance }) {
                 } catch (e) {
                     console.error("Failed to fetch groups", e)
                 }
+            }
+
+            // Fetch leaves for this user (only approved ones)
+            try {
+                const leavesData = await getFactorialLeaves(
+                    dateRange.startDate,
+                    dateRange.endDate,
+                    result.user_id || null,
+                    'approved'
+                )
+                setLeaves(leavesData || [])
+            } catch (err) {
+                console.error('Failed to load leaves:', err)
+                setLeaves([])
             }
         } catch (err) {
             setError(err.message)
@@ -383,6 +398,7 @@ export default function UserView({ dateRange, selectedInstance }) {
                 <h2 className="text-lg font-semibold text-dark-100 mb-4 px-1">Calendario</h2>
                 <WorklogCalendar
                     worklogs={data.worklogs}
+                    leaves={leaves}
                     onUserClick={(email) => navigate(`/users/${encodeURIComponent(email)}`)}
                 />
             </div>

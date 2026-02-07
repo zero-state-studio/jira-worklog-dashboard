@@ -636,3 +636,63 @@ class InvoiceListResponse(BaseModel):
     """Response for invoice list."""
     invoices: list[InvoiceInDB]
     total_count: int
+
+
+# ============ Factorial HR Models ============
+
+class FactorialConfigCreate(BaseModel):
+    """Request to create/update Factorial configuration."""
+    api_key: str
+
+
+class UserFactorialAccount(BaseModel):
+    """Factorial employee account mapping for a user."""
+    factorial_employee_id: int
+    factorial_email: Optional[str] = None
+
+
+class FactorialLeave(BaseModel):
+    """A leave/absence entry from Factorial."""
+    id: int
+    factorial_leave_id: int
+    user_id: int
+    user_email: str
+    user_full_name: str
+    factorial_employee_id: int
+    leave_type_id: Optional[int] = None
+    leave_type_name: str
+    start_date: date
+    finish_date: date
+    half_day: str  # 'start', 'finish', 'no'
+    status: str  # 'approved', 'pending', 'declined'
+    description: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    @property
+    def days_count(self) -> float:
+        """Calcola il numero di giorni (0.5 se half day)."""
+        delta = (self.finish_date - self.start_date).days + 1
+        if self.half_day in ['start', 'finish']:
+            return delta - 0.5
+        return float(delta)
+
+
+class FetchFactorialIdResponse(BaseModel):
+    """Response from fetch Factorial employee ID."""
+    factorial_employee_id: int
+    factorial_email: str
+
+
+class BulkFetchFactorialResult(BaseModel):
+    """Result for a single user in bulk Factorial employee fetch."""
+    user_email: str
+    user_name: str
+    success: bool
+    factorial_employee_id: Optional[int] = None
+    error: Optional[str] = None
+
+
+class BulkFetchFactorialResponse(BaseModel):
+    """Response from bulk Factorial employee fetch."""
+    results: list[BulkFetchFactorialResult]
+    summary: dict  # {total, success, failed, skipped}

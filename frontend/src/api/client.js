@@ -680,3 +680,50 @@ export async function exportInvoiceExcel(invoiceId) {
     link.click()
     URL.revokeObjectURL(link.href)
 }
+
+// ============ Factorial API ============
+
+// Configuration
+export async function getFactorialConfig() {
+    return fetchApi('/factorial/config')
+}
+
+export async function setFactorialConfig(apiKey) {
+    return fetchApiPost('/factorial/config', { api_key: apiKey })
+}
+
+export async function deleteFactorialConfig() {
+    return fetchApiDelete('/factorial/config')
+}
+
+// Employee Mapping (Single)
+export async function fetchFactorialEmployeeId(userId) {
+    return fetchApiPost(`/factorial/users/${userId}/fetch-employee-id`)
+}
+
+export async function deleteFactorialAccount(userId) {
+    return fetchApiDelete(`/factorial/users/${userId}/factorial-account`)
+}
+
+// Employee Mapping (Bulk)
+export async function bulkFetchFactorialEmployees() {
+    return fetchApiPost('/factorial/users/bulk-fetch-employees')
+}
+
+// Leaves Sync
+export async function syncFactorialLeaves(startDate, endDate) {
+    return fetchApiPost('/factorial/sync-leaves', {
+        start_date: formatDate(startDate),
+        end_date: formatDate(endDate)
+    })
+}
+
+export async function getFactorialLeaves(startDate, endDate, userId = null, status = null) {
+    const params = {
+        start_date: formatDate(startDate),
+        end_date: formatDate(endDate)
+    }
+    if (userId) params.user_id = userId
+    if (status) params.status = status
+    return fetchApi('/factorial/leaves', params)
+}

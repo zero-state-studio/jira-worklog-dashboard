@@ -477,8 +477,82 @@ class WorklogStorage:
                 except Exception:
                     pass  # Column already exists
 
+                # ========== Factorial HR Tables ==========
+
+                # Factorial configuration
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS factorial_config (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        api_key TEXT NOT NULL,
+                        is_active INTEGER DEFAULT 1,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # User Factorial accounts mapping
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS user_factorial_accounts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        factorial_employee_id INTEGER NOT NULL UNIQUE,
+                        factorial_email TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(user_id)
+                    )
+                """)
+
+                # Factorial leaves/absences
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS factorial_leaves (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        factorial_leave_id INTEGER NOT NULL UNIQUE,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        factorial_employee_id INTEGER NOT NULL,
+                        leave_type_id INTEGER,
+                        leave_type_name TEXT NOT NULL,
+                        start_date TEXT NOT NULL,
+                        finish_date TEXT NOT NULL,
+                        half_day TEXT DEFAULT 'no',
+                        status TEXT NOT NULL,
+                        description TEXT,
+                        data TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_factorial_leaves_user
+                    ON factorial_leaves(user_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_factorial_leaves_dates
+                    ON factorial_leaves(start_date, finish_date)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_factorial_leaves_status
+                    ON factorial_leaves(status)
+                """)
+
+                # Factorial sync history
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS factorial_sync_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        start_date TEXT NOT NULL,
+                        end_date TEXT NOT NULL,
+                        leaves_synced INTEGER DEFAULT 0,
+                        leaves_updated INTEGER DEFAULT 0,
+                        status TEXT DEFAULT 'completed',
+                        error_message TEXT,
+                        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        completed_at TIMESTAMP
+                    )
+                """)
+
                 await db.commit()
-            
+
             self._initialized = True
     
     # ========== Worklog Operations ==========
@@ -2664,6 +2738,234 @@ class WorklogStorage:
             cursor = await db.execute("DELETE FROM holidays WHERE id = ?", (holiday_id,))
             await db.commit()
             return cursor.rowcount > 0
+
+    # ========== Factorial HR Operations ==========
+
+    async def get_factorial_config(self) -> Optional[dict]:
+        """Get active Factorial configuration."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                "SELECT id, api_key, is_active, created_at, updated_at FROM factorial_config WHERE is_active = 1 ORDER BY id DESC LIMIT 1"
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return {
+                        "id": row[0],
+                        "api_key": row[1],
+                        "is_active": row[2],
+                        "created_at": row[3],
+                        "updated_at": row[4]
+                    }
+        return None
+
+    async def set_factorial_config(self, api_key: str) -> int:
+        """Create or update Factorial configuration."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            # Deactivate old configs
+            await db.execute("UPDATE factorial_config SET is_active = 0")
+
+            # Insert new config
+            cursor = await db.execute(
+                "INSERT INTO factorial_config (api_key, is_active) VALUES (?, 1)",
+                (api_key,)
+            )
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_user_factorial_account(self, user_id: int) -> Optional[dict]:
+        """Get Factorial employee ID for a user."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                "SELECT factorial_employee_id, factorial_email FROM user_factorial_accounts WHERE user_id = ?",
+                (user_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return {
+                        "factorial_employee_id": row[0],
+                        "factorial_email": row[1]
+                    }
+        return None
+
+    async def set_user_factorial_account(
+        self,
+        user_id: int,
+        factorial_employee_id: int,
+        factorial_email: str = None
+    ) -> bool:
+        """Set/update Factorial employee ID for a user."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                INSERT INTO user_factorial_accounts (user_id, factorial_employee_id, factorial_email)
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    factorial_employee_id = excluded.factorial_employee_id,
+                    factorial_email = excluded.factorial_email,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (user_id, factorial_employee_id, factorial_email))
+            await db.commit()
+        return True
+
+    async def delete_user_factorial_account(self, user_id: int) -> bool:
+        """Delete Factorial account mapping for a user."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "DELETE FROM user_factorial_accounts WHERE user_id = ?",
+                (user_id,)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def get_leaves_in_range(
+        self,
+        start_date: date,
+        end_date: date,
+        user_id: Optional[int] = None,
+        status_filter: Optional[str] = None
+    ) -> list[dict]:
+        """Get leaves within date range from storage."""
+        await self.initialize()
+
+        query = """
+            SELECT
+                fl.id, fl.factorial_leave_id, fl.user_id,
+                u.email as user_email,
+                u.first_name || ' ' || u.last_name as user_full_name,
+                fl.factorial_employee_id, fl.leave_type_id, fl.leave_type_name,
+                fl.start_date, fl.finish_date, fl.half_day, fl.status, fl.description,
+                fl.created_at
+            FROM factorial_leaves fl
+            JOIN users u ON fl.user_id = u.id
+            WHERE (fl.start_date <= ? AND fl.finish_date >= ?)
+        """
+        params = [end_date.isoformat(), start_date.isoformat()]
+
+        if user_id:
+            query += " AND fl.user_id = ?"
+            params.append(user_id)
+
+        if status_filter:
+            query += " AND fl.status = ?"
+            params.append(status_filter)
+
+        query += " ORDER BY fl.start_date DESC"
+
+        leaves = []
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(query, params) as cursor:
+                async for row in cursor:
+                    leaves.append({
+                        "id": row[0],
+                        "factorial_leave_id": row[1],
+                        "user_id": row[2],
+                        "user_email": row[3],
+                        "user_full_name": row[4],
+                        "factorial_employee_id": row[5],
+                        "leave_type_id": row[6],
+                        "leave_type_name": row[7],
+                        "start_date": row[8],
+                        "finish_date": row[9],
+                        "half_day": row[10],
+                        "status": row[11],
+                        "description": row[12],
+                        "created_at": row[13]
+                    })
+
+        return leaves
+
+    async def upsert_leaves(self, leaves: list[dict], user_id_map: dict[int, int]) -> tuple[int, int]:
+        """
+        Insert or update leaves.
+
+        Args:
+            leaves: List of leave dicts from Factorial API
+            user_id_map: Map of factorial_employee_id -> user_id
+
+        Returns:
+            (inserted_count, updated_count)
+        """
+        await self.initialize()
+
+        inserted = 0
+        updated = 0
+
+        async with aiosqlite.connect(self.db_path) as db:
+            for leave in leaves:
+                factorial_employee_id = leave.get("employee_id")
+                user_id = user_id_map.get(factorial_employee_id)
+
+                if not user_id:
+                    continue  # Skip leaves for unmapped employees
+
+                factorial_leave_id = leave.get("id")
+
+                # Check if exists
+                async with db.execute(
+                    "SELECT id FROM factorial_leaves WHERE factorial_leave_id = ?",
+                    (factorial_leave_id,)
+                ) as cursor:
+                    exists = await cursor.fetchone() is not None
+
+                leave_type = leave.get("leave_type", {})
+
+                if exists:
+                    await db.execute("""
+                        UPDATE factorial_leaves SET
+                            user_id = ?,
+                            factorial_employee_id = ?,
+                            leave_type_id = ?,
+                            leave_type_name = ?,
+                            start_date = ?,
+                            finish_date = ?,
+                            half_day = ?,
+                            status = ?,
+                            description = ?,
+                            data = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE factorial_leave_id = ?
+                    """, (
+                        user_id,
+                        factorial_employee_id,
+                        leave_type.get("id"),
+                        leave_type.get("name", "Leave"),
+                        leave.get("start_on"),
+                        leave.get("finish_on"),
+                        leave.get("half_day", "no"),
+                        leave.get("status", "approved"),
+                        leave.get("description"),
+                        json.dumps(leave),
+                        factorial_leave_id
+                    ))
+                    updated += 1
+                else:
+                    await db.execute("""
+                        INSERT INTO factorial_leaves
+                        (factorial_leave_id, user_id, factorial_employee_id, leave_type_id,
+                         leave_type_name, start_date, finish_date, half_day, status, description, data)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        factorial_leave_id,
+                        user_id,
+                        factorial_employee_id,
+                        leave_type.get("id"),
+                        leave_type.get("name", "Leave"),
+                        leave.get("start_on"),
+                        leave.get("finish_on"),
+                        leave.get("half_day", "no"),
+                        leave.get("status", "approved"),
+                        leave.get("description"),
+                        json.dumps(leave)
+                    ))
+                    inserted += 1
+
+            await db.commit()
+
+        return (inserted, updated)
 
 
 # Global storage instance
