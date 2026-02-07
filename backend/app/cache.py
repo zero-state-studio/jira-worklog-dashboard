@@ -196,11 +196,21 @@ class WorklogStorage:
                         email TEXT NOT NULL,
                         api_token TEXT NOT NULL,
                         tempo_api_token TEXT,
+                        billing_client_id INTEGER REFERENCES billing_clients(id) ON DELETE SET NULL,
                         is_active INTEGER DEFAULT 1,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
+
+                # Add billing_client_id column if it doesn't exist (migration)
+                try:
+                    await db.execute("""
+                        ALTER TABLE jira_instances
+                        ADD COLUMN billing_client_id INTEGER REFERENCES billing_clients(id) ON DELETE SET NULL
+                    """)
+                except Exception:
+                    pass  # Column already exists
 
                 # Complementary instance groups - instances in same group track same work
                 await db.execute("""
@@ -325,10 +335,20 @@ class WorklogStorage:
                         name TEXT NOT NULL UNIQUE,
                         billing_currency TEXT NOT NULL DEFAULT 'EUR',
                         default_hourly_rate REAL,
+                        jira_instance_id INTEGER REFERENCES jira_instances(id) ON DELETE SET NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
+
+                # Add jira_instance_id column if it doesn't exist (migration)
+                try:
+                    await db.execute("""
+                        ALTER TABLE billing_clients
+                        ADD COLUMN jira_instance_id INTEGER REFERENCES jira_instances(id) ON DELETE SET NULL
+                    """)
+                except Exception:
+                    pass  # Column already exists
 
                 # Billing projects (belong to a client)
                 await db.execute("""
@@ -1327,16 +1347,17 @@ class WorklogStorage:
         url: str,
         email: str,
         api_token: str,
-        tempo_api_token: Optional[str] = None
+        tempo_api_token: Optional[str] = None,
+        billing_client_id: Optional[int] = None
     ) -> int:
         """Create a new JIRA instance. Returns instance_id."""
         await self.initialize()
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute("""
-                INSERT INTO jira_instances (name, url, email, api_token, tempo_api_token)
-                VALUES (?, ?, ?, ?, ?)
-            """, (name, url, email, api_token, tempo_api_token))
+                INSERT INTO jira_instances (name, url, email, api_token, tempo_api_token, billing_client_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (name, url, email, api_token, tempo_api_token, billing_client_id))
             await db.commit()
             return cursor.lastrowid
 
@@ -1346,7 +1367,7 @@ class WorklogStorage:
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, name, url, email, api_token, tempo_api_token, is_active,
+                SELECT id, name, url, email, api_token, tempo_api_token, billing_client_id, is_active,
                        created_at, updated_at, default_project_key
                 FROM jira_instances WHERE id = ?
             """, (instance_id,)) as cursor:
@@ -1359,10 +1380,11 @@ class WorklogStorage:
                         "email": row[3],
                         "api_token": row[4],
                         "tempo_api_token": row[5],
-                        "is_active": bool(row[6]),
-                        "created_at": row[7],
-                        "updated_at": row[8],
-                        "default_project_key": row[9]
+                        "billing_client_id": row[6],
+                        "is_active": bool(row[7]),
+                        "created_at": row[8],
+                        "updated_at": row[9],
+                        "default_project_key": row[10]
                     }
         return None
 
@@ -1372,7 +1394,7 @@ class WorklogStorage:
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, name, url, email, api_token, tempo_api_token, is_active,
+                SELECT id, name, url, email, api_token, tempo_api_token, billing_client_id, is_active,
                        created_at, updated_at, default_project_key
                 FROM jira_instances WHERE name = ?
             """, (name,)) as cursor:
@@ -1385,10 +1407,11 @@ class WorklogStorage:
                         "email": row[3],
                         "api_token": row[4],
                         "tempo_api_token": row[5],
-                        "is_active": bool(row[6]),
-                        "created_at": row[7],
-                        "updated_at": row[8],
-                        "default_project_key": row[9]
+                        "billing_client_id": row[6],
+                        "is_active": bool(row[7]),
+                        "created_at": row[8],
+                        "updated_at": row[9],
+                        "default_project_key": row[10]
                     }
         return None
 
@@ -1399,7 +1422,7 @@ class WorklogStorage:
         instances = []
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, name, url, email, api_token, tempo_api_token, is_active,
+                SELECT id, name, url, email, api_token, tempo_api_token, billing_client_id, is_active,
                        created_at, updated_at, default_project_key
                 FROM jira_instances
                 ORDER BY name
@@ -1409,10 +1432,11 @@ class WorklogStorage:
                         "id": row[0],
                         "name": row[1],
                         "url": row[2],
-                        "is_active": bool(row[6]),
-                        "created_at": row[7],
-                        "updated_at": row[8],
-                        "default_project_key": row[9]
+                        "billing_client_id": row[6],
+                        "is_active": bool(row[7]),
+                        "created_at": row[8],
+                        "updated_at": row[9],
+                        "default_project_key": row[10]
                     }
                     if include_credentials:
                         instance["email"] = row[3]
@@ -1425,7 +1449,7 @@ class WorklogStorage:
         """Update JIRA instance fields. Returns True if updated."""
         await self.initialize()
 
-        allowed_fields = {"name", "url", "email", "api_token", "tempo_api_token", "is_active", "default_project_key"}
+        allowed_fields = {"name", "url", "email", "api_token", "tempo_api_token", "billing_client_id", "is_active", "default_project_key"}
         updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
 
         if not updates:
@@ -2119,13 +2143,13 @@ class WorklogStorage:
 
     # ========== Billing Client Operations ==========
 
-    async def create_billing_client(self, name: str, billing_currency: str = "EUR", default_hourly_rate: Optional[float] = None) -> int:
+    async def create_billing_client(self, name: str, billing_currency: str = "EUR", default_hourly_rate: Optional[float] = None, jira_instance_id: Optional[int] = None) -> int:
         """Create a billing client. Returns client_id."""
         await self.initialize()
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "INSERT INTO billing_clients (name, billing_currency, default_hourly_rate) VALUES (?, ?, ?)",
-                (name, billing_currency, default_hourly_rate)
+                "INSERT INTO billing_clients (name, billing_currency, default_hourly_rate, jira_instance_id) VALUES (?, ?, ?, ?)",
+                (name, billing_currency, default_hourly_rate, jira_instance_id)
             )
             await db.commit()
             return cursor.lastrowid
@@ -2135,12 +2159,12 @@ class WorklogStorage:
         await self.initialize()
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT id, name, billing_currency, default_hourly_rate, created_at, updated_at FROM billing_clients WHERE id = ?",
+                "SELECT id, name, billing_currency, default_hourly_rate, jira_instance_id, created_at, updated_at FROM billing_clients WHERE id = ?",
                 (client_id,)
             ) as cursor:
                 row = await cursor.fetchone()
                 if row:
-                    return {"id": row[0], "name": row[1], "billing_currency": row[2], "default_hourly_rate": row[3], "created_at": row[4], "updated_at": row[5]}
+                    return {"id": row[0], "name": row[1], "billing_currency": row[2], "default_hourly_rate": row[3], "jira_instance_id": row[4], "created_at": row[5], "updated_at": row[6]}
         return None
 
     async def get_all_billing_clients(self) -> list[dict]:
@@ -2149,16 +2173,16 @@ class WorklogStorage:
         clients = []
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT id, name, billing_currency, default_hourly_rate, created_at, updated_at FROM billing_clients ORDER BY name"
+                "SELECT id, name, billing_currency, default_hourly_rate, jira_instance_id, created_at, updated_at FROM billing_clients ORDER BY name"
             ) as cursor:
                 async for row in cursor:
-                    clients.append({"id": row[0], "name": row[1], "billing_currency": row[2], "default_hourly_rate": row[3], "created_at": row[4], "updated_at": row[5]})
+                    clients.append({"id": row[0], "name": row[1], "billing_currency": row[2], "default_hourly_rate": row[3], "jira_instance_id": row[4], "created_at": row[5], "updated_at": row[6]})
         return clients
 
     async def update_billing_client(self, client_id: int, **kwargs) -> bool:
         """Update billing client fields."""
         await self.initialize()
-        allowed = {"name", "billing_currency", "default_hourly_rate"}
+        allowed = {"name", "billing_currency", "default_hourly_rate", "jira_instance_id"}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
             return False

@@ -10,7 +10,8 @@ import {
     getComplementaryGroups,
     createComplementaryGroup,
     updateComplementaryGroup,
-    deleteComplementaryGroup
+    deleteComplementaryGroup,
+    getBillingClients
 } from '../../api/client'
 
 const PlusIcon = () => (
@@ -76,10 +77,17 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
         email: '',
         api_token: '',
         tempo_api_token: '',
-        default_project_key: ''
+        default_project_key: '',
+        billing_client_id: ''
     })
     const [showToken, setShowToken] = useState(false)
     const [showTempoToken, setShowTempoToken] = useState(false)
+    const [clients, setClients] = useState([])
+
+    // Load clients
+    useEffect(() => {
+        getBillingClients().then(setClients).catch(console.error)
+    }, [])
 
     // Update form data when instance changes (for editing)
     useEffect(() => {
@@ -90,7 +98,8 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
                 email: instance.email || '',
                 api_token: instance.api_token || '',
                 tempo_api_token: instance.tempo_api_token || '',
-                default_project_key: instance.default_project_key || ''
+                default_project_key: instance.default_project_key || '',
+                billing_client_id: instance.billing_client_id || ''
             })
         } else {
             setFormData({
@@ -99,7 +108,8 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
                 email: '',
                 api_token: '',
                 tempo_api_token: '',
-                default_project_key: ''
+                default_project_key: '',
+                billing_client_id: ''
             })
         }
     }, [instance])
@@ -225,6 +235,25 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
                         />
                         <p className="text-xs text-dark-500 mt-1">
                             Project key usato come default nella creazione pacchetti
+                        </p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-dark-300 mb-1">
+                            Cliente di Fatturazione (opzionale)
+                        </label>
+                        <select
+                            value={formData.billing_client_id || ''}
+                            onChange={(e) => setFormData({ ...formData, billing_client_id: e.target.value ? Number(e.target.value) : null })}
+                            className="input-field w-full"
+                        >
+                            <option value="">Nessuno</option>
+                            {clients.map(client => (
+                                <option key={client.id} value={client.id}>{client.name}</option>
+                            ))}
+                        </select>
+                        <p className="text-xs text-dark-500 mt-1">
+                            Associa questa istanza a un cliente per la fatturazione
                         </p>
                     </div>
 

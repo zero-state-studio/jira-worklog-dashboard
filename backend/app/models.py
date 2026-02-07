@@ -451,6 +451,7 @@ class BillingClientCreate(BaseModel):
     name: str
     billing_currency: str = "EUR"
     default_hourly_rate: Optional[float] = None
+    jira_instance_id: Optional[int] = None
 
 
 class BillingClientUpdate(BaseModel):
@@ -458,6 +459,7 @@ class BillingClientUpdate(BaseModel):
     name: Optional[str] = None
     billing_currency: Optional[str] = None
     default_hourly_rate: Optional[float] = None
+    jira_instance_id: Optional[int] = None
 
 
 class BillingClientInDB(BaseModel):
@@ -466,6 +468,7 @@ class BillingClientInDB(BaseModel):
     name: str
     billing_currency: str = "EUR"
     default_hourly_rate: Optional[float] = None
+    jira_instance_id: Optional[int] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

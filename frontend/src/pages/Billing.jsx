@@ -192,6 +192,12 @@ export default function Billing({ dateRange }) {
                                             <span>Tariffa default</span>
                                             <span className="text-dark-200">{client.default_hourly_rate ? `${client.default_hourly_rate} €/h` : '—'}</span>
                                         </div>
+                                        {client.jira_instance_id && (
+                                            <div className="flex justify-between text-dark-400">
+                                                <span>Istanza JIRA</span>
+                                                <span className="text-dark-200">{jiraInstances?.instances?.find(i => i.id === client.jira_instance_id)?.name || '—'}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -534,6 +540,7 @@ export default function Billing({ dateRange }) {
             {showClientModal && (
                 <ClientModal
                     client={editingClient}
+                    jiraInstances={jiraInstances}
                     onClose={() => setShowClientModal(false)}
                     onSave={async (data) => {
                         if (editingClient) {
@@ -606,10 +613,11 @@ export default function Billing({ dateRange }) {
 
 // ============ MODAL COMPONENTS ============
 
-function ClientModal({ client, onClose, onSave }) {
+function ClientModal({ client, jiraInstances, onClose, onSave }) {
     const [name, setName] = useState(client?.name || '')
     const [currency, setCurrency] = useState(client?.billing_currency || 'EUR')
     const [rate, setRate] = useState(client?.default_hourly_rate || '')
+    const [jiraInstanceId, setJiraInstanceId] = useState(client?.jira_instance_id || '')
     const [saving, setSaving] = useState(false)
 
     return (
@@ -635,10 +643,19 @@ function ClientModal({ client, onClose, onSave }) {
                             <input type="number" value={rate} onChange={e => setRate(e.target.value)} className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm" step="0.01" min="0" placeholder="0.00" />
                         </div>
                     </div>
+                    <div>
+                        <label className="block text-sm text-dark-300 mb-1">Istanza JIRA (opzionale)</label>
+                        <select value={jiraInstanceId} onChange={e => setJiraInstanceId(e.target.value ? Number(e.target.value) : '')} className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm">
+                            <option value="">Nessuna</option>
+                            {jiraInstances?.instances?.map(inst => (
+                                <option key={inst.id} value={inst.id}>{inst.name}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
                 <div className="flex justify-end gap-3 mt-6">
                     <button onClick={onClose} className="btn-secondary text-sm">Annulla</button>
-                    <button onClick={async () => { setSaving(true); await onSave({ name, billing_currency: currency, default_hourly_rate: rate ? Number(rate) : null }); setSaving(false) }} className="btn-primary text-sm" disabled={!name || saving}>
+                    <button onClick={async () => { setSaving(true); await onSave({ name, billing_currency: currency, default_hourly_rate: rate ? Number(rate) : null, jira_instance_id: jiraInstanceId || null }); setSaving(false) }} className="btn-primary text-sm" disabled={!name || saving}>
                         {saving ? 'Salvataggio...' : 'Salva'}
                     </button>
                 </div>

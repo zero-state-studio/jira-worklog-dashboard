@@ -613,6 +613,7 @@ async def create_jira_instance(data: dict):
     email = data.get("email")
     api_token = data.get("api_token")
     tempo_api_token = data.get("tempo_api_token")
+    billing_client_id = data.get("billing_client_id")
 
     if not all([name, url, email, api_token]):
         raise HTTPException(status_code=400, detail="name, url, email, and api_token are required")
@@ -627,7 +628,8 @@ async def create_jira_instance(data: dict):
         url=url,
         email=email,
         api_token=api_token,
-        tempo_api_token=tempo_api_token
+        tempo_api_token=tempo_api_token,
+        billing_client_id=billing_client_id
     )
 
     instance = await storage.get_jira_instance(instance_id)
@@ -670,6 +672,7 @@ async def get_jira_instance(instance_id: int, include_credentials: bool = False)
         "id": instance["id"],
         "name": instance["name"],
         "url": instance["url"],
+        "billing_client_id": instance.get("billing_client_id"),
         "is_active": instance["is_active"],
         "has_tempo": bool(instance.get("tempo_api_token")),
         "default_project_key": instance.get("default_project_key"),
@@ -707,6 +710,7 @@ async def update_jira_instance(instance_id: int, data: dict):
         "id": updated["id"],
         "name": updated["name"],
         "url": updated["url"],
+        "billing_client_id": updated.get("billing_client_id"),
         "is_active": updated["is_active"],
         "has_tempo": bool(updated.get("tempo_api_token")),
         "default_project_key": updated.get("default_project_key")

@@ -39,7 +39,8 @@ async def create_client(data: BillingClientCreate):
         client_id = await storage.create_billing_client(
             name=data.name,
             billing_currency=data.billing_currency,
-            default_hourly_rate=data.default_hourly_rate
+            default_hourly_rate=data.default_hourly_rate,
+            jira_instance_id=data.jira_instance_id
         )
     except Exception as e:
         if "UNIQUE" in str(e):
