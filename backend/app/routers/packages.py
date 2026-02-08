@@ -2,7 +2,7 @@
 Packages API router - create packages of JIRA issues from templates.
 """
 import uuid
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional
 
 from ..models import (
@@ -13,6 +13,7 @@ from ..cache import get_storage
 from ..jira_client import JiraClient
 from ..config import get_jira_instances_from_db
 from ..logging_config import get_logger
+from ..auth.dependencies import get_current_user, require_admin, CurrentUser
 
 router = APIRouter(prefix="/api/packages", tags=["packages"])
 logger = get_logger(__name__)
@@ -21,16 +22,19 @@ logger = get_logger(__name__)
 # ========== Template CRUD Endpoints ==========
 
 @router.get("/templates")
-async def list_templates():
-    """List all package templates with their elements."""
+async def list_templates(current_user: CurrentUser = Depends(get_current_user)):
+    """List all package templates with their elements (scoped to company)."""
     storage = get_storage()
-    templates = await storage.get_all_package_templates()
+    templates = await storage.get_all_package_templates(current_user.company_id)
     return {"templates": templates}
 
 
 @router.post("/templates")
-async def create_template(data: PackageTemplateCreate):
-    """Create a new package template."""
+async def create_template(
+    data: PackageTemplateCreate,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Create a new package template (ADMIN only)."""
     storage = get_storage()
 
     template_id = await storage.create_package_template(
@@ -38,37 +42,45 @@ async def create_template(data: PackageTemplateCreate):
         description=data.description,
         default_project_key=data.default_project_key,
         parent_issue_type=data.parent_issue_type,
-        child_issue_type=data.child_issue_type
+        child_issue_type=data.child_issue_type,
+        company_id=current_user.company_id
     )
 
     # Set elements
     if data.elements:
-        await storage.set_template_elements(template_id, data.elements)
+        await storage.set_template_elements(template_id, data.elements, current_user.company_id)
 
     # Set associated instances
     if data.instance_ids:
-        await storage.set_template_instances(template_id, data.instance_ids)
+        await storage.set_template_instances(template_id, data.instance_ids, current_user.company_id)
 
-    template = await storage.get_package_template(template_id)
+    template = await storage.get_package_template(template_id, current_user.company_id)
     return template
 
 
 @router.get("/templates/{template_id}")
-async def get_template(template_id: int):
-    """Get a single package template."""
+async def get_template(
+    template_id: int,
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """Get a single package template (scoped to company)."""
     storage = get_storage()
-    template = await storage.get_package_template(template_id)
+    template = await storage.get_package_template(template_id, current_user.company_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     return template
 
 
 @router.put("/templates/{template_id}")
-async def update_template(template_id: int, data: PackageTemplateUpdate):
-    """Update a package template."""
+async def update_template(
+    template_id: int,
+    data: PackageTemplateUpdate,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Update a package template (ADMIN only)."""
     storage = get_storage()
 
-    existing = await storage.get_package_template(template_id)
+    existing = await storage.get_package_template(template_id, current_user.company_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Template not found")
 
@@ -86,40 +98,46 @@ async def update_template(template_id: int, data: PackageTemplateUpdate):
         update_fields["child_issue_type"] = data.child_issue_type
 
     if update_fields:
-        await storage.update_package_template(template_id, **update_fields)
+        await storage.update_package_template(template_id, current_user.company_id, **update_fields)
 
     # Update elements if provided
     if data.elements is not None:
-        await storage.set_template_elements(template_id, data.elements)
+        await storage.set_template_elements(template_id, data.elements, current_user.company_id)
 
     # Update associated instances if provided
     if data.instance_ids is not None:
-        await storage.set_template_instances(template_id, data.instance_ids)
+        await storage.set_template_instances(template_id, data.instance_ids, current_user.company_id)
 
-    updated = await storage.get_package_template(template_id)
+    updated = await storage.get_package_template(template_id, current_user.company_id)
     return updated
 
 
 @router.delete("/templates/{template_id}")
-async def delete_template(template_id: int):
-    """Delete a package template."""
+async def delete_template(
+    template_id: int,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Delete a package template (ADMIN only)."""
     storage = get_storage()
 
-    existing = await storage.get_package_template(template_id)
+    existing = await storage.get_package_template(template_id, current_user.company_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    await storage.delete_package_template(template_id)
+    await storage.delete_package_template(template_id, current_user.company_id)
     return {"success": True, "message": "Template deleted"}
 
 
 # ========== JIRA Metadata Endpoints ==========
 
 @router.get("/jira-projects")
-async def get_jira_projects(instance: str = Query(..., description="JIRA instance name")):
-    """Get projects from a JIRA instance."""
+async def get_jira_projects(
+    instance: str = Query(..., description="JIRA instance name"),
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """Get projects from a JIRA instance (scoped to company)."""
     storage = get_storage()
-    db_instance = await storage.get_jira_instance_by_name(instance)
+    db_instance = await storage.get_jira_instance_by_name(instance, current_user.company_id)
     if not db_instance:
         raise HTTPException(status_code=404, detail=f"JIRA instance '{instance}' not found")
 
@@ -140,11 +158,12 @@ async def get_jira_projects(instance: str = Query(..., description="JIRA instanc
 @router.get("/jira-issue-types")
 async def get_jira_issue_types(
     instance: str = Query(..., description="JIRA instance name"),
-    project_key: str = Query(..., description="JIRA project key")
+    project_key: str = Query(..., description="JIRA project key"),
+    current_user: CurrentUser = Depends(get_current_user)
 ):
-    """Get issue types for a project from a JIRA instance."""
+    """Get issue types for a project from a JIRA instance (scoped to company)."""
     storage = get_storage()
-    db_instance = await storage.get_jira_instance_by_name(instance)
+    db_instance = await storage.get_jira_instance_by_name(instance, current_user.company_id)
     if not db_instance:
         raise HTTPException(status_code=404, detail=f"JIRA instance '{instance}' not found")
 
@@ -165,8 +184,11 @@ async def get_jira_issue_types(
 # ========== Package Creation Endpoint ==========
 
 @router.post("/create", response_model=PackageCreateResponse)
-async def create_package(data: PackageCreateRequest):
-    """Create a package of issues (parent + children) on one or more JIRA instances.
+async def create_package(
+    data: PackageCreateRequest,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Create a package of issues (parent + children) on one or more JIRA instances (ADMIN only).
     Automatically detects complementary instances and creates packages on them too."""
     storage = get_storage()
 
@@ -183,11 +205,11 @@ async def create_package(data: PackageCreateRequest):
     # Auto-detect complementary instances
     auto_instances = {}  # instance_name -> project_key
     for instance_name in list(selected_instance_names):
-        complementary_names = await storage.get_complementary_instances_for(instance_name)
+        complementary_names = await storage.get_complementary_instances_for(instance_name, current_user.company_id)
         for comp_name in complementary_names:
             if comp_name not in selected_instance_names and comp_name not in auto_instances:
                 # Use default_project_key from the DB instance
-                comp_instance = await storage.get_jira_instance_by_name(comp_name)
+                comp_instance = await storage.get_jira_instance_by_name(comp_name, current_user.company_id)
                 if comp_instance and comp_instance.get("default_project_key"):
                     auto_instances[comp_name] = comp_instance["default_project_key"]
                     logger.info(f"Auto-adding complementary instance '{comp_name}' with default project '{comp_instance['default_project_key']}'")
@@ -211,7 +233,7 @@ async def create_package(data: PackageCreateRequest):
 
         try:
             # Get JIRA instance credentials
-            db_instance = await storage.get_jira_instance_by_name(instance_name)
+            db_instance = await storage.get_jira_instance_by_name(instance_name, current_user.company_id)
             if not db_instance:
                 errors.append(f"JIRA instance '{instance_name}' not found")
                 continue
@@ -330,7 +352,7 @@ async def create_package(data: PackageCreateRequest):
                                 "element_name": element_name
                             })
 
-            await storage.save_linked_issues(links_to_save)
+            await storage.save_linked_issues(links_to_save, current_user.company_id)
             linked_issues_saved = links_to_save
             logger.info(f"Saved {len(links_to_save)} linked issue records")
 
@@ -349,9 +371,10 @@ async def create_package(data: PackageCreateRequest):
 @router.get("/linked-issues")
 async def get_linked_issues(
     issue_key: str = Query(..., description="Issue key"),
-    jira_instance: str = Query(..., description="JIRA instance name")
+    jira_instance: str = Query(..., description="JIRA instance name"),
+    current_user: CurrentUser = Depends(get_current_user)
 ):
-    """Get issues linked to a given issue across JIRA instances."""
+    """Get issues linked to a given issue across JIRA instances (scoped to company)."""
     storage = get_storage()
-    linked = await storage.get_linked_issues_by_key(issue_key, jira_instance)
+    linked = await storage.get_linked_issues_by_key(issue_key, jira_instance, current_user.company_id)
     return {"linked_issues": linked}

@@ -3,7 +3,7 @@ Factorial HR API router - configurazione, employee mappings, leaves sync.
 Pattern: seguire settings.py per user operations, sync.py per sync logic.
 """
 from datetime import date
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional
 
 from ..models import (
@@ -12,6 +12,7 @@ from ..models import (
 )
 from ..cache import get_storage
 from ..factorial_client import FactorialClient
+from ..auth.dependencies import get_current_user, require_admin, CurrentUser
 
 router = APIRouter(prefix="/api/factorial", tags=["factorial"])
 
@@ -19,10 +20,10 @@ router = APIRouter(prefix="/api/factorial", tags=["factorial"])
 # ========== Configuration ==========
 
 @router.get("/config")
-async def get_factorial_config():
-    """Get Factorial configuration (masked API key)."""
+async def get_factorial_config(current_user: CurrentUser = Depends(require_admin)):
+    """Get Factorial configuration (masked API key) (ADMIN only)."""
     storage = get_storage()
-    config = await storage.get_factorial_config()
+    config = await storage.get_factorial_config(current_user.company_id)
     if not config:
         return {"configured": False}
     return {
@@ -33,8 +34,11 @@ async def get_factorial_config():
 
 
 @router.post("/config")
-async def set_factorial_config(config: FactorialConfigCreate):
-    """Set/update Factorial configuration con test connessione."""
+async def set_factorial_config(
+    config: FactorialConfigCreate,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Set/update Factorial configuration con test connessione (ADMIN only)."""
     storage = get_storage()
     try:
         client = FactorialClient(config.api_key)
@@ -42,25 +46,28 @@ async def set_factorial_config(config: FactorialConfigCreate):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid API key: {str(e)}")
 
-    config_id = await storage.set_factorial_config(config.api_key)
+    config_id = await storage.set_factorial_config(config.api_key, current_user.company_id)
     return {"success": True, "message": "Factorial configured", "config_id": config_id}
 
 
 # ========== Employee Mapping (Singolo) ==========
 
 @router.post("/users/{user_id}/fetch-employee-id", response_model=FetchFactorialIdResponse)
-async def fetch_factorial_employee_id(user_id: int):
+async def fetch_factorial_employee_id(
+    user_id: int,
+    current_user: CurrentUser = Depends(require_admin)
+):
     """
-    Fetch Factorial employee ID per singolo user.
+    Fetch Factorial employee ID per singolo user (ADMIN only).
     Pattern: seguire settings.py:fetch_jira_account_id
     """
     storage = get_storage()
 
-    user = await storage.get_user(user_id)
+    user = await storage.get_user(user_id, current_user.company_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    config = await storage.get_factorial_config()
+    config = await storage.get_factorial_config(current_user.company_id)
     if not config:
         raise HTTPException(status_code=400, detail="Factorial not configured")
 
@@ -71,7 +78,7 @@ async def fetch_factorial_employee_id(user_id: int):
         if not employee_id:
             raise HTTPException(status_code=404, detail=f"Employee not found for {user['email']}")
 
-        await storage.set_user_factorial_account(user_id, employee_id, user["email"])
+        await storage.set_user_factorial_account(user_id, employee_id, user["email"], current_user.company_id)
 
         return FetchFactorialIdResponse(
             factorial_employee_id=employee_id,
@@ -84,10 +91,13 @@ async def fetch_factorial_employee_id(user_id: int):
 
 
 @router.delete("/users/{user_id}/factorial-account")
-async def delete_factorial_account(user_id: int):
-    """Elimina mapping Factorial per user."""
+async def delete_factorial_account(
+    user_id: int,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Elimina mapping Factorial per user (ADMIN only)."""
     storage = get_storage()
-    deleted = await storage.delete_user_factorial_account(user_id)
+    deleted = await storage.delete_user_factorial_account(user_id, current_user.company_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Mapping not found")
     return {"success": True}
@@ -96,18 +106,18 @@ async def delete_factorial_account(user_id: int):
 # ========== Employee Mapping (Bulk) ==========
 
 @router.post("/users/bulk-fetch-employees", response_model=BulkFetchFactorialResponse)
-async def bulk_fetch_factorial_employees():
+async def bulk_fetch_factorial_employees(current_user: CurrentUser = Depends(require_admin)):
     """
-    Fetch employee IDs per tutti gli utenti.
+    Fetch employee IDs per tutti gli utenti (ADMIN only).
     Pattern: seguire settings.py:bulk_fetch_jira_accounts
     """
     storage = get_storage()
 
-    config = await storage.get_factorial_config()
+    config = await storage.get_factorial_config(current_user.company_id)
     if not config:
         raise HTTPException(status_code=400, detail="Factorial not configured")
 
-    users = await storage.get_all_users()
+    users = await storage.get_all_users(current_user.company_id)
     if not users:
         return BulkFetchFactorialResponse(
             results=[],
@@ -123,7 +133,7 @@ async def bulk_fetch_factorial_employees():
 
     for user in users:
         # Skip se già mappato
-        existing = await storage.get_user_factorial_account(user["id"])
+        existing = await storage.get_user_factorial_account(user["id"], current_user.company_id)
         if existing:
             skipped_count += 1
             continue
@@ -131,7 +141,7 @@ async def bulk_fetch_factorial_employees():
         try:
             employee_id = await client.search_employee_by_email(user["email"])
             if employee_id:
-                await storage.set_user_factorial_account(user["id"], employee_id, user["email"])
+                await storage.set_user_factorial_account(user["id"], employee_id, user["email"], current_user.company_id)
                 results.append(BulkFetchFactorialResult(
                     user_email=user["email"],
                     user_name=f"{user['first_name']} {user['last_name']}",
@@ -170,24 +180,28 @@ async def bulk_fetch_factorial_employees():
 # ========== Leaves Sync ==========
 
 @router.post("/sync-leaves")
-async def sync_factorial_leaves(start_date: date, end_date: date):
+async def sync_factorial_leaves(
+    start_date: date,
+    end_date: date,
+    current_user: CurrentUser = Depends(require_admin)
+):
     """
-    Sync leaves da Factorial per date range.
+    Sync leaves da Factorial per date range (ADMIN only).
     Pattern: seguire sync.py
     """
     storage = get_storage()
 
-    config = await storage.get_factorial_config()
+    config = await storage.get_factorial_config(current_user.company_id)
     if not config:
         raise HTTPException(status_code=400, detail="Factorial not configured")
 
     # Build user→employee mapping
-    users = await storage.get_all_users()
+    users = await storage.get_all_users(current_user.company_id)
     user_factorial_map = {}  # factorial_employee_id → user_id
     employee_ids = []
 
     for user in users:
-        factorial_account = await storage.get_user_factorial_account(user["id"])
+        factorial_account = await storage.get_user_factorial_account(user["id"], current_user.company_id)
         if factorial_account:
             emp_id = factorial_account["factorial_employee_id"]
             user_factorial_map[emp_id] = user["id"]
@@ -202,7 +216,7 @@ async def sync_factorial_leaves(start_date: date, end_date: date):
         leaves = await client.get_leaves_in_range(start_date, end_date, employee_ids)
 
         # Upsert to DB
-        inserted, updated = await storage.upsert_leaves(leaves, user_factorial_map)
+        inserted, updated = await storage.upsert_leaves(leaves, user_factorial_map, current_user.company_id)
 
         return {
             "success": True,
@@ -220,11 +234,12 @@ async def get_factorial_leaves(
     start_date: date,
     end_date: date,
     user_id: Optional[int] = None,
-    status: Optional[str] = None
+    status: Optional[str] = None,
+    current_user: CurrentUser = Depends(get_current_user)
 ):
-    """Get leaves da storage locale."""
+    """Get leaves da storage locale (scoped to company)."""
     storage = get_storage()
-    leaves = await storage.get_leaves_in_range(start_date, end_date, user_id, status)
+    leaves = await storage.get_leaves_in_range(start_date, end_date, user_id, status, current_user.company_id)
 
     return [
         FactorialLeave(

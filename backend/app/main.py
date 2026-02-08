@@ -15,7 +15,8 @@ from starlette.responses import Response
 
 from .config import get_config, DEMO_CONFIG, get_teams_from_db, get_users_from_db
 from .cache import get_storage
-from .routers import dashboard, teams, users, epics, sync, settings, logs, issues, packages, billing, factorial
+from .routers import dashboard, teams, users, epics, sync, settings, logs, issues, packages, billing, factorial, auth, invitations
+from .middleware.company_context import CompanyContextMiddleware
 from .logging_config import (
     setup_logging, generate_request_id, request_id_var,
     get_logger, get_db_handler
@@ -191,6 +192,9 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 # Add logging middleware (before CORS)
 app.add_middleware(LoggingMiddleware)
 
+# Add company context middleware (after logging, before CORS)
+app.add_middleware(CompanyContextMiddleware)
+
 # Configure CORS for frontend (web and Tauri desktop)
 app.add_middleware(
     CORSMiddleware,
@@ -208,6 +212,11 @@ app.add_middleware(
 )
 
 # Include routers
+# Auth routers (public - no authentication required)
+app.include_router(auth.router)
+app.include_router(invitations.router)
+
+# Application routers (will require authentication after full migration)
 app.include_router(dashboard.router)
 app.include_router(teams.router)
 app.include_router(users.router)

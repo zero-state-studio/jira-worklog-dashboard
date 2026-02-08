@@ -11,6 +11,7 @@ import IssueView from './pages/IssueView'
 import Settings from './pages/Settings'
 import UsersListView from './pages/UsersListView'
 import Billing from './pages/Billing'
+import Login from './pages/Login'
 
 function App() {
     // Global date range state
@@ -23,25 +24,33 @@ function App() {
     const [selectedInstance, setSelectedInstance] = useState(null)
 
     return (
-        <Layout
-            dateRange={dateRange}
-            setDateRange={setDateRange}
-            selectedInstance={selectedInstance}
-            setSelectedInstance={setSelectedInstance}
-        >
-            <Routes>
-                <Route path="/" element={<Dashboard dateRange={dateRange} selectedInstance={selectedInstance} />} />
-                <Route path="/teams" element={<TeamsListView dateRange={dateRange} selectedInstance={selectedInstance} />} />
-                <Route path="/teams/:teamName" element={<TeamView dateRange={dateRange} selectedInstance={selectedInstance} />} />
-                <Route path="/users" element={<UsersListView dateRange={dateRange} selectedInstance={selectedInstance} />} />
-                <Route path="/users/:email" element={<UserView dateRange={dateRange} selectedInstance={selectedInstance} />} />
-                <Route path="/epics" element={<EpicView dateRange={dateRange} selectedInstance={selectedInstance} />} />
-                <Route path="/epics/:epicKey" element={<EpicView dateRange={dateRange} selectedInstance={selectedInstance} />} />
-                <Route path="/issues/:issueKey" element={<IssueView dateRange={dateRange} />} />
-                <Route path="/billing" element={<Billing dateRange={dateRange} />} />
-                <Route path="/settings" element={<Settings />} />
-            </Routes>
-        </Layout>
+        <Routes>
+            {/* Auth route - standalone without Layout */}
+            <Route path="/login" element={<Login />} />
+
+            {/* App routes - wrapped in Layout */}
+            <Route path="/*" element={
+                <Layout
+                    dateRange={dateRange}
+                    setDateRange={setDateRange}
+                    selectedInstance={selectedInstance}
+                    setSelectedInstance={setSelectedInstance}
+                >
+                    <Routes>
+                        <Route path="/" element={<Dashboard dateRange={dateRange} selectedInstance={selectedInstance} />} />
+                        <Route path="/teams" element={<TeamsListView dateRange={dateRange} selectedInstance={selectedInstance} />} />
+                        <Route path="/teams/:teamName" element={<TeamView dateRange={dateRange} selectedInstance={selectedInstance} />} />
+                        <Route path="/users" element={<UsersListView dateRange={dateRange} selectedInstance={selectedInstance} />} />
+                        <Route path="/users/:email" element={<UserView dateRange={dateRange} selectedInstance={selectedInstance} />} />
+                        <Route path="/epics" element={<EpicView dateRange={dateRange} selectedInstance={selectedInstance} />} />
+                        <Route path="/epics/:epicKey" element={<EpicView dateRange={dateRange} selectedInstance={selectedInstance} />} />
+                        <Route path="/issues/:issueKey" element={<IssueView dateRange={dateRange} />} />
+                        <Route path="/billing" element={<Billing dateRange={dateRange} />} />
+                        <Route path="/settings" element={<Settings />} />
+                    </Routes>
+                </Layout>
+            } />
+        </Routes>
     )
 }
 

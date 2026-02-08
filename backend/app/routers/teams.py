@@ -16,17 +16,21 @@ from ..config import (
     get_complementary_instances_from_db, get_jira_instances_from_db
 )
 from ..cache import get_storage
+from ..auth.dependencies import get_current_user, CurrentUser
 from .dashboard import calculate_expected_hours, calculate_daily_trend, calculate_epic_hours
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
 
 
 @router.get("")
-async def list_teams(config: AppConfig = Depends(get_config)):
-    """List all configured teams."""
-    # Get teams and users from database
-    teams = await get_teams_from_db()
-    users = await get_users_from_db()
+async def list_teams(
+    current_user: CurrentUser = Depends(get_current_user),
+    config: AppConfig = Depends(get_config)
+):
+    """List all configured teams (scoped to company)."""
+    # Get teams and users from database (scoped to company)
+    teams = await get_teams_from_db(current_user.company_id)
+    users = await get_users_from_db(current_user.company_id)
 
     # Group users by team
     team_members = {}
@@ -56,12 +60,13 @@ async def get_team_detail(
     start_date: date = Query(..., description="Start date for the period"),
     end_date: date = Query(..., description="End date for the period"),
     jira_instance: str = Query(None, description="Filter by JIRA instance name"),
+    current_user: CurrentUser = Depends(get_current_user),
     config: AppConfig = Depends(get_config)
 ):
-    """Get detailed statistics for a specific team."""
-    # Get teams and users from database
-    teams = await get_teams_from_db()
-    users = await get_users_from_db()
+    """Get detailed statistics for a specific team (scoped to company)."""
+    # Get teams and users from database (scoped to company)
+    teams = await get_teams_from_db(current_user.company_id)
+    users = await get_users_from_db(current_user.company_id)
 
     # Validate team exists
     team_data = None
@@ -82,17 +87,18 @@ async def get_team_detail(
 
     storage = get_storage()
 
-    # Read worklogs from local storage
+    # Read worklogs from local storage (scoped to company)
     worklogs = await storage.get_worklogs_in_range(
         start_date, end_date,
         user_emails=team_emails,
-        jira_instance=jira_instance
+        jira_instance=jira_instance,
+        company_id=current_user.company_id
     )
 
     # Handle complementary instances when no specific instance filter
     if not jira_instance:
-        # Build set of secondary instances to exclude (from database)
-        complementary_groups = await get_complementary_instances_from_db()
+        # Build set of secondary instances to exclude (from database, scoped to company)
+        complementary_groups = await get_complementary_instances_from_db(current_user.company_id)
         secondary_instances = set()
         for group_name, instances in complementary_groups.items():
             if len(instances) >= 2:
@@ -107,9 +113,9 @@ async def get_team_detail(
     total_seconds = sum(w.time_spent_seconds for w in worklogs)
     total_hours = total_seconds / 3600
 
-    # Expected hours (excluding holidays)
+    # Expected hours (excluding holidays, scoped to company)
     holiday_dates = await storage.get_active_holiday_dates(
-        start_date.isoformat(), end_date.isoformat()
+        start_date.isoformat(), end_date.isoformat(), current_user.company_id
     )
     expected_hours = calculate_expected_hours(
         start_date,
@@ -143,11 +149,12 @@ async def get_team_multi_jira_overview(
     team_name: str,
     start_date: date = Query(..., description="Start date for the period"),
     end_date: date = Query(..., description="End date for the period"),
+    current_user: CurrentUser = Depends(get_current_user),
     config: AppConfig = Depends(get_config)
 ):
-    """Get multi-JIRA overview data filtered by team members."""
-    teams = await get_teams_from_db()
-    users = await get_users_from_db()
+    """Get multi-JIRA overview data filtered by team members (scoped to company)."""
+    teams = await get_teams_from_db(current_user.company_id)
+    users = await get_users_from_db(current_user.company_id)
 
     # Validate team exists
     team_data = None
@@ -166,13 +173,13 @@ async def get_team_multi_jira_overview(
     ]
     team_emails = [m["email"] for m in team_members]
 
-    jira_instances = await get_jira_instances_from_db()
+    jira_instances = await get_jira_instances_from_db(current_user.company_id)
 
     storage = get_storage()
 
-    # Calculate expected hours for team members (excluding holidays)
+    # Calculate expected hours for team members (excluding holidays, scoped to company)
     holiday_dates = await storage.get_active_holiday_dates(
-        start_date.isoformat(), end_date.isoformat()
+        start_date.isoformat(), end_date.isoformat(), current_user.company_id
     )
     expected_hours = calculate_expected_hours(
         start_date, end_date, len(team_emails), config.settings.daily_working_hours,
@@ -185,7 +192,8 @@ async def get_team_multi_jira_overview(
         worklogs = await storage.get_worklogs_in_range(
             start_date, end_date,
             user_emails=team_emails,
-            jira_instance=inst.name
+            jira_instance=inst.name,
+            company_id=current_user.company_id
         )
         instance_worklogs[inst.name] = worklogs
 
@@ -216,7 +224,7 @@ async def get_team_multi_jira_overview(
 
     # Build complementary comparisons
     complementary_comparisons = []
-    complementary_groups = await get_complementary_instances_from_db()
+    complementary_groups = await get_complementary_instances_from_db(current_user.company_id)
 
     for group_name, group_instances in complementary_groups.items():
         if len(group_instances) < 2:

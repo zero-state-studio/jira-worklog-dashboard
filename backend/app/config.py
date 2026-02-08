@@ -120,22 +120,27 @@ def get_all_configured_emails(config: AppConfig) -> Set[str]:
 # ============ Database-based configuration functions ============
 # These functions read from SQLite database with fallback to config.yaml
 
-async def get_teams_from_db():
+async def get_teams_from_db(company_id: int):
     """
-    Get teams from database. Falls back to config.yaml if DB is empty.
-    Returns list of dicts with: id, name, member_count, members (list of user dicts)
+    Get teams from database for a specific company. Falls back to config.yaml if DB is empty.
+
+    Args:
+        company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+    Returns:
+        List of dicts with: id, name, member_count, members (list of user dicts)
     """
     from .cache import get_storage
     storage = get_storage()
     await storage.initialize()
 
-    teams = await storage.get_all_teams()
+    teams = await storage.get_all_teams(company_id)
 
     # If database has teams, use them
     if teams:
         result = []
         for team in teams:
-            members = await storage.get_users_by_team(team["id"])
+            members = await storage.get_users_by_team(team["id"], company_id)
             result.append({
                 "id": team["id"],
                 "name": team["name"],
@@ -144,7 +149,7 @@ async def get_teams_from_db():
             })
         return result
 
-    # Fallback to config.yaml
+    # Fallback to config.yaml (only for backward compatibility, not multi-tenant)
     try:
         config = get_config()
         return [
@@ -171,22 +176,27 @@ async def get_teams_from_db():
         return []
 
 
-async def get_users_from_db():
+async def get_users_from_db(company_id: int):
     """
-    Get all users from database. Falls back to config.yaml if DB is empty.
-    Returns list of user dicts with: id, email, first_name, last_name, team_id, team_name, jira_accounts
+    Get all users from database for a specific company. Falls back to config.yaml if DB is empty.
+
+    Args:
+        company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+    Returns:
+        List of user dicts with: id, email, first_name, last_name, team_id, team_name, jira_accounts
     """
     from .cache import get_storage
     storage = get_storage()
     await storage.initialize()
 
-    users = await storage.get_all_users()
+    users = await storage.get_all_users(company_id)
 
     # If database has users, use them
     if users:
         return users
 
-    # Fallback to config.yaml
+    # Fallback to config.yaml (only for backward compatibility, not multi-tenant)
     try:
         config = get_config()
         result = []
@@ -208,19 +218,32 @@ async def get_users_from_db():
         return []
 
 
-async def get_all_emails_from_db() -> List[str]:
+async def get_all_emails_from_db(company_id: int) -> List[str]:
     """
-    Get all user emails from database. Falls back to config.yaml if DB is empty.
+    Get all user emails from database for a specific company.
+
+    Args:
+        company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+    Returns:
+        List of user email addresses
     """
-    users = await get_users_from_db()
+    users = await get_users_from_db(company_id)
     return [u["email"].lower() for u in users]
 
 
-async def get_team_emails_from_db(team_name: str) -> List[str]:
+async def get_team_emails_from_db(team_name: str, company_id: int) -> List[str]:
     """
-    Get all emails for a specific team from database.
+    Get all emails for a specific team from database for a specific company.
+
+    Args:
+        team_name: Team name to filter by
+        company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+    Returns:
+        List of team member email addresses
     """
-    teams = await get_teams_from_db()
+    teams = await get_teams_from_db(company_id)
     for team in teams:
         if team["name"].lower() == team_name.lower():
             return [m["email"].lower() for m in team["members"]]
@@ -249,16 +272,21 @@ async def get_user_by_email_from_db(email: str) -> Optional[Dict]:
     return None
 
 
-async def get_jira_instances_from_db() -> List[JiraInstanceConfig]:
+async def get_jira_instances_from_db(company_id: int) -> List[JiraInstanceConfig]:
     """
-    Get JIRA instances from database. Falls back to config.yaml if DB is empty.
-    Returns list of JiraInstanceConfig objects ready for use with JiraClient.
+    Get JIRA instances from database for a specific company. Falls back to config.yaml if DB is empty.
+
+    Args:
+        company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+    Returns:
+        List of JiraInstanceConfig objects ready for use with JiraClient
     """
     from .cache import get_storage
     storage = get_storage()
     await storage.initialize()
 
-    instances = await storage.get_all_jira_instances(include_credentials=True)
+    instances = await storage.get_all_jira_instances(company_id, include_credentials=True)
 
     # If database has instances, use them
     if instances:
@@ -274,7 +302,7 @@ async def get_jira_instances_from_db() -> List[JiraInstanceConfig]:
             if inst.get("is_active", True)  # Only include active instances
         ]
 
-    # Fallback to config.yaml
+    # Fallback to config.yaml (only for backward compatibility, not multi-tenant)
     try:
         config = get_config()
         return config.jira_instances
@@ -282,20 +310,25 @@ async def get_jira_instances_from_db() -> List[JiraInstanceConfig]:
         return []
 
 
-async def get_complementary_instances_from_db() -> Dict[str, List[str]]:
+async def get_complementary_instances_from_db(company_id: int) -> Dict[str, List[str]]:
     """
-    Get complementary instance groups from database.
-    Returns a dict mapping group name to list of instance names that are complementary.
+    Get complementary instance groups from database for a specific company.
+
+    Args:
+        company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+    Returns:
+        Dict mapping group name to list of instance names that are complementary
     """
     from .cache import get_storage
     storage = get_storage()
     await storage.initialize()
 
-    groups = await storage.get_all_complementary_groups()
+    groups = await storage.get_all_complementary_groups(company_id)
     result = {}
 
     for group in groups:
-        instance_names = await storage.get_complementary_instance_names_by_group(group["id"])
+        instance_names = await storage.get_complementary_instance_names_by_group(group["id"], company_id)
         if instance_names:
             result[group["name"]] = instance_names
 

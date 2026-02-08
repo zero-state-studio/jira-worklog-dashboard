@@ -551,27 +551,441 @@ class WorklogStorage:
                     )
                 """)
 
+                # ========== Authentication Tables ==========
+
+                # Companies/Organizations
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS companies (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL UNIQUE,
+                        domain TEXT,
+                        is_active INTEGER DEFAULT 1,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # OAuth authenticated users
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS oauth_users (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+                        google_id TEXT NOT NULL UNIQUE,
+                        email TEXT NOT NULL,
+                        first_name TEXT,
+                        last_name TEXT,
+                        picture_url TEXT,
+                        role TEXT NOT NULL DEFAULT 'USER',
+                        is_active INTEGER DEFAULT 1,
+                        last_login_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(company_id, email)
+                    )
+                """)
+
+                # Session tokens
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS auth_sessions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL REFERENCES oauth_users(id) ON DELETE CASCADE,
+                        refresh_token TEXT NOT NULL UNIQUE,
+                        access_token_jti TEXT,
+                        expires_at TIMESTAMP NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # Invitations
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS invitations (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+                        email TEXT NOT NULL,
+                        role TEXT NOT NULL DEFAULT 'USER',
+                        invited_by INTEGER REFERENCES oauth_users(id),
+                        token TEXT NOT NULL UNIQUE,
+                        status TEXT DEFAULT 'PENDING',
+                        expires_at TIMESTAMP NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # Auth audit log
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS auth_audit_log (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id INTEGER REFERENCES companies(id),
+                        user_id INTEGER REFERENCES oauth_users(id),
+                        event_type TEXT NOT NULL,
+                        email TEXT,
+                        ip_address TEXT,
+                        metadata_json TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # Auth indexes
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_oauth_users_company
+                    ON oauth_users(company_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_oauth_users_google_id
+                    ON oauth_users(google_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_oauth_users_email
+                    ON oauth_users(email)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_auth_sessions_user
+                    ON auth_sessions(user_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_auth_sessions_token
+                    ON auth_sessions(refresh_token)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_invitations_company
+                    ON invitations(company_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_invitations_token
+                    ON invitations(token)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_invitations_email
+                    ON invitations(email, status)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_auth_audit_company
+                    ON auth_audit_log(company_id, created_at)
+                """)
+
+                # ========== Company ID Migration ==========
+                # Add company_id to all existing tables for multi-tenant support
+
+                # Add company_id to teams
+                try:
+                    await db.execute("""
+                        ALTER TABLE teams
+                        ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE
+                    """)
+                except Exception:
+                    pass  # Column already exists
+
+                # Add company_id to users
+                try:
+                    await db.execute("""
+                        ALTER TABLE users
+                        ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE
+                    """)
+                except Exception:
+                    pass  # Column already exists
+
+                # Add company_id to jira_instances
+                try:
+                    await db.execute("""
+                        ALTER TABLE jira_instances
+                        ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE
+                    """)
+                except Exception:
+                    pass  # Column already exists
+
+                # Add company_id to worklogs
+                try:
+                    await db.execute("""
+                        ALTER TABLE worklogs
+                        ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE
+                    """)
+                except Exception:
+                    pass  # Column already exists
+
+                # Add company_id to epics
+                try:
+                    await db.execute("""
+                        ALTER TABLE epics
+                        ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE
+                    """)
+                except Exception:
+                    pass  # Column already exists
+
+                # Add company_id to billing_clients
+                try:
+                    await db.execute("""
+                        ALTER TABLE billing_clients
+                        ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE
+                    """)
+                except Exception:
+                    pass  # Column already exists
+
+                # Add company_id to billing_projects
+                try:
+                    await db.execute("""
+                        ALTER TABLE billing_projects
+                        ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE
+                    """)
+                except Exception:
+                    pass  # Column already exists
+
+                # Add company_id to invoices
+                try:
+                    await db.execute("""
+                        ALTER TABLE invoices
+                        ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE
+                    """)
+                except Exception:
+                    pass  # Column already exists
+
+                # Add company_id to package_templates
+                try:
+                    await db.execute("""
+                        ALTER TABLE package_templates
+                        ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE
+                    """)
+                except Exception:
+                    pass  # Column already exists
+
+                # Add company_id to holidays
+                try:
+                    await db.execute("""
+                        ALTER TABLE holidays
+                        ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE
+                    """)
+                except Exception:
+                    pass  # Column already exists
+
+                # Add company_id to factorial_config
+                try:
+                    await db.execute("""
+                        ALTER TABLE factorial_config
+                        ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE
+                    """)
+                except Exception:
+                    pass  # Column already exists
+
+                # Add company_id to complementary_groups
+                try:
+                    await db.execute("""
+                        ALTER TABLE complementary_groups
+                        ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE
+                    """)
+                except Exception:
+                    pass  # Column already exists
+
+                # Add company_id to logs (optional - for filtering)
+                try:
+                    await db.execute("""
+                        ALTER TABLE logs
+                        ADD COLUMN company_id INTEGER REFERENCES companies(id)
+                    """)
+                except Exception:
+                    pass  # Column already exists
+
+                # Create indexes for company_id columns
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_teams_company
+                    ON teams(company_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_users_company
+                    ON users(company_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_jira_instances_company
+                    ON jira_instances(company_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_worklogs_company
+                    ON worklogs(company_id, started)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_epics_company
+                    ON epics(company_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_billing_clients_company
+                    ON billing_clients(company_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_billing_projects_company
+                    ON billing_projects(company_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_invoices_company
+                    ON invoices(company_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_package_templates_company
+                    ON package_templates(company_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_holidays_company
+                    ON holidays(company_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_factorial_config_company
+                    ON factorial_config(company_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_complementary_groups_company
+                    ON complementary_groups(company_id)
+                """)
+
                 await db.commit()
 
             self._initialized = True
-    
+
+    # ========== Migration Operations ==========
+
+    async def check_legacy_data(self) -> dict:
+        """Check if there are legacy records (company_id IS NULL) that need migration.
+
+        Returns:
+            Dictionary with counts of legacy records per table
+        """
+        await self.initialize()
+
+        tables_with_company_id = [
+            "teams", "users", "jira_instances", "worklogs", "epics",
+            "billing_clients", "billing_projects", "invoices",
+            "package_templates", "holidays", "factorial_config",
+            "complementary_groups", "logs"
+        ]
+
+        legacy_counts = {}
+
+        async with aiosqlite.connect(self.db_path) as db:
+            for table in tables_with_company_id:
+                try:
+                    cursor = await db.execute(
+                        f"SELECT COUNT(*) FROM {table} WHERE company_id IS NULL"
+                    )
+                    count = (await cursor.fetchone())[0]
+                    if count > 0:
+                        legacy_counts[table] = count
+                except Exception as e:
+                    # Table might not exist or have company_id column yet
+                    pass
+
+        total_legacy = sum(legacy_counts.values())
+        return {
+            "needs_migration": total_legacy > 0,
+            "total_legacy_records": total_legacy,
+            "by_table": legacy_counts
+        }
+
+    async def migrate_legacy_data(self, target_company_id: int = 1) -> dict:
+        """Migrate all legacy data (company_id IS NULL) to a specific company.
+
+        This is a one-time migration operation that assigns legacy data to company_id=1
+        (or another specified company). This ensures backward compatibility with data
+        created before multi-tenant implementation.
+
+        Args:
+            target_company_id: The company ID to assign to legacy data (default: 1)
+
+        Returns:
+            Dictionary with migration results per table
+        """
+        await self.initialize()
+
+        # Check if target company exists
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM companies WHERE id = ?",
+                (target_company_id,)
+            )
+            if (await cursor.fetchone())[0] == 0:
+                raise ValueError(f"Target company_id={target_company_id} does not exist")
+
+        tables_with_company_id = [
+            "teams", "users", "jira_instances", "worklogs", "epics",
+            "billing_clients", "billing_projects", "invoices",
+            "package_templates", "holidays", "factorial_config",
+            "complementary_groups", "logs"
+        ]
+
+        migration_results = {}
+        total_migrated = 0
+
+        async with aiosqlite.connect(self.db_path) as db:
+            for table in tables_with_company_id:
+                try:
+                    # Count records to migrate
+                    cursor = await db.execute(
+                        f"SELECT COUNT(*) FROM {table} WHERE company_id IS NULL"
+                    )
+                    count_before = (await cursor.fetchone())[0]
+
+                    if count_before > 0:
+                        # Migrate records
+                        await db.execute(
+                            f"UPDATE {table} SET company_id = ? WHERE company_id IS NULL",
+                            (target_company_id,)
+                        )
+
+                        # Verify migration
+                        cursor = await db.execute(
+                            f"SELECT COUNT(*) FROM {table} WHERE company_id IS NULL"
+                        )
+                        count_after = (await cursor.fetchone())[0]
+
+                        migrated = count_before - count_after
+                        migration_results[table] = {
+                            "before": count_before,
+                            "after": count_after,
+                            "migrated": migrated
+                        }
+                        total_migrated += migrated
+                except Exception as e:
+                    # Table might not exist or have company_id column yet
+                    migration_results[table] = {
+                        "error": str(e)
+                    }
+
+            await db.commit()
+
+        return {
+            "success": True,
+            "target_company_id": target_company_id,
+            "total_migrated": total_migrated,
+            "by_table": migration_results
+        }
+
     # ========== Worklog Operations ==========
     
     async def get_worklogs_in_range(
-        self, 
-        start_date: date, 
+        self,
+        start_date: date,
         end_date: date,
         user_emails: Optional[list[str]] = None,
-        jira_instance: Optional[str] = None
+        jira_instance: Optional[str] = None,
+        company_id: Optional[int] = None
     ) -> list[Worklog]:
-        """Get worklogs within a date range from permanent storage."""
-        await self.initialize()
-        
-        query = """
-            SELECT data FROM worklogs 
-            WHERE date(started) >= ? AND date(started) <= ?
+        """Get worklogs within a date range from permanent storage.
+
+        Args:
+            start_date: Start of date range
+            end_date: End of date range
+            user_emails: Optional list of user emails to filter by
+            jira_instance: Optional JIRA instance name to filter by
+            company_id: Company ID to filter by (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            List of worklogs matching the criteria
         """
-        params = [start_date.isoformat(), end_date.isoformat()]
+        await self.initialize()
+
+        # Multi-tenant security: require company_id for data isolation
+        if company_id is None:
+            raise ValueError("company_id is required for multi-tenant operations")
+
+        query = """
+            SELECT data FROM worklogs
+            WHERE company_id = ? AND date(started) >= ? AND date(started) <= ?
+        """
+        params = [company_id, start_date.isoformat(), end_date.isoformat()]
         
         if jira_instance:
             query += " AND jira_instance = ?"
@@ -595,13 +1009,23 @@ class WorklogStorage:
         
         return worklogs
     
-    async def upsert_worklogs(self, worklogs: list[Worklog]) -> tuple[int, int]:
+    async def upsert_worklogs(self, worklogs: list[Worklog], company_id: int) -> tuple[int, int]:
         """
-        Insert or update worklogs. 
-        Returns (inserted_count, updated_count).
+        Insert or update worklogs.
+
+        Args:
+            worklogs: List of worklogs to insert/update
+            company_id: Company ID to assign to worklogs (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            (inserted_count, updated_count)
         """
         await self.initialize()
-        
+
+        # Multi-tenant security: require company_id
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         inserted = 0
         updated = 0
         
@@ -617,6 +1041,7 @@ class WorklogStorage:
                 if exists:
                     await db.execute("""
                         UPDATE worklogs SET
+                            company_id = ?,
                             issue_key = ?,
                             issue_summary = ?,
                             author_email = ?,
@@ -633,6 +1058,7 @@ class WorklogStorage:
                             updated_at = CURRENT_TIMESTAMP
                         WHERE id = ?
                     """, (
+                        company_id,
                         wl.issue_key,
                         wl.issue_summary,
                         wl.author_email,
@@ -652,12 +1078,13 @@ class WorklogStorage:
                 else:
                     await db.execute("""
                         INSERT INTO worklogs
-                        (id, issue_key, issue_summary, author_email, author_display_name,
+                        (id, company_id, issue_key, issue_summary, author_email, author_display_name,
                          time_spent_seconds, started, jira_instance, parent_key, parent_name,
                          parent_type, epic_key, epic_name, data)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         wl.id,
+                        company_id,
                         wl.issue_key,
                         wl.issue_summary,
                         wl.author_email,
@@ -679,62 +1106,97 @@ class WorklogStorage:
         return inserted, updated
     
     async def delete_worklogs_not_in_list(
-        self, 
+        self,
         worklog_ids: list[str],
         start_date: date,
         end_date: date,
-        jira_instance: str
+        jira_instance: str,
+        company_id: int
     ) -> int:
-        """
-        Delete worklogs that are in the DB for the given range/instance 
+        """Delete worklogs that are in the DB for the given range/instance/company
         but not in the provided list (i.e., deleted from JIRA).
-        Returns count of deleted worklogs.
+
+        Args:
+            worklog_ids: List of worklog IDs to keep
+            start_date: Start of date range
+            end_date: End of date range
+            jira_instance: JIRA instance name
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Count of deleted worklogs
         """
         await self.initialize()
-        
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         if not worklog_ids:
-            # If no worklogs from JIRA, delete all for this range/instance
+            # If no worklogs from JIRA, delete all for this range/instance/company
             query = """
-                DELETE FROM worklogs 
-                WHERE date(started) >= ? AND date(started) <= ? 
+                DELETE FROM worklogs
+                WHERE company_id = ? AND date(started) >= ? AND date(started) <= ?
                 AND jira_instance = ?
             """
-            params = [start_date.isoformat(), end_date.isoformat(), jira_instance]
+            params = [company_id, start_date.isoformat(), end_date.isoformat(), jira_instance]
         else:
             placeholders = ",".join("?" * len(worklog_ids))
             query = f"""
-                DELETE FROM worklogs 
-                WHERE date(started) >= ? AND date(started) <= ? 
+                DELETE FROM worklogs
+                WHERE company_id = ? AND date(started) >= ? AND date(started) <= ?
                 AND jira_instance = ?
                 AND id NOT IN ({placeholders})
             """
-            params = [start_date.isoformat(), end_date.isoformat(), jira_instance]
+            params = [company_id, start_date.isoformat(), end_date.isoformat(), jira_instance]
             params.extend(worklog_ids)
-        
+
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(query, params)
             deleted = cursor.rowcount
             await db.commit()
-        
+
         return deleted
     
-    async def get_worklog_count(self) -> int:
-        """Get total count of worklogs in storage."""
+    async def get_worklog_count(self, company_id: int) -> int:
+        """Get total count of worklogs in storage for a specific company.
+
+        Args:
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Count of worklogs belonging to the company
+        """
         await self.initialize()
-        
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute("SELECT COUNT(*) FROM worklogs") as cursor:
+            async with db.execute(
+                "SELECT COUNT(*) FROM worklogs WHERE company_id = ?",
+                (company_id,)
+            ) as cursor:
                 row = await cursor.fetchone()
                 return row[0] if row else 0
-    
-    async def get_data_date_range(self) -> Optional[tuple[date, date]]:
-        """Get the date range of stored data."""
+
+    async def get_data_date_range(self, company_id: int) -> Optional[tuple[date, date]]:
+        """Get the date range of stored data for a specific company.
+
+        Args:
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Tuple of (min_date, max_date) for company's worklogs, None if no data
+        """
         await self.initialize()
-        
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT MIN(date(started)), MAX(date(started)) FROM worklogs
-            """) as cursor:
+                SELECT MIN(date(started)), MAX(date(started)) FROM worklogs WHERE company_id = ?
+            """, (company_id,)) as cursor:
                 row = await cursor.fetchone()
                 if row and row[0] and row[1]:
                     return (
@@ -825,26 +1287,48 @@ class WorklogStorage:
     
     # ========== Team Operations ==========
 
-    async def create_team(self, name: str) -> int:
-        """Create a new team. Returns team_id."""
+    async def create_team(self, name: str, company_id: int) -> int:
+        """Create a new team for a specific company.
+
+        Args:
+            name: Team name
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Created team ID
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "INSERT INTO teams (name) VALUES (?)",
-                (name,)
+                "INSERT INTO teams (name, company_id) VALUES (?, ?)",
+                (name, company_id)
             )
             await db.commit()
             return cursor.lastrowid
 
-    async def get_team(self, team_id: int) -> Optional[dict]:
-        """Get a team by ID."""
+    async def get_team(self, team_id: int, company_id: int) -> Optional[dict]:
+        """Get a team by ID for a specific company.
+
+        Args:
+            team_id: Team ID to retrieve
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Team dict if found and belongs to company, None otherwise
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT id, name, created_at, updated_at FROM teams WHERE id = ?",
-                (team_id,)
+                "SELECT id, name, created_at, updated_at FROM teams WHERE id = ? AND company_id = ?",
+                (team_id, company_id)
             ) as cursor:
                 row = await cursor.fetchone()
                 if row:
@@ -856,14 +1340,25 @@ class WorklogStorage:
                     }
         return None
 
-    async def get_team_by_name(self, name: str) -> Optional[dict]:
-        """Get a team by name."""
+    async def get_team_by_name(self, name: str, company_id: int) -> Optional[dict]:
+        """Get a team by name for a specific company.
+
+        Args:
+            name: Team name to search for
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Team dict if found and belongs to company, None otherwise
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT id, name, created_at, updated_at FROM teams WHERE name = ?",
-                (name,)
+                "SELECT id, name, created_at, updated_at FROM teams WHERE name = ? AND company_id = ?",
+                (name, company_id)
             ) as cursor:
                 row = await cursor.fetchone()
                 if row:
@@ -875,9 +1370,20 @@ class WorklogStorage:
                     }
         return None
 
-    async def get_all_teams(self) -> list[dict]:
-        """Get all teams with member counts."""
+    async def get_all_teams(self, company_id: int) -> list[dict]:
+        """Get all teams with member counts for a specific company.
+
+        Args:
+            company_id: Company ID to filter teams by (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            List of teams belonging to the company
+        """
         await self.initialize()
+
+        # Multi-tenant security: require company_id
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         teams = []
         async with aiosqlite.connect(self.db_path) as db:
@@ -885,10 +1391,11 @@ class WorklogStorage:
                 SELECT t.id, t.name, t.created_at, t.updated_at,
                        COUNT(u.id) as member_count
                 FROM teams t
-                LEFT JOIN users u ON u.team_id = t.id
+                LEFT JOIN users u ON u.team_id = t.id AND u.company_id = ?
+                WHERE t.company_id = ?
                 GROUP BY t.id
                 ORDER BY t.name
-            """) as cursor:
+            """, (company_id, company_id)) as cursor:
                 async for row in cursor:
                     teams.append({
                         "id": row[0],
@@ -899,26 +1406,49 @@ class WorklogStorage:
                     })
         return teams
 
-    async def update_team(self, team_id: int, name: str) -> bool:
-        """Update a team's name. Returns True if updated."""
+    async def update_team(self, team_id: int, name: str, company_id: int) -> bool:
+        """Update a team's name for a specific company.
+
+        Args:
+            team_id: Team ID to update
+            name: New team name
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            True if updated, False if team not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "UPDATE teams SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (name, team_id)
+                "UPDATE teams SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?",
+                (name, team_id, company_id)
             )
             await db.commit()
             return cursor.rowcount > 0
 
-    async def delete_team(self, team_id: int) -> bool:
-        """Delete a team. Returns True if deleted."""
+    async def delete_team(self, team_id: int, company_id: int) -> bool:
+        """Delete a team for a specific company.
+
+        Args:
+            team_id: Team ID to delete
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            True if deleted, False if team not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "DELETE FROM teams WHERE id = ?",
-                (team_id,)
+                "DELETE FROM teams WHERE id = ? AND company_id = ?",
+                (team_id, company_id)
             )
             await db.commit()
             return cursor.rowcount > 0
@@ -930,31 +1460,57 @@ class WorklogStorage:
         email: str,
         first_name: str,
         last_name: str,
+        company_id: int,
         team_id: Optional[int] = None
     ) -> int:
-        """Create a new user. Returns user_id."""
+        """Create a new user for a specific company.
+
+        Args:
+            email: User email
+            first_name: User first name
+            last_name: User last name
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            team_id: Optional team ID
+
+        Returns:
+            Created user ID
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "INSERT INTO users (email, first_name, last_name, team_id) VALUES (?, ?, ?, ?)",
-                (email, first_name, last_name, team_id)
+                "INSERT INTO users (email, first_name, last_name, company_id, team_id) VALUES (?, ?, ?, ?, ?)",
+                (email, first_name, last_name, company_id, team_id)
             )
             await db.commit()
             return cursor.lastrowid
 
-    async def get_user(self, user_id: int) -> Optional[dict]:
-        """Get a user by ID with JIRA accounts."""
+    async def get_user(self, user_id: int, company_id: int) -> Optional[dict]:
+        """Get a user by ID with JIRA accounts for a specific company.
+
+        Args:
+            user_id: User ID to retrieve
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            User dict if found and belongs to company, None otherwise
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT u.id, u.email, u.first_name, u.last_name, u.team_id,
                        u.created_at, u.updated_at, t.name as team_name
                 FROM users u
-                LEFT JOIN teams t ON t.id = u.team_id
-                WHERE u.id = ?
-            """, (user_id,)) as cursor:
+                LEFT JOIN teams t ON t.id = u.team_id AND t.company_id = ?
+                WHERE u.id = ? AND u.company_id = ?
+            """, (company_id, user_id, company_id)) as cursor:
                 row = await cursor.fetchone()
                 if not row:
                     return None
@@ -984,23 +1540,45 @@ class WorklogStorage:
 
         return user
 
-    async def get_user_by_email(self, email: str) -> Optional[dict]:
-        """Get a user by email."""
+    async def get_user_by_email(self, email: str, company_id: int) -> Optional[dict]:
+        """Get a user by email for a specific company.
+
+        Args:
+            email: User email to search for
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            User dict if found and belongs to company, None otherwise
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT id FROM users WHERE LOWER(email) = LOWER(?)",
-                (email,)
+                "SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND company_id = ?",
+                (email, company_id)
             ) as cursor:
                 row = await cursor.fetchone()
                 if row:
-                    return await self.get_user(row[0])
+                    return await self.get_user(row[0], company_id)
         return None
 
-    async def get_all_users(self) -> list[dict]:
-        """Get all users with team info and JIRA accounts."""
+    async def get_all_users(self, company_id: int) -> list[dict]:
+        """Get all users with team info and JIRA accounts for a specific company.
+
+        Args:
+            company_id: Company ID to filter users by (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            List of users belonging to the company
+        """
         await self.initialize()
+
+        # Multi-tenant security: require company_id
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         users = []
         async with aiosqlite.connect(self.db_path) as db:
@@ -1008,9 +1586,10 @@ class WorklogStorage:
                 SELECT u.id, u.email, u.first_name, u.last_name, u.team_id,
                        u.created_at, u.updated_at, t.name as team_name
                 FROM users u
-                LEFT JOIN teams t ON t.id = u.team_id
+                LEFT JOIN teams t ON t.id = u.team_id AND t.company_id = ?
+                WHERE u.company_id = ?
                 ORDER BY u.last_name, u.first_name
-            """) as cursor:
+            """, (company_id, company_id)) as cursor:
                 async for row in cursor:
                     users.append({
                         "id": row[0],
@@ -1045,9 +1624,20 @@ class WorklogStorage:
 
         return users
 
-    async def get_users_by_team(self, team_id: int) -> list[dict]:
-        """Get all users in a team."""
+    async def get_users_by_team(self, team_id: int, company_id: int) -> list[dict]:
+        """Get all users in a team for a specific company.
+
+        Args:
+            team_id: Team ID to get users for
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            List of users in the team belonging to the company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         users = []
         async with aiosqlite.connect(self.db_path) as db:
@@ -1055,9 +1645,9 @@ class WorklogStorage:
                 SELECT u.id, u.email, u.first_name, u.last_name, u.team_id,
                        u.created_at, u.updated_at
                 FROM users u
-                WHERE u.team_id = ?
+                WHERE u.team_id = ? AND u.company_id = ?
                 ORDER BY u.last_name, u.first_name
-            """, (team_id,)) as cursor:
+            """, (team_id, company_id)) as cursor:
                 async for row in cursor:
                     users.append({
                         "id": row[0],
@@ -1071,9 +1661,21 @@ class WorklogStorage:
                     })
         return users
 
-    async def update_user(self, user_id: int, **kwargs) -> bool:
-        """Update user fields. Returns True if updated."""
+    async def update_user(self, user_id: int, company_id: int, **kwargs) -> bool:
+        """Update user fields for a specific company.
+
+        Args:
+            user_id: User ID to update
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            **kwargs: Fields to update (email, first_name, last_name, team_id)
+
+        Returns:
+            True if updated, False if user not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         allowed_fields = {"email", "first_name", "last_name", "team_id"}
         updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
@@ -1083,25 +1685,36 @@ class WorklogStorage:
 
         set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
         values = list(updates.values())
-        values.append(user_id)
+        values.extend([user_id, company_id])
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                f"UPDATE users SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                f"UPDATE users SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?",
                 values
             )
             await db.commit()
             return cursor.rowcount > 0
 
-    async def delete_user(self, user_id: int) -> bool:
-        """Delete a user and their JIRA accounts. Returns True if deleted."""
+    async def delete_user(self, user_id: int, company_id: int) -> bool:
+        """Delete a user and their JIRA accounts for a specific company.
+
+        Args:
+            user_id: User ID to delete
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            True if deleted, False if user not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             # JIRA accounts will be deleted by CASCADE
             cursor = await db.execute(
-                "DELETE FROM users WHERE id = ?",
-                (user_id,)
+                "DELETE FROM users WHERE id = ? AND company_id = ?",
+                (user_id, company_id)
             )
             await db.commit()
             return cursor.rowcount > 0
@@ -1421,30 +2034,58 @@ class WorklogStorage:
         url: str,
         email: str,
         api_token: str,
+        company_id: int,
         tempo_api_token: Optional[str] = None,
         billing_client_id: Optional[int] = None
     ) -> int:
-        """Create a new JIRA instance. Returns instance_id."""
+        """Create a new JIRA instance for a specific company.
+
+        Args:
+            name: Instance name
+            url: JIRA base URL
+            email: User email for authentication
+            api_token: JIRA API token
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            tempo_api_token: Optional Tempo API token
+            billing_client_id: Optional billing client ID
+
+        Returns:
+            Created instance ID
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute("""
-                INSERT INTO jira_instances (name, url, email, api_token, tempo_api_token, billing_client_id)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (name, url, email, api_token, tempo_api_token, billing_client_id))
+                INSERT INTO jira_instances (name, url, email, api_token, company_id, tempo_api_token, billing_client_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (name, url, email, api_token, company_id, tempo_api_token, billing_client_id))
             await db.commit()
             return cursor.lastrowid
 
-    async def get_jira_instance(self, instance_id: int) -> Optional[dict]:
-        """Get a JIRA instance by ID."""
+    async def get_jira_instance(self, instance_id: int, company_id: int) -> Optional[dict]:
+        """Get a JIRA instance by ID for a specific company.
+
+        Args:
+            instance_id: JIRA instance ID to retrieve
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            JIRA instance dict if found and belongs to company, None otherwise
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT id, name, url, email, api_token, tempo_api_token, billing_client_id, is_active,
                        created_at, updated_at, default_project_key
-                FROM jira_instances WHERE id = ?
-            """, (instance_id,)) as cursor:
+                FROM jira_instances WHERE id = ? AND company_id = ?
+            """, (instance_id, company_id)) as cursor:
                 row = await cursor.fetchone()
                 if row:
                     return {
@@ -1462,16 +2103,27 @@ class WorklogStorage:
                     }
         return None
 
-    async def get_jira_instance_by_name(self, name: str) -> Optional[dict]:
-        """Get a JIRA instance by name."""
+    async def get_jira_instance_by_name(self, name: str, company_id: int) -> Optional[dict]:
+        """Get a JIRA instance by name for a specific company.
+
+        Args:
+            name: JIRA instance name to search for
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            JIRA instance dict if found and belongs to company, None otherwise
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT id, name, url, email, api_token, tempo_api_token, billing_client_id, is_active,
                        created_at, updated_at, default_project_key
-                FROM jira_instances WHERE name = ?
-            """, (name,)) as cursor:
+                FROM jira_instances WHERE name = ? AND company_id = ?
+            """, (name, company_id)) as cursor:
                 row = await cursor.fetchone()
                 if row:
                     return {
@@ -1489,9 +2141,21 @@ class WorklogStorage:
                     }
         return None
 
-    async def get_all_jira_instances(self, include_credentials: bool = False) -> list[dict]:
-        """Get all JIRA instances. Optionally include credentials."""
+    async def get_all_jira_instances(self, include_credentials: bool = False, company_id: Optional[int] = None) -> list[dict]:
+        """Get all JIRA instances for a specific company. Optionally include credentials.
+
+        Args:
+            include_credentials: Whether to include API tokens in response
+            company_id: Company ID to filter instances by (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            List of JIRA instances belonging to the company
+        """
         await self.initialize()
+
+        # Multi-tenant security: require company_id
+        if company_id is None:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         instances = []
         async with aiosqlite.connect(self.db_path) as db:
@@ -1499,8 +2163,9 @@ class WorklogStorage:
                 SELECT id, name, url, email, api_token, tempo_api_token, billing_client_id, is_active,
                        created_at, updated_at, default_project_key
                 FROM jira_instances
+                WHERE company_id = ?
                 ORDER BY name
-            """) as cursor:
+            """, (company_id,)) as cursor:
                 async for row in cursor:
                     instance = {
                         "id": row[0],
@@ -1519,9 +2184,21 @@ class WorklogStorage:
                     instances.append(instance)
         return instances
 
-    async def update_jira_instance(self, instance_id: int, **kwargs) -> bool:
-        """Update JIRA instance fields. Returns True if updated."""
+    async def update_jira_instance(self, instance_id: int, company_id: int, **kwargs) -> bool:
+        """Update JIRA instance fields for a specific company.
+
+        Args:
+            instance_id: Instance ID to update
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            **kwargs: Fields to update (name, url, email, api_token, etc.)
+
+        Returns:
+            True if updated, False if instance not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         allowed_fields = {"name", "url", "email", "api_token", "tempo_api_token", "billing_client_id", "is_active", "default_project_key"}
         updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
@@ -1531,24 +2208,35 @@ class WorklogStorage:
 
         set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
         values = list(updates.values())
-        values.append(instance_id)
+        values.extend([instance_id, company_id])
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                f"UPDATE jira_instances SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                f"UPDATE jira_instances SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?",
                 values
             )
             await db.commit()
             return cursor.rowcount > 0
 
-    async def delete_jira_instance(self, instance_id: int) -> bool:
-        """Delete a JIRA instance. Returns True if deleted."""
+    async def delete_jira_instance(self, instance_id: int, company_id: int) -> bool:
+        """Delete a JIRA instance for a specific company.
+
+        Args:
+            instance_id: Instance ID to delete
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            True if deleted, False if instance not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "DELETE FROM jira_instances WHERE id = ?",
-                (instance_id,)
+                "DELETE FROM jira_instances WHERE id = ? AND company_id = ?",
+                (instance_id, company_id)
             )
             await db.commit()
             return cursor.rowcount > 0
@@ -1558,22 +2246,58 @@ class WorklogStorage:
     async def create_complementary_group(
         self,
         name: str,
+        company_id: int,
         primary_instance_id: Optional[int] = None
     ) -> int:
-        """Create a new complementary group. Returns group_id."""
+        """Create a new complementary group for a specific company.
+
+        Args:
+            name: Group name
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            primary_instance_id: Optional primary instance ID (must belong to company if provided)
+
+        Returns:
+            group_id
+
+        Raises:
+            ValueError: If primary_instance doesn't belong to company
+        """
         await self.initialize()
 
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
+            # Verify primary instance belongs to company if provided
+            if primary_instance_id:
+                async with db.execute(
+                    "SELECT id FROM jira_instances WHERE id = ? AND company_id = ?",
+                    (primary_instance_id, company_id)
+                ) as cursor:
+                    if not await cursor.fetchone():
+                        raise ValueError(f"Primary instance {primary_instance_id} not found or doesn't belong to company {company_id}")
+
             cursor = await db.execute("""
-                INSERT INTO complementary_groups (name, primary_instance_id)
-                VALUES (?, ?)
-            """, (name, primary_instance_id))
+                INSERT INTO complementary_groups (name, primary_instance_id, company_id)
+                VALUES (?, ?, ?)
+            """, (name, primary_instance_id, company_id))
             await db.commit()
             return cursor.lastrowid
 
-    async def get_complementary_group(self, group_id: int) -> Optional[dict]:
-        """Get a complementary group with its members."""
+    async def get_complementary_group(self, group_id: int, company_id: int) -> Optional[dict]:
+        """Get a complementary group with its members for a specific company.
+
+        Args:
+            group_id: Group ID to retrieve
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Group dict or None if not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
@@ -1581,8 +2305,8 @@ class WorklogStorage:
                        pi.name as primary_instance_name
                 FROM complementary_groups g
                 LEFT JOIN jira_instances pi ON pi.id = g.primary_instance_id
-                WHERE g.id = ?
-            """, (group_id,)) as cursor:
+                WHERE g.id = ? AND g.company_id = ?
+            """, (group_id, company_id)) as cursor:
                 row = await cursor.fetchone()
                 if not row:
                     return None
@@ -1597,14 +2321,14 @@ class WorklogStorage:
                     "members": []
                 }
 
-            # Get members
+            # Get members (only from same company)
             async with db.execute("""
                 SELECT ji.id, ji.name, ji.url
                 FROM complementary_group_members cgm
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
-                WHERE cgm.group_id = ?
+                WHERE cgm.group_id = ? AND ji.company_id = ?
                 ORDER BY ji.name
-            """, (group_id,)) as cursor:
+            """, (group_id, company_id)) as cursor:
                 async for row in cursor:
                     group["members"].append({
                         "id": row[0],
@@ -1614,9 +2338,19 @@ class WorklogStorage:
 
         return group
 
-    async def get_all_complementary_groups(self) -> list[dict]:
-        """Get all complementary groups with their members."""
+    async def get_all_complementary_groups(self, company_id: int) -> list[dict]:
+        """Get all complementary groups with their members for a specific company.
+
+        Args:
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            List of group dicts for the company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         groups = []
         async with aiosqlite.connect(self.db_path) as db:
@@ -1625,8 +2359,9 @@ class WorklogStorage:
                        pi.name as primary_instance_name
                 FROM complementary_groups g
                 LEFT JOIN jira_instances pi ON pi.id = g.primary_instance_id
+                WHERE g.company_id = ?
                 ORDER BY g.name
-            """) as cursor:
+            """, (company_id,)) as cursor:
                 async for row in cursor:
                     groups.append({
                         "id": row[0],
@@ -1638,17 +2373,18 @@ class WorklogStorage:
                         "members": []
                     })
 
-            # Get members for all groups
+            # Get members for all groups (only from same company)
             group_ids = [g["id"] for g in groups]
             if group_ids:
                 placeholders = ",".join("?" * len(group_ids))
+                params = group_ids + [company_id]
                 async with db.execute(f"""
                     SELECT cgm.group_id, ji.id, ji.name, ji.url
                     FROM complementary_group_members cgm
                     JOIN jira_instances ji ON ji.id = cgm.instance_id
-                    WHERE cgm.group_id IN ({placeholders})
+                    WHERE cgm.group_id IN ({placeholders}) AND ji.company_id = ?
                     ORDER BY ji.name
-                """, group_ids) as cursor:
+                """, params) as cursor:
                     async for row in cursor:
                         group_id, inst_id, inst_name, inst_url = row
                         for group in groups:
@@ -1665,11 +2401,38 @@ class WorklogStorage:
     async def update_complementary_group(
         self,
         group_id: int,
+        company_id: int,
         name: Optional[str] = None,
         primary_instance_id: Optional[int] = None
     ) -> bool:
-        """Update complementary group. Returns True if updated."""
+        """Update complementary group for a specific company.
+
+        Args:
+            group_id: Group ID to update
+            company_id: Company ID (REQUIRED for multi-tenant isolation - verifies ownership)
+            name: Optional new group name
+            primary_instance_id: Optional new primary instance ID (must belong to company)
+
+        Returns:
+            True if updated, False if group not found or doesn't belong to company
+
+        Raises:
+            ValueError: If primary_instance doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
+        # Verify primary instance belongs to company if provided
+        if primary_instance_id and primary_instance_id > 0:
+            async with aiosqlite.connect(self.db_path) as db:
+                async with db.execute(
+                    "SELECT id FROM jira_instances WHERE id = ? AND company_id = ?",
+                    (primary_instance_id, company_id)
+                ) as cursor:
+                    if not await cursor.fetchone():
+                        raise ValueError(f"Primary instance {primary_instance_id} not found or doesn't belong to company {company_id}")
 
         updates = []
         values = []
@@ -1684,25 +2447,36 @@ class WorklogStorage:
         if not updates:
             return False
 
-        values.append(group_id)
+        values.extend([group_id, company_id])
         set_clause = ", ".join(updates)
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                f"UPDATE complementary_groups SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                f"UPDATE complementary_groups SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?",
                 values
             )
             await db.commit()
             return cursor.rowcount > 0
 
-    async def delete_complementary_group(self, group_id: int) -> bool:
-        """Delete a complementary group. Returns True if deleted."""
+    async def delete_complementary_group(self, group_id: int, company_id: int) -> bool:
+        """Delete a complementary group for a specific company.
+
+        Args:
+            group_id: Group ID to delete
+            company_id: Company ID (REQUIRED for multi-tenant isolation - verifies ownership)
+
+        Returns:
+            True if deleted, False if group not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "DELETE FROM complementary_groups WHERE id = ?",
-                (group_id,)
+                "DELETE FROM complementary_groups WHERE id = ? AND company_id = ?",
+                (group_id, company_id)
             )
             await db.commit()
             return cursor.rowcount > 0
@@ -1710,12 +2484,44 @@ class WorklogStorage:
     async def add_instance_to_complementary_group(
         self,
         group_id: int,
-        instance_id: int
+        instance_id: int,
+        company_id: int
     ) -> bool:
-        """Add an instance to a complementary group. Returns True if added."""
+        """Add an instance to a complementary group for a specific company.
+
+        Args:
+            group_id: Group ID (must belong to company)
+            instance_id: Instance ID (must belong to company)
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            True if added, False if already exists
+
+        Raises:
+            ValueError: If group or instance doesn't belong to company
+        """
         await self.initialize()
 
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
+            # Verify group belongs to company
+            async with db.execute(
+                "SELECT id FROM complementary_groups WHERE id = ? AND company_id = ?",
+                (group_id, company_id)
+            ) as cursor:
+                if not await cursor.fetchone():
+                    raise ValueError(f"Group {group_id} not found or doesn't belong to company {company_id}")
+
+            # Verify instance belongs to company
+            async with db.execute(
+                "SELECT id FROM jira_instances WHERE id = ? AND company_id = ?",
+                (instance_id, company_id)
+            ) as cursor:
+                if not await cursor.fetchone():
+                    raise ValueError(f"Instance {instance_id} not found or doesn't belong to company {company_id}")
+
             try:
                 await db.execute("""
                     INSERT INTO complementary_group_members (group_id, instance_id)
@@ -1729,28 +2535,79 @@ class WorklogStorage:
     async def remove_instance_from_complementary_group(
         self,
         group_id: int,
-        instance_id: int
+        instance_id: int,
+        company_id: int
     ) -> bool:
-        """Remove an instance from a complementary group. Returns True if removed."""
+        """Remove an instance from a complementary group for a specific company.
+
+        Args:
+            group_id: Group ID (must belong to company)
+            instance_id: Instance ID
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            True if removed, False if membership not found or group doesn't belong to company
+        """
         await self.initialize()
 
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
+            # Verify group belongs to company before removing membership
             cursor = await db.execute("""
                 DELETE FROM complementary_group_members
                 WHERE group_id = ? AND instance_id = ?
-            """, (group_id, instance_id))
+                AND group_id IN (SELECT id FROM complementary_groups WHERE company_id = ?)
+            """, (group_id, instance_id, company_id))
             await db.commit()
             return cursor.rowcount > 0
 
     async def set_complementary_group_members(
         self,
         group_id: int,
-        instance_ids: list[int]
+        instance_ids: list[int],
+        company_id: int
     ) -> bool:
-        """Set the members of a complementary group (replaces existing)."""
+        """Set the members of a complementary group for a specific company (replaces existing).
+
+        Args:
+            group_id: Group ID (must belong to company)
+            instance_ids: List of instance IDs (must belong to company)
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            True if successful
+
+        Raises:
+            ValueError: If group or any instance doesn't belong to company
+        """
         await self.initialize()
 
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
+            # Verify group belongs to company
+            async with db.execute(
+                "SELECT id FROM complementary_groups WHERE id = ? AND company_id = ?",
+                (group_id, company_id)
+            ) as cursor:
+                if not await cursor.fetchone():
+                    raise ValueError(f"Group {group_id} not found or doesn't belong to company {company_id}")
+
+            # Verify all instances belong to company
+            if instance_ids:
+                placeholders = ",".join("?" * len(instance_ids))
+                params = instance_ids + [company_id]
+                async with db.execute(f"""
+                    SELECT COUNT(*) FROM jira_instances
+                    WHERE id IN ({placeholders}) AND company_id = ?
+                """, params) as cursor:
+                    count = (await cursor.fetchone())[0]
+                    if count != len(instance_ids):
+                        raise ValueError(f"Some instances don't belong to company {company_id}")
+
             # Remove all existing members
             await db.execute(
                 "DELETE FROM complementary_group_members WHERE group_id = ?",
@@ -1767,12 +2624,21 @@ class WorklogStorage:
             await db.commit()
             return True
 
-    async def get_complementary_instance_names(self) -> list[str]:
-        """
-        Get list of complementary instance names for backward compatibility.
+    async def get_complementary_instance_names(self, company_id: int) -> list[str]:
+        """Get list of complementary instance names for a specific company.
+
         Returns names of instances in all complementary groups (for filtering).
+
+        Args:
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            List of instance names in complementary groups for the company
         """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         names = []
         async with aiosqlite.connect(self.db_path) as db:
@@ -1780,17 +2646,27 @@ class WorklogStorage:
                 SELECT DISTINCT ji.name
                 FROM complementary_group_members cgm
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
-            """) as cursor:
+                JOIN complementary_groups cg ON cg.id = cgm.group_id
+                WHERE cg.company_id = ? AND ji.company_id = ?
+            """, (company_id, company_id)) as cursor:
                 async for row in cursor:
                     names.append(row[0])
         return names
 
-    async def get_complementary_instance_names_by_group(self, group_id: int) -> list[str]:
-        """
-        Get instance names for a specific complementary group.
-        Returns list of instance names in the specified group.
+    async def get_complementary_instance_names_by_group(self, group_id: int, company_id: int) -> list[str]:
+        """Get instance names for a specific complementary group for a specific company.
+
+        Args:
+            group_id: Group ID
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            List of instance names in the group (empty if group doesn't belong to company)
         """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         names = []
         async with aiosqlite.connect(self.db_path) as db:
@@ -1798,19 +2674,27 @@ class WorklogStorage:
                 SELECT ji.name
                 FROM complementary_group_members cgm
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
-                WHERE cgm.group_id = ?
+                JOIN complementary_groups cg ON cg.id = cgm.group_id
+                WHERE cgm.group_id = ? AND cg.company_id = ? AND ji.company_id = ?
                 ORDER BY ji.name
-            """, (group_id,)) as cursor:
+            """, (group_id, company_id, company_id)) as cursor:
                 async for row in cursor:
                     names.append(row[0])
         return names
 
-    async def get_primary_instance_for_complementary(self) -> Optional[str]:
-        """
-        Get the primary instance name to use when complementary instances exist.
-        Returns the first primary instance found, or None.
+    async def get_primary_instance_for_complementary(self, company_id: int) -> Optional[str]:
+        """Get the primary instance name to use when complementary instances exist for a specific company.
+
+        Args:
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Primary instance name or None
         """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
@@ -1818,8 +2702,9 @@ class WorklogStorage:
                 FROM complementary_groups cg
                 JOIN jira_instances ji ON ji.id = cg.primary_instance_id
                 WHERE cg.primary_instance_id IS NOT NULL
+                AND cg.company_id = ? AND ji.company_id = ?
                 LIMIT 1
-            """) as cursor:
+            """, (company_id, company_id)) as cursor:
                 row = await cursor.fetchone()
                 if row:
                     return row[0]
@@ -1830,32 +2715,59 @@ class WorklogStorage:
     async def create_package_template(
         self,
         name: str,
+        company_id: int,
         description: Optional[str] = None,
         default_project_key: Optional[str] = None,
         parent_issue_type: str = "Task",
         child_issue_type: str = "Sub-task"
     ) -> int:
-        """Create a new package template. Returns template_id."""
+        """Create a new package template for a specific company.
+
+        Args:
+            name: Template name
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            description: Optional template description
+            default_project_key: Default JIRA project key
+            parent_issue_type: Parent issue type (default: Task)
+            child_issue_type: Child issue type (default: Sub-task)
+
+        Returns:
+            template_id
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute("""
-                INSERT INTO package_templates (name, description, default_project_key, parent_issue_type, child_issue_type)
-                VALUES (?, ?, ?, ?, ?)
-            """, (name, description, default_project_key, parent_issue_type, child_issue_type))
+                INSERT INTO package_templates (name, description, default_project_key, parent_issue_type, child_issue_type, company_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (name, description, default_project_key, parent_issue_type, child_issue_type, company_id))
             await db.commit()
             return cursor.lastrowid
 
-    async def get_package_template(self, template_id: int) -> Optional[dict]:
-        """Get a package template with its elements."""
+    async def get_package_template(self, template_id: int, company_id: int) -> Optional[dict]:
+        """Get a package template with its elements for a specific company.
+
+        Args:
+            template_id: Template ID to retrieve
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Template dict or None if not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT id, name, description, default_project_key, parent_issue_type, child_issue_type,
                        created_at, updated_at
-                FROM package_templates WHERE id = ?
-            """, (template_id,)) as cursor:
+                FROM package_templates WHERE id = ? AND company_id = ?
+            """, (template_id, company_id)) as cursor:
                 row = await cursor.fetchone()
                 if not row:
                     return None
@@ -1887,14 +2799,14 @@ class WorklogStorage:
                         "sort_order": erow[2]
                     })
 
-            # Get associated instances
+            # Get associated instances (only from same company)
             async with db.execute("""
                 SELECT ji.id, ji.name, ji.url
                 FROM package_template_instances pti
                 JOIN jira_instances ji ON ji.id = pti.instance_id
-                WHERE pti.template_id = ?
+                WHERE pti.template_id = ? AND ji.company_id = ?
                 ORDER BY ji.name
-            """, (template_id,)) as cursor:
+            """, (template_id, company_id)) as cursor:
                 async for irow in cursor:
                     template["instances"].append({
                         "id": irow[0],
@@ -1904,9 +2816,19 @@ class WorklogStorage:
 
         return template
 
-    async def get_all_package_templates(self) -> list[dict]:
-        """Get all package templates with their elements."""
+    async def get_all_package_templates(self, company_id: int) -> list[dict]:
+        """Get all package templates with their elements for a specific company.
+
+        Args:
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            List of template dicts for the company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         templates = []
         async with aiosqlite.connect(self.db_path) as db:
@@ -1914,8 +2836,9 @@ class WorklogStorage:
                 SELECT id, name, description, default_project_key, parent_issue_type, child_issue_type,
                        created_at, updated_at
                 FROM package_templates
+                WHERE company_id = ?
                 ORDER BY name
-            """) as cursor:
+            """, (company_id,)) as cursor:
                 async for row in cursor:
                     templates.append({
                         "id": row[0],
@@ -1950,14 +2873,15 @@ class WorklogStorage:
                                 })
                                 break
 
-                # Fetch instances for all templates
+                # Fetch instances for all templates (only from same company)
+                params = template_ids + [company_id]
                 async with db.execute(f"""
                     SELECT pti.template_id, ji.id, ji.name, ji.url
                     FROM package_template_instances pti
                     JOIN jira_instances ji ON ji.id = pti.instance_id
-                    WHERE pti.template_id IN ({placeholders})
+                    WHERE pti.template_id IN ({placeholders}) AND ji.company_id = ?
                     ORDER BY ji.name
-                """, template_ids) as cursor:
+                """, params) as cursor:
                     async for row in cursor:
                         for t in templates:
                             if t["id"] == row[0]:
@@ -1970,9 +2894,21 @@ class WorklogStorage:
 
         return templates
 
-    async def update_package_template(self, template_id: int, **kwargs) -> bool:
-        """Update package template fields. Returns True if updated."""
+    async def update_package_template(self, template_id: int, company_id: int, **kwargs) -> bool:
+        """Update package template fields for a specific company.
+
+        Args:
+            template_id: Template ID to update
+            company_id: Company ID (REQUIRED for multi-tenant isolation - verifies ownership)
+            **kwargs: Fields to update (name, description, default_project_key, parent_issue_type, child_issue_type)
+
+        Returns:
+            True if updated, False if template not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         allowed_fields = {"name", "description", "default_project_key", "parent_issue_type", "child_issue_type"}
         updates = []
@@ -1986,34 +2922,68 @@ class WorklogStorage:
         if not updates:
             return False
 
-        values.append(template_id)
+        values.extend([template_id, company_id])
         set_clause = ", ".join(updates)
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                f"UPDATE package_templates SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                f"UPDATE package_templates SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?",
                 values
             )
             await db.commit()
             return cursor.rowcount > 0
 
-    async def delete_package_template(self, template_id: int) -> bool:
-        """Delete a package template. Returns True if deleted."""
+    async def delete_package_template(self, template_id: int, company_id: int) -> bool:
+        """Delete a package template for a specific company.
+
+        Args:
+            template_id: Template ID to delete
+            company_id: Company ID (REQUIRED for multi-tenant isolation - verifies ownership)
+
+        Returns:
+            True if deleted, False if template not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "DELETE FROM package_templates WHERE id = ?",
-                (template_id,)
+                "DELETE FROM package_templates WHERE id = ? AND company_id = ?",
+                (template_id, company_id)
             )
             await db.commit()
             return cursor.rowcount > 0
 
-    async def set_template_elements(self, template_id: int, elements: list[str]) -> bool:
-        """Set the elements of a package template (replaces existing)."""
+    async def set_template_elements(self, template_id: int, elements: list[str], company_id: int) -> bool:
+        """Set the elements of a package template for a specific company (replaces existing).
+
+        Args:
+            template_id: Template ID (must belong to company)
+            elements: List of element names
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            True if successful
+
+        Raises:
+            ValueError: If template doesn't belong to company
+        """
         await self.initialize()
 
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
+            # Verify template belongs to company
+            async with db.execute(
+                "SELECT id FROM package_templates WHERE id = ? AND company_id = ?",
+                (template_id, company_id)
+            ) as cursor:
+                if not await cursor.fetchone():
+                    raise ValueError(f"Template {template_id} not found or doesn't belong to company {company_id}")
+
             # Remove all existing elements
             await db.execute(
                 "DELETE FROM package_template_elements WHERE template_id = ?",
@@ -2071,11 +3041,46 @@ class WorklogStorage:
 
     # ========== Template Instance Operations ==========
 
-    async def set_template_instances(self, template_id: int, instance_ids: list[int]) -> bool:
-        """Set the JIRA instances associated with a template (replaces existing)."""
+    async def set_template_instances(self, template_id: int, instance_ids: list[int], company_id: int) -> bool:
+        """Set the JIRA instances associated with a template for a specific company (replaces existing).
+
+        Args:
+            template_id: Template ID (must belong to company)
+            instance_ids: List of JIRA instance IDs (must belong to company)
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            True if successful
+
+        Raises:
+            ValueError: If template or any instance doesn't belong to company
+        """
         await self.initialize()
 
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
+            # Verify template belongs to company
+            async with db.execute(
+                "SELECT id FROM package_templates WHERE id = ? AND company_id = ?",
+                (template_id, company_id)
+            ) as cursor:
+                if not await cursor.fetchone():
+                    raise ValueError(f"Template {template_id} not found or doesn't belong to company {company_id}")
+
+            # Verify all instances belong to company
+            if instance_ids:
+                placeholders = ",".join("?" * len(instance_ids))
+                params = instance_ids + [company_id]
+                async with db.execute(f"""
+                    SELECT COUNT(*) FROM jira_instances
+                    WHERE id IN ({placeholders}) AND company_id = ?
+                """, params) as cursor:
+                    count = (await cursor.fetchone())[0]
+                    if count != len(instance_ids):
+                        raise ValueError(f"Some instances don't belong to company {company_id}")
+
             await db.execute(
                 "DELETE FROM package_template_instances WHERE template_id = ?",
                 (template_id,)
@@ -2088,19 +3093,32 @@ class WorklogStorage:
             await db.commit()
         return True
 
-    async def get_template_instances(self, template_id: int) -> list[dict]:
-        """Get JIRA instances associated with a template."""
+    async def get_template_instances(self, template_id: int, company_id: int) -> list[dict]:
+        """Get JIRA instances associated with a template for a specific company.
+
+        Args:
+            template_id: Template ID
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            List of instance dicts (empty if template doesn't belong to company)
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         instances = []
         async with aiosqlite.connect(self.db_path) as db:
+            # Verify template belongs to company, then get instances (also filtered by company)
             async with db.execute("""
                 SELECT ji.id, ji.name, ji.url
                 FROM package_template_instances pti
                 JOIN jira_instances ji ON ji.id = pti.instance_id
-                WHERE pti.template_id = ?
+                JOIN package_templates pt ON pt.id = pti.template_id
+                WHERE pti.template_id = ? AND pt.company_id = ? AND ji.company_id = ?
                 ORDER BY ji.name
-            """, (template_id,)) as cursor:
+            """, (template_id, company_id, company_id)) as cursor:
                 async for row in cursor:
                     instances.append({
                         "id": row[0],
@@ -2183,106 +3201,209 @@ class WorklogStorage:
                     })
         return results
 
-    async def get_complementary_instances_for(self, instance_name: str) -> list[str]:
-        """Given an instance name, return the other instances in its complementary group(s)."""
+    async def get_complementary_instances_for(self, instance_name: str, company_id: int) -> list[str]:
+        """Given an instance name, return the other instances in its complementary group(s) for a specific company.
+
+        Args:
+            instance_name: Instance name to find complementary instances for
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            List of other instance names in the same complementary groups
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         other_names = []
         async with aiosqlite.connect(self.db_path) as db:
-            # Find groups this instance belongs to
+            # Find groups this instance belongs to (only within same company)
             async with db.execute("""
                 SELECT cgm.group_id
                 FROM complementary_group_members cgm
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
-                WHERE ji.name = ?
-            """, (instance_name,)) as cursor:
+                JOIN complementary_groups cg ON cg.id = cgm.group_id
+                WHERE ji.name = ? AND ji.company_id = ? AND cg.company_id = ?
+            """, (instance_name, company_id, company_id)) as cursor:
                 group_ids = [row[0] async for row in cursor]
 
             if not group_ids:
                 return []
 
-            # Find all other instances in those groups
+            # Find all other instances in those groups (only from same company)
             placeholders = ",".join("?" * len(group_ids))
+            params = list(group_ids) + [company_id, instance_name]
             async with db.execute(f"""
                 SELECT DISTINCT ji.name
                 FROM complementary_group_members cgm
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
                 WHERE cgm.group_id IN ({placeholders})
+                AND ji.company_id = ?
                 AND ji.name != ?
                 ORDER BY ji.name
-            """, (*group_ids, instance_name)) as cursor:
+            """, params) as cursor:
                 async for row in cursor:
                     other_names.append(row[0])
         return other_names
 
     # ========== Billing Client Operations ==========
 
-    async def create_billing_client(self, name: str, billing_currency: str = "EUR", default_hourly_rate: Optional[float] = None, jira_instance_id: Optional[int] = None) -> int:
-        """Create a billing client. Returns client_id."""
+    async def create_billing_client(self, name: str, company_id: int, billing_currency: str = "EUR", default_hourly_rate: Optional[float] = None, jira_instance_id: Optional[int] = None) -> int:
+        """Create a billing client for a specific company.
+
+        Args:
+            name: Client name
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            billing_currency: Currency code (default: EUR)
+            default_hourly_rate: Default hourly rate
+            jira_instance_id: Associated JIRA instance ID
+
+        Returns:
+            client_id
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "INSERT INTO billing_clients (name, billing_currency, default_hourly_rate, jira_instance_id) VALUES (?, ?, ?, ?)",
-                (name, billing_currency, default_hourly_rate, jira_instance_id)
+                "INSERT INTO billing_clients (name, billing_currency, default_hourly_rate, jira_instance_id, company_id) VALUES (?, ?, ?, ?, ?)",
+                (name, billing_currency, default_hourly_rate, jira_instance_id, company_id)
             )
             await db.commit()
             return cursor.lastrowid
 
-    async def get_billing_client(self, client_id: int) -> Optional[dict]:
-        """Get a billing client by ID."""
+    async def get_billing_client(self, client_id: int, company_id: int) -> Optional[dict]:
+        """Get a billing client by ID for a specific company.
+
+        Args:
+            client_id: Client ID to retrieve
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Client dict or None if not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT id, name, billing_currency, default_hourly_rate, jira_instance_id, created_at, updated_at FROM billing_clients WHERE id = ?",
-                (client_id,)
+                "SELECT id, name, billing_currency, default_hourly_rate, jira_instance_id, created_at, updated_at FROM billing_clients WHERE id = ? AND company_id = ?",
+                (client_id, company_id)
             ) as cursor:
                 row = await cursor.fetchone()
                 if row:
                     return {"id": row[0], "name": row[1], "billing_currency": row[2], "default_hourly_rate": row[3], "jira_instance_id": row[4], "created_at": row[5], "updated_at": row[6]}
         return None
 
-    async def get_all_billing_clients(self) -> list[dict]:
-        """Get all billing clients."""
+    async def get_all_billing_clients(self, company_id: int) -> list[dict]:
+        """Get all billing clients for a specific company.
+
+        Args:
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            List of client dicts for the company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         clients = []
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT id, name, billing_currency, default_hourly_rate, jira_instance_id, created_at, updated_at FROM billing_clients ORDER BY name"
+                "SELECT id, name, billing_currency, default_hourly_rate, jira_instance_id, created_at, updated_at FROM billing_clients WHERE company_id = ? ORDER BY name",
+                (company_id,)
             ) as cursor:
                 async for row in cursor:
                     clients.append({"id": row[0], "name": row[1], "billing_currency": row[2], "default_hourly_rate": row[3], "jira_instance_id": row[4], "created_at": row[5], "updated_at": row[6]})
         return clients
 
-    async def update_billing_client(self, client_id: int, **kwargs) -> bool:
-        """Update billing client fields."""
+    async def update_billing_client(self, client_id: int, company_id: int, **kwargs) -> bool:
+        """Update billing client fields for a specific company.
+
+        Args:
+            client_id: Client ID to update
+            company_id: Company ID (REQUIRED for multi-tenant isolation - verifies ownership)
+            **kwargs: Fields to update (name, billing_currency, default_hourly_rate, jira_instance_id)
+
+        Returns:
+            True if updated, False if client not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         allowed = {"name", "billing_currency", "default_hourly_rate", "jira_instance_id"}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
             return False
         set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
-        values = list(updates.values()) + [client_id]
+        values = list(updates.values()) + [client_id, company_id]
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                f"UPDATE billing_clients SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?", values
+                f"UPDATE billing_clients SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?", values
             )
             await db.commit()
             return cursor.rowcount > 0
 
-    async def delete_billing_client(self, client_id: int) -> bool:
-        """Delete a billing client (cascades to projects, mappings, rates)."""
+    async def delete_billing_client(self, client_id: int, company_id: int) -> bool:
+        """Delete a billing client for a specific company (cascades to projects, mappings, rates).
+
+        Args:
+            client_id: Client ID to delete
+            company_id: Company ID (REQUIRED for multi-tenant isolation - verifies ownership)
+
+        Returns:
+            True if deleted, False if client not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute("DELETE FROM billing_clients WHERE id = ?", (client_id,))
+            cursor = await db.execute("DELETE FROM billing_clients WHERE id = ? AND company_id = ?", (client_id, company_id))
             await db.commit()
             return cursor.rowcount > 0
 
     # ========== Billing Project Operations ==========
 
-    async def create_billing_project(self, client_id: int, name: str, default_hourly_rate: Optional[float] = None) -> int:
-        """Create a billing project. Returns project_id."""
+    async def create_billing_project(self, client_id: int, name: str, company_id: int, default_hourly_rate: Optional[float] = None) -> int:
+        """Create a billing project for a specific company.
+
+        Args:
+            client_id: Client ID (must belong to company)
+            name: Project name
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            default_hourly_rate: Default hourly rate
+
+        Returns:
+            project_id
+
+        Raises:
+            ValueError: If client doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
+        # Verify client belongs to company
         async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                "SELECT id FROM billing_clients WHERE id = ? AND company_id = ?",
+                (client_id, company_id)
+            ) as cursor:
+                if not await cursor.fetchone():
+                    raise ValueError(f"Client {client_id} not found or doesn't belong to company {company_id}")
+
             cursor = await db.execute(
                 "INSERT INTO billing_projects (client_id, name, default_hourly_rate) VALUES (?, ?, ?)",
                 (client_id, name, default_hourly_rate)
@@ -2290,14 +3411,28 @@ class WorklogStorage:
             await db.commit()
             return cursor.lastrowid
 
-    async def get_billing_project(self, project_id: int) -> Optional[dict]:
-        """Get a billing project by ID with mappings."""
+    async def get_billing_project(self, project_id: int, company_id: int) -> Optional[dict]:
+        """Get a billing project by ID with mappings for a specific company.
+
+        Args:
+            project_id: Project ID to retrieve
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Project dict or None if not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute(
-                "SELECT id, client_id, name, default_hourly_rate, created_at, updated_at FROM billing_projects WHERE id = ?",
-                (project_id,)
-            ) as cursor:
+            async with db.execute("""
+                SELECT bp.id, bp.client_id, bp.name, bp.default_hourly_rate, bp.created_at, bp.updated_at
+                FROM billing_projects bp
+                JOIN billing_clients bc ON bc.id = bp.client_id
+                WHERE bp.id = ? AND bc.company_id = ?
+            """, (project_id, company_id)) as cursor:
                 row = await cursor.fetchone()
                 if not row:
                     return None
@@ -2311,15 +3446,31 @@ class WorklogStorage:
                     project["mappings"].append({"id": row[0], "billing_project_id": row[1], "jira_instance": row[2], "jira_project_key": row[3], "created_at": row[4]})
         return project
 
-    async def get_billing_projects_by_client(self, client_id: int) -> list[dict]:
-        """Get all billing projects for a client with mappings."""
+    async def get_billing_projects_by_client(self, client_id: int, company_id: int) -> list[dict]:
+        """Get all billing projects for a client with mappings for a specific company.
+
+        Args:
+            client_id: Client ID
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            List of project dicts for the client (empty if client doesn't belong to company)
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         projects = []
         async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute(
-                "SELECT id, client_id, name, default_hourly_rate, created_at, updated_at FROM billing_projects WHERE client_id = ? ORDER BY name",
-                (client_id,)
-            ) as cursor:
+            # Verify client belongs to company, then get projects
+            async with db.execute("""
+                SELECT bp.id, bp.client_id, bp.name, bp.default_hourly_rate, bp.created_at, bp.updated_at
+                FROM billing_projects bp
+                JOIN billing_clients bc ON bc.id = bp.client_id
+                WHERE bp.client_id = ? AND bc.company_id = ?
+                ORDER BY bp.name
+            """, (client_id, company_id)) as cursor:
                 async for row in cursor:
                     projects.append({"id": row[0], "client_id": row[1], "name": row[2], "default_hourly_rate": row[3], "created_at": row[4], "updated_at": row[5], "mappings": []})
 
@@ -2337,9 +3488,20 @@ class WorklogStorage:
                                 break
         return projects
 
-    async def get_all_billing_projects(self) -> list[dict]:
-        """Get all billing projects with mappings and client info."""
+    async def get_all_billing_projects(self, company_id: int) -> list[dict]:
+        """Get all billing projects with mappings and client info for a specific company.
+
+        Args:
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            List of project dicts for the company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         projects = []
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
@@ -2347,8 +3509,9 @@ class WorklogStorage:
                        bc.name as client_name
                 FROM billing_projects bp
                 JOIN billing_clients bc ON bc.id = bp.client_id
+                WHERE bc.company_id = ?
                 ORDER BY bc.name, bp.name
-            """) as cursor:
+            """, (company_id,)) as cursor:
                 async for row in cursor:
                     projects.append({"id": row[0], "client_id": row[1], "name": row[2], "default_hourly_rate": row[3], "created_at": row[4], "updated_at": row[5], "client_name": row[6], "mappings": []})
 
@@ -2366,36 +3529,91 @@ class WorklogStorage:
                                 break
         return projects
 
-    async def update_billing_project(self, project_id: int, **kwargs) -> bool:
-        """Update billing project fields."""
+    async def update_billing_project(self, project_id: int, company_id: int, **kwargs) -> bool:
+        """Update billing project fields for a specific company.
+
+        Args:
+            project_id: Project ID to update
+            company_id: Company ID (REQUIRED for multi-tenant isolation - verifies ownership)
+            **kwargs: Fields to update (name, default_hourly_rate)
+
+        Returns:
+            True if updated, False if project not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         allowed = {"name", "default_hourly_rate"}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
             return False
         set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
-        values = list(updates.values()) + [project_id]
+        values = list(updates.values()) + [project_id, company_id]
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
-                f"UPDATE billing_projects SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?", values
-            )
+            cursor = await db.execute(f"""
+                UPDATE billing_projects SET {set_clause}, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND client_id IN (SELECT id FROM billing_clients WHERE company_id = ?)
+            """, values)
             await db.commit()
             return cursor.rowcount > 0
 
-    async def delete_billing_project(self, project_id: int) -> bool:
-        """Delete a billing project (cascades to mappings, rates)."""
+    async def delete_billing_project(self, project_id: int, company_id: int) -> bool:
+        """Delete a billing project for a specific company (cascades to mappings, rates).
+
+        Args:
+            project_id: Project ID to delete
+            company_id: Company ID (REQUIRED for multi-tenant isolation - verifies ownership)
+
+        Returns:
+            True if deleted, False if project not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute("DELETE FROM billing_projects WHERE id = ?", (project_id,))
+            cursor = await db.execute("""
+                DELETE FROM billing_projects
+                WHERE id = ? AND client_id IN (SELECT id FROM billing_clients WHERE company_id = ?)
+            """, (project_id, company_id))
             await db.commit()
             return cursor.rowcount > 0
 
     # ========== Billing Project Mapping Operations ==========
 
-    async def add_billing_project_mapping(self, billing_project_id: int, jira_instance: str, jira_project_key: str) -> int:
-        """Add a JIRA project mapping to a billing project. Returns mapping_id."""
+    async def add_billing_project_mapping(self, billing_project_id: int, jira_instance: str, jira_project_key: str, company_id: int) -> int:
+        """Add a JIRA project mapping to a billing project for a specific company.
+
+        Args:
+            billing_project_id: Billing project ID (must belong to company)
+            jira_instance: JIRA instance name
+            jira_project_key: JIRA project key
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            mapping_id
+
+        Raises:
+            ValueError: If project doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
+            # Verify project belongs to company
+            async with db.execute("""
+                SELECT bp.id FROM billing_projects bp
+                JOIN billing_clients bc ON bc.id = bp.client_id
+                WHERE bp.id = ? AND bc.company_id = ?
+            """, (billing_project_id, company_id)) as cursor:
+                if not await cursor.fetchone():
+                    raise ValueError(f"Project {billing_project_id} not found or doesn't belong to company {company_id}")
+
             cursor = await db.execute(
                 "INSERT INTO billing_project_mappings (billing_project_id, jira_instance, jira_project_key) VALUES (?, ?, ?)",
                 (billing_project_id, jira_instance, jira_project_key)
@@ -2403,25 +3621,58 @@ class WorklogStorage:
             await db.commit()
             return cursor.lastrowid
 
-    async def delete_billing_project_mapping(self, mapping_id: int) -> bool:
-        """Delete a billing project mapping."""
+    async def delete_billing_project_mapping(self, mapping_id: int, company_id: int) -> bool:
+        """Delete a billing project mapping for a specific company.
+
+        Args:
+            mapping_id: Mapping ID to delete
+            company_id: Company ID (REQUIRED for multi-tenant isolation - verifies ownership)
+
+        Returns:
+            True if deleted, False if mapping not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute("DELETE FROM billing_project_mappings WHERE id = ?", (mapping_id,))
+            cursor = await db.execute("""
+                DELETE FROM billing_project_mappings
+                WHERE id = ? AND billing_project_id IN (
+                    SELECT bp.id FROM billing_projects bp
+                    JOIN billing_clients bc ON bc.id = bp.client_id
+                    WHERE bc.company_id = ?
+                )
+            """, (mapping_id, company_id))
             await db.commit()
             return cursor.rowcount > 0
 
-    async def get_billing_project_for_worklog(self, jira_instance: str, issue_key: str) -> Optional[dict]:
-        """Find the billing project that maps to a given JIRA issue (by project key prefix)."""
+    async def get_billing_project_for_worklog(self, jira_instance: str, issue_key: str, company_id: int) -> Optional[dict]:
+        """Find the billing project that maps to a given JIRA issue for a specific company.
+
+        Args:
+            jira_instance: JIRA instance name
+            issue_key: JIRA issue key (e.g. PROJ-123)
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Billing project dict or None if not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         project_key = issue_key.split("-")[0] if "-" in issue_key else issue_key
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT bp.id, bp.client_id, bp.name, bp.default_hourly_rate
                 FROM billing_project_mappings bpm
                 JOIN billing_projects bp ON bp.id = bpm.billing_project_id
-                WHERE bpm.jira_instance = ? AND bpm.jira_project_key = ?
-            """, (jira_instance, project_key)) as cursor:
+                JOIN billing_clients bc ON bc.id = bp.client_id
+                WHERE bpm.jira_instance = ? AND bpm.jira_project_key = ? AND bc.company_id = ?
+            """, (jira_instance, project_key, company_id)) as cursor:
                 row = await cursor.fetchone()
                 if row:
                     return {"id": row[0], "client_id": row[1], "name": row[2], "default_hourly_rate": row[3]}
@@ -2429,10 +3680,39 @@ class WorklogStorage:
 
     # ========== Billing Rate Operations ==========
 
-    async def create_billing_rate(self, billing_project_id: int, hourly_rate: float, user_email: Optional[str] = None, issue_type: Optional[str] = None, valid_from: Optional[str] = None, valid_to: Optional[str] = None) -> int:
-        """Create a billing rate override. Returns rate_id."""
+    async def create_billing_rate(self, billing_project_id: int, hourly_rate: float, company_id: int, user_email: Optional[str] = None, issue_type: Optional[str] = None, valid_from: Optional[str] = None, valid_to: Optional[str] = None) -> int:
+        """Create a billing rate override for a specific company.
+
+        Args:
+            billing_project_id: Billing project ID (must belong to company)
+            hourly_rate: Hourly rate
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            user_email: Optional user email filter
+            issue_type: Optional issue type filter
+            valid_from: Optional start date
+            valid_to: Optional end date
+
+        Returns:
+            rate_id
+
+        Raises:
+            ValueError: If project doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
+            # Verify project belongs to company
+            async with db.execute("""
+                SELECT bp.id FROM billing_projects bp
+                JOIN billing_clients bc ON bc.id = bp.client_id
+                WHERE bp.id = ? AND bc.company_id = ?
+            """, (billing_project_id, company_id)) as cursor:
+                if not await cursor.fetchone():
+                    raise ValueError(f"Project {billing_project_id} not found or doesn't belong to company {company_id}")
+
             cursor = await db.execute(
                 "INSERT INTO billing_rates (billing_project_id, user_email, issue_type, hourly_rate, valid_from, valid_to) VALUES (?, ?, ?, ?, ?, ?)",
                 (billing_project_id, user_email, issue_type, hourly_rate, valid_from, valid_to)
@@ -2440,33 +3720,96 @@ class WorklogStorage:
             await db.commit()
             return cursor.lastrowid
 
-    async def get_billing_rates(self, billing_project_id: int) -> list[dict]:
-        """Get all billing rates for a project."""
+    async def get_billing_rates(self, billing_project_id: int, company_id: int) -> list[dict]:
+        """Get all billing rates for a project for a specific company.
+
+        Args:
+            billing_project_id: Billing project ID
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            List of rate dicts (empty if project doesn't belong to company)
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         rates = []
         async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute(
-                "SELECT id, billing_project_id, user_email, issue_type, hourly_rate, valid_from, valid_to, created_at FROM billing_rates WHERE billing_project_id = ? ORDER BY created_at DESC",
-                (billing_project_id,)
-            ) as cursor:
+            # Verify project belongs to company, then get rates
+            async with db.execute("""
+                SELECT br.id, br.billing_project_id, br.user_email, br.issue_type, br.hourly_rate, br.valid_from, br.valid_to, br.created_at
+                FROM billing_rates br
+                JOIN billing_projects bp ON bp.id = br.billing_project_id
+                JOIN billing_clients bc ON bc.id = bp.client_id
+                WHERE br.billing_project_id = ? AND bc.company_id = ?
+                ORDER BY br.created_at DESC
+            """, (billing_project_id, company_id)) as cursor:
                 async for row in cursor:
                     rates.append({"id": row[0], "billing_project_id": row[1], "user_email": row[2], "issue_type": row[3], "hourly_rate": row[4], "valid_from": row[5], "valid_to": row[6], "created_at": row[7]})
         return rates
 
-    async def delete_billing_rate(self, rate_id: int) -> bool:
-        """Delete a billing rate."""
+    async def delete_billing_rate(self, rate_id: int, company_id: int) -> bool:
+        """Delete a billing rate for a specific company.
+
+        Args:
+            rate_id: Rate ID to delete
+            company_id: Company ID (REQUIRED for multi-tenant isolation - verifies ownership)
+
+        Returns:
+            True if deleted, False if rate not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute("DELETE FROM billing_rates WHERE id = ?", (rate_id,))
+            cursor = await db.execute("""
+                DELETE FROM billing_rates
+                WHERE id = ? AND billing_project_id IN (
+                    SELECT bp.id FROM billing_projects bp
+                    JOIN billing_clients bc ON bc.id = bp.client_id
+                    WHERE bc.company_id = ?
+                )
+            """, (rate_id, company_id))
             await db.commit()
             return cursor.rowcount > 0
 
     # ========== Billing Classification Operations ==========
 
-    async def set_worklog_classification(self, worklog_id: str, is_billable: bool, override_hourly_rate: Optional[float] = None, note: Optional[str] = None, classified_by: Optional[str] = None) -> int:
-        """Set or update worklog billing classification. Returns classification_id."""
+    async def set_worklog_classification(self, worklog_id: str, is_billable: bool, company_id: int, override_hourly_rate: Optional[float] = None, note: Optional[str] = None, classified_by: Optional[str] = None) -> int:
+        """Set or update worklog billing classification for a specific company.
+
+        Args:
+            worklog_id: Worklog ID (must belong to company)
+            is_billable: Whether worklog is billable
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            override_hourly_rate: Optional override rate
+            note: Optional note
+            classified_by: User who classified the worklog
+
+        Returns:
+            classification_id
+
+        Raises:
+            ValueError: If worklog doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
+            # Verify worklog belongs to company
+            async with db.execute(
+                "SELECT id FROM worklogs WHERE id = ? AND company_id = ?",
+                (worklog_id, company_id)
+            ) as cursor:
+                if not await cursor.fetchone():
+                    raise ValueError(f"Worklog {worklog_id} not found or doesn't belong to company {company_id}")
+
             cursor = await db.execute("""
                 INSERT INTO billing_worklog_classifications (worklog_id, is_billable, override_hourly_rate, note, classified_by)
                 VALUES (?, ?, ?, ?, ?)
@@ -2477,28 +3820,76 @@ class WorklogStorage:
             await db.commit()
             return cursor.lastrowid
 
-    async def get_worklog_classifications(self, worklog_ids: list[str]) -> dict[str, dict]:
-        """Get classifications for a list of worklog IDs. Returns {worklog_id: classification_dict}."""
+    async def get_worklog_classifications(self, worklog_ids: list[str], company_id: int) -> dict[str, dict]:
+        """Get classifications for a list of worklog IDs for a specific company.
+
+        Args:
+            worklog_ids: List of worklog IDs
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Dict mapping worklog_id to classification dict (only for worklogs belonging to company)
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         if not worklog_ids:
             return {}
         result = {}
         async with aiosqlite.connect(self.db_path) as db:
             placeholders = ",".join("?" * len(worklog_ids))
+            params = worklog_ids + [company_id]
             async with db.execute(f"""
-                SELECT id, worklog_id, is_billable, override_hourly_rate, note, classified_by, classified_at
-                FROM billing_worklog_classifications WHERE worklog_id IN ({placeholders})
-            """, worklog_ids) as cursor:
+                SELECT bwc.id, bwc.worklog_id, bwc.is_billable, bwc.override_hourly_rate, bwc.note, bwc.classified_by, bwc.classified_at
+                FROM billing_worklog_classifications bwc
+                JOIN worklogs w ON w.id = bwc.worklog_id
+                WHERE bwc.worklog_id IN ({placeholders}) AND w.company_id = ?
+            """, params) as cursor:
                 async for row in cursor:
                     result[row[1]] = {"id": row[0], "worklog_id": row[1], "is_billable": bool(row[2]), "override_hourly_rate": row[3], "note": row[4], "classified_by": row[5], "classified_at": row[6]}
         return result
 
     # ========== Invoice Operations ==========
 
-    async def create_invoice(self, client_id: int, period_start: str, period_end: str, currency: str = "EUR", billing_project_id: Optional[int] = None, subtotal_amount: float = 0, taxes_amount: float = 0, total_amount: float = 0, group_by: str = "project", notes: Optional[str] = None, created_by: Optional[str] = None) -> int:
-        """Create an invoice. Returns invoice_id."""
+    async def create_invoice(self, client_id: int, period_start: str, period_end: str, company_id: int, currency: str = "EUR", billing_project_id: Optional[int] = None, subtotal_amount: float = 0, taxes_amount: float = 0, total_amount: float = 0, group_by: str = "project", notes: Optional[str] = None, created_by: Optional[str] = None) -> int:
+        """Create an invoice for a specific company.
+
+        Args:
+            client_id: Client ID (must belong to company)
+            period_start: Invoice period start date
+            period_end: Invoice period end date
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            currency: Currency code (default: EUR)
+            billing_project_id: Optional billing project ID
+            subtotal_amount: Subtotal amount
+            taxes_amount: Taxes amount
+            total_amount: Total amount
+            group_by: Grouping method (project, user, etc.)
+            notes: Optional notes
+            created_by: User who created the invoice
+
+        Returns:
+            invoice_id
+
+        Raises:
+            ValueError: If client doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
+            # Verify client belongs to company
+            async with db.execute(
+                "SELECT id FROM billing_clients WHERE id = ? AND company_id = ?",
+                (client_id, company_id)
+            ) as cursor:
+                if not await cursor.fetchone():
+                    raise ValueError(f"Client {client_id} not found or doesn't belong to company {company_id}")
+
             cursor = await db.execute("""
                 INSERT INTO invoices (client_id, billing_project_id, period_start, period_end, status, currency, subtotal_amount, taxes_amount, total_amount, group_by, notes, created_by)
                 VALUES (?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?, ?, ?)
@@ -2506,10 +3897,41 @@ class WorklogStorage:
             await db.commit()
             return cursor.lastrowid
 
-    async def add_invoice_line_item(self, invoice_id: int, line_type: str, description: str, quantity_hours: float, hourly_rate: float, amount: float, metadata_json: Optional[str] = None, sort_order: int = 0) -> int:
-        """Add a line item to an invoice. Returns line_item_id."""
+    async def add_invoice_line_item(self, invoice_id: int, line_type: str, description: str, quantity_hours: float, hourly_rate: float, amount: float, company_id: int, metadata_json: Optional[str] = None, sort_order: int = 0) -> int:
+        """Add a line item to an invoice for a specific company.
+
+        Args:
+            invoice_id: Invoice ID (must belong to company)
+            line_type: Type of line item
+            description: Line item description
+            quantity_hours: Quantity in hours
+            hourly_rate: Hourly rate
+            amount: Total amount
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            metadata_json: Optional metadata JSON
+            sort_order: Sort order
+
+        Returns:
+            line_item_id
+
+        Raises:
+            ValueError: If invoice doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
+            # Verify invoice belongs to company
+            async with db.execute("""
+                SELECT i.id FROM invoices i
+                JOIN billing_clients bc ON bc.id = i.client_id
+                WHERE i.id = ? AND bc.company_id = ?
+            """, (invoice_id, company_id)) as cursor:
+                if not await cursor.fetchone():
+                    raise ValueError(f"Invoice {invoice_id} not found or doesn't belong to company {company_id}")
+
             cursor = await db.execute("""
                 INSERT INTO invoice_line_items (invoice_id, line_type, description, quantity_hours, hourly_rate, amount, metadata_json, sort_order)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -2517,9 +3939,21 @@ class WorklogStorage:
             await db.commit()
             return cursor.lastrowid
 
-    async def get_invoice(self, invoice_id: int) -> Optional[dict]:
-        """Get an invoice by ID with line items."""
+    async def get_invoice(self, invoice_id: int, company_id: int) -> Optional[dict]:
+        """Get an invoice by ID with line items for a specific company.
+
+        Args:
+            invoice_id: Invoice ID to retrieve
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Invoice dict or None if not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT i.id, i.client_id, i.billing_project_id, i.period_start, i.period_end,
@@ -2529,8 +3963,8 @@ class WorklogStorage:
                 FROM invoices i
                 JOIN billing_clients bc ON bc.id = i.client_id
                 LEFT JOIN billing_projects bp ON bp.id = i.billing_project_id
-                WHERE i.id = ?
-            """, (invoice_id,)) as cursor:
+                WHERE i.id = ? AND bc.company_id = ?
+            """, (invoice_id, company_id)) as cursor:
                 row = await cursor.fetchone()
                 if not row:
                     return None
@@ -2556,18 +3990,32 @@ class WorklogStorage:
                     })
         return invoice
 
-    async def get_invoices(self, client_id: Optional[int] = None, status: Optional[str] = None) -> list[dict]:
-        """Get invoices with optional filters."""
+    async def get_invoices(self, company_id: int, client_id: Optional[int] = None, status: Optional[str] = None) -> list[dict]:
+        """Get invoices with optional filters for a specific company.
+
+        Args:
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            client_id: Optional client ID filter (must belong to company)
+            status: Optional status filter
+
+        Returns:
+            List of invoice dicts for the company
+        """
         await self.initialize()
-        conditions = []
-        params = []
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
+        conditions = ["bc.company_id = ?"]
+        params = [company_id]
+
         if client_id:
             conditions.append("i.client_id = ?")
             params.append(client_id)
         if status:
             conditions.append("i.status = ?")
             params.append(status)
-        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        where_clause = " AND ".join(conditions)
 
         invoices = []
         async with aiosqlite.connect(self.db_path) as db:
@@ -2594,31 +4042,57 @@ class WorklogStorage:
                     })
         return invoices
 
-    async def update_invoice_status(self, invoice_id: int, status: str) -> bool:
-        """Update invoice status. Sets issued_at when status is ISSUED."""
+    async def update_invoice_status(self, invoice_id: int, status: str, company_id: int) -> bool:
+        """Update invoice status for a specific company.
+
+        Args:
+            invoice_id: Invoice ID to update
+            status: New status (DRAFT, ISSUED, PAID, etc.)
+            company_id: Company ID (REQUIRED for multi-tenant isolation - verifies ownership)
+
+        Returns:
+            True if updated, False if invoice not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
             if status == "ISSUED":
-                cursor = await db.execute(
-                    "UPDATE invoices SET status = ?, issued_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (status, invoice_id)
-                )
+                cursor = await db.execute("""
+                    UPDATE invoices SET status = ?, issued_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND client_id IN (SELECT id FROM billing_clients WHERE company_id = ?)
+                """, (status, invoice_id, company_id))
             else:
-                cursor = await db.execute(
-                    "UPDATE invoices SET status = ? WHERE id = ?",
-                    (status, invoice_id)
-                )
+                cursor = await db.execute("""
+                    UPDATE invoices SET status = ?
+                    WHERE id = ? AND client_id IN (SELECT id FROM billing_clients WHERE company_id = ?)
+                """, (status, invoice_id, company_id))
             await db.commit()
             return cursor.rowcount > 0
 
-    async def delete_invoice(self, invoice_id: int) -> bool:
-        """Delete a draft invoice (cascades to line items)."""
+    async def delete_invoice(self, invoice_id: int, company_id: int) -> bool:
+        """Delete a draft invoice for a specific company (cascades to line items).
+
+        Args:
+            invoice_id: Invoice ID to delete
+            company_id: Company ID (REQUIRED for multi-tenant isolation - verifies ownership)
+
+        Returns:
+            True if deleted, False if invoice not found, not a draft, or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
-                "DELETE FROM invoices WHERE id = ? AND status = 'DRAFT'",
-                (invoice_id,)
-            )
+            cursor = await db.execute("""
+                DELETE FROM invoices
+                WHERE id = ? AND status = 'DRAFT'
+                AND client_id IN (SELECT id FROM billing_clients WHERE company_id = ?)
+            """, (invoice_id, company_id))
             await db.commit()
             return cursor.rowcount > 0
 
@@ -2636,9 +4110,22 @@ class WorklogStorage:
 
     # ========== Holiday Operations ==========
 
-    async def get_holidays_for_year(self, year: int, country: str = "IT") -> list[dict]:
-        """Get all holidays for a given year and country."""
+    async def get_holidays_for_year(self, year: int, company_id: int, country: str = "IT") -> list[dict]:
+        """Get all holidays for a given year and country for a specific company.
+
+        Args:
+            year: Year to retrieve holidays for
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            country: Country code (default: IT)
+
+        Returns:
+            List of holiday dicts for the company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         start = f"{year}-01-01"
         end = f"{year}-12-31"
         holidays = []
@@ -2647,9 +4134,9 @@ class WorklogStorage:
                 SELECT id, name, holiday_date, holiday_type, month, day,
                        country, is_active, created_at, updated_at
                 FROM holidays
-                WHERE holiday_date >= ? AND holiday_date <= ? AND country = ?
+                WHERE holiday_date >= ? AND holiday_date <= ? AND country = ? AND company_id = ?
                 ORDER BY holiday_date
-            """, (start, end, country)) as cursor:
+            """, (start, end, country, company_id)) as cursor:
                 async for row in cursor:
                     holidays.append({
                         "id": row[0], "name": row[1], "holiday_date": row[2],
@@ -2659,33 +4146,62 @@ class WorklogStorage:
                     })
         return holidays
 
-    async def get_active_holiday_dates(self, start_date: str, end_date: str, country: str = "IT") -> set[str]:
-        """Get set of active holiday date strings (ISO format) in a date range.
-        Auto-seeds holidays for years in range if none exist."""
+    async def get_active_holiday_dates(self, start_date: str, end_date: str, company_id: int, country: str = "IT") -> set[str]:
+        """Get set of active holiday date strings (ISO format) in a date range for a specific company.
+
+        Auto-seeds holidays for years in range if none exist.
+
+        Args:
+            start_date: Start date (ISO format)
+            end_date: End date (ISO format)
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            country: Country code (default: IT)
+
+        Returns:
+            Set of holiday date strings for the company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
 
         # Auto-seed holidays for each year in the range
         start_year = int(start_date[:4])
         end_year = int(end_date[:4])
         for y in range(start_year, end_year + 1):
-            existing = await self.get_holidays_for_year(y, country)
+            existing = await self.get_holidays_for_year(y, company_id, country)
             if not existing:
-                await self.seed_holidays_for_year(y, country)
+                await self.seed_holidays_for_year(y, company_id, country)
 
         dates = set()
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT holiday_date FROM holidays
                 WHERE holiday_date >= ? AND holiday_date <= ?
-                AND country = ? AND is_active = 1
-            """, (start_date, end_date, country)) as cursor:
+                AND country = ? AND is_active = 1 AND company_id = ?
+            """, (start_date, end_date, country, company_id)) as cursor:
                 async for row in cursor:
                     dates.add(row[0])
         return dates
 
-    async def seed_holidays_for_year(self, year: int, country: str = "IT") -> int:
-        """Seed default holidays for a year. Skips existing dates. Returns count inserted."""
+    async def seed_holidays_for_year(self, year: int, company_id: int, country: str = "IT") -> int:
+        """Seed default holidays for a year for a specific company.
+
+        Skips existing dates.
+
+        Args:
+            year: Year to seed holidays for
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            country: Country code (default: IT)
+
+        Returns:
+            Count of holidays inserted
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         from .holidays import generate_holidays_for_year
         holidays = generate_holidays_for_year(year, country)
         inserted = 0
@@ -2693,49 +4209,88 @@ class WorklogStorage:
             for h in holidays:
                 try:
                     await db.execute("""
-                        INSERT INTO holidays (name, holiday_date, holiday_type, month, day, country, is_active)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO holidays (name, holiday_date, holiday_type, month, day, country, is_active, company_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """, (h["name"], h["holiday_date"], h["holiday_type"],
-                          h["month"], h["day"], h["country"], h["is_active"]))
+                          h["month"], h["day"], h["country"], h["is_active"], company_id))
                     inserted += 1
                 except Exception:
                     pass  # UNIQUE constraint - already exists
             await db.commit()
         return inserted
 
-    async def create_holiday(self, name: str, holiday_date: str, country: str = "IT") -> int:
-        """Create a custom holiday. Returns holiday_id."""
+    async def create_holiday(self, name: str, holiday_date: str, company_id: int, country: str = "IT") -> int:
+        """Create a custom holiday for a specific company.
+
+        Args:
+            name: Holiday name
+            holiday_date: Holiday date (ISO format)
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            country: Country code (default: IT)
+
+        Returns:
+            holiday_id
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute("""
-                INSERT INTO holidays (name, holiday_date, holiday_type, country, is_active)
-                VALUES (?, ?, 'custom', ?, 1)
-            """, (name, holiday_date, country))
+                INSERT INTO holidays (name, holiday_date, holiday_type, country, is_active, company_id)
+                VALUES (?, ?, 'custom', ?, 1, ?)
+            """, (name, holiday_date, country, company_id))
             await db.commit()
             return cursor.lastrowid
 
-    async def update_holiday(self, holiday_id: int, **kwargs) -> bool:
-        """Update holiday fields (name, is_active)."""
+    async def update_holiday(self, holiday_id: int, company_id: int, **kwargs) -> bool:
+        """Update holiday fields for a specific company.
+
+        Args:
+            holiday_id: Holiday ID to update
+            company_id: Company ID (REQUIRED for multi-tenant isolation - verifies ownership)
+            **kwargs: Fields to update (name, is_active)
+
+        Returns:
+            True if updated, False if holiday not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         allowed = {"name", "is_active"}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
             return False
         set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
-        values = list(updates.values()) + [holiday_id]
+        values = list(updates.values()) + [holiday_id, company_id]
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                f"UPDATE holidays SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                f"UPDATE holidays SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?",
                 values
             )
             await db.commit()
             return cursor.rowcount > 0
 
-    async def delete_holiday(self, holiday_id: int) -> bool:
-        """Delete a holiday."""
+    async def delete_holiday(self, holiday_id: int, company_id: int) -> bool:
+        """Delete a holiday for a specific company.
+
+        Args:
+            holiday_id: Holiday ID to delete
+            company_id: Company ID (REQUIRED for multi-tenant isolation - verifies ownership)
+
+        Returns:
+            True if deleted, False if holiday not found or doesn't belong to company
+        """
         await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute("DELETE FROM holidays WHERE id = ?", (holiday_id,))
+            cursor = await db.execute("DELETE FROM holidays WHERE id = ? AND company_id = ?", (holiday_id, company_id))
             await db.commit()
             return cursor.rowcount > 0
 
@@ -2966,6 +4521,364 @@ class WorklogStorage:
             await db.commit()
 
         return (inserted, updated)
+
+    # ========== Authentication Operations ==========
+
+    async def create_company(self, name: str, domain: str = None) -> int:
+        """Create a new company/organization."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                INSERT INTO companies (name, domain)
+                VALUES (?, ?)
+            """, (name, domain))
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_company(self, company_id: int) -> Optional[dict]:
+        """Get company by ID."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("""
+                SELECT * FROM companies WHERE id = ? AND is_active = 1
+            """, (company_id,)) as cursor:
+                row = await cursor.fetchone()
+                return dict(row) if row else None
+
+    async def count_companies(self) -> int:
+        """Count total active companies."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT COUNT(*) FROM companies WHERE is_active = 1
+            """) as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row else 0
+
+    # OAuth Users
+
+    async def create_oauth_user(
+        self,
+        google_id: str,
+        email: str,
+        company_id: int,
+        role: str = "USER",
+        first_name: str = None,
+        last_name: str = None,
+        picture_url: str = None
+    ) -> int:
+        """Create a new OAuth user."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                INSERT INTO oauth_users
+                (company_id, google_id, email, first_name, last_name, picture_url, role, last_login_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (company_id, google_id, email, first_name, last_name, picture_url, role))
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_oauth_user_by_id(self, user_id: int) -> Optional[dict]:
+        """Get OAuth user by ID."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("""
+                SELECT * FROM oauth_users WHERE id = ?
+            """, (user_id,)) as cursor:
+                row = await cursor.fetchone()
+                return dict(row) if row else None
+
+    async def get_oauth_user_by_google_id(self, google_id: str) -> Optional[dict]:
+        """Get OAuth user by Google ID."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("""
+                SELECT * FROM oauth_users WHERE google_id = ?
+            """, (google_id,)) as cursor:
+                row = await cursor.fetchone()
+                return dict(row) if row else None
+
+    async def get_oauth_user_by_email(self, email: str, company_id: int = None) -> Optional[dict]:
+        """Get OAuth user by email (optionally filtered by company)."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            if company_id:
+                query = "SELECT * FROM oauth_users WHERE email = ? AND company_id = ?"
+                params = (email, company_id)
+            else:
+                query = "SELECT * FROM oauth_users WHERE email = ?"
+                params = (email,)
+
+            async with db.execute(query, params) as cursor:
+                row = await cursor.fetchone()
+                return dict(row) if row else None
+
+    async def get_all_oauth_users(self, company_id: int) -> list[dict]:
+        """Get all OAuth users for a company."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("""
+                SELECT * FROM oauth_users
+                WHERE company_id = ?
+                ORDER BY created_at DESC
+            """, (company_id,)) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
+
+    async def update_oauth_user_last_login(self, user_id: int):
+        """Update user's last login timestamp."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                UPDATE oauth_users
+                SET last_login_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (user_id,))
+            await db.commit()
+
+    async def update_oauth_user(
+        self,
+        user_id: int,
+        first_name: str = None,
+        last_name: str = None,
+        picture_url: str = None,
+        role: str = None,
+        is_active: int = None
+    ):
+        """Update OAuth user profile."""
+        await self.initialize()
+
+        updates = []
+        params = []
+
+        if first_name is not None:
+            updates.append("first_name = ?")
+            params.append(first_name)
+        if last_name is not None:
+            updates.append("last_name = ?")
+            params.append(last_name)
+        if picture_url is not None:
+            updates.append("picture_url = ?")
+            params.append(picture_url)
+        if role is not None:
+            updates.append("role = ?")
+            params.append(role)
+        if is_active is not None:
+            updates.append("is_active = ?")
+            params.append(is_active)
+
+        if not updates:
+            return
+
+        params.append(user_id)
+        query = f"""
+            UPDATE oauth_users
+            SET {', '.join(updates)}
+            WHERE id = ?
+        """
+
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(query, params)
+            await db.commit()
+
+    # Auth Sessions
+
+    async def create_session(
+        self,
+        user_id: int,
+        refresh_token: str,
+        expires_at: datetime,
+        access_token_jti: str = None
+    ) -> int:
+        """Create a new auth session."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                INSERT INTO auth_sessions (user_id, refresh_token, access_token_jti, expires_at)
+                VALUES (?, ?, ?, ?)
+            """, (user_id, refresh_token, access_token_jti, expires_at.isoformat()))
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_session_by_refresh_token(self, refresh_token: str) -> Optional[dict]:
+        """Get session by refresh token."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("""
+                SELECT * FROM auth_sessions WHERE refresh_token = ?
+            """, (refresh_token,)) as cursor:
+                row = await cursor.fetchone()
+                if not row:
+                    return None
+
+                session = dict(row)
+                # Parse datetime
+                session["expires_at"] = datetime.fromisoformat(session["expires_at"])
+                return session
+
+    async def invalidate_session(self, refresh_token: str):
+        """Invalidate a session by deleting it."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                DELETE FROM auth_sessions WHERE refresh_token = ?
+            """, (refresh_token,))
+            await db.commit()
+
+    async def delete_expired_sessions(self):
+        """Delete all expired sessions."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                DELETE FROM auth_sessions
+                WHERE datetime(expires_at) < datetime('now')
+            """)
+            await db.commit()
+
+    # Invitations
+
+    async def create_invitation(
+        self,
+        company_id: int,
+        email: str,
+        role: str,
+        invited_by: int,
+        token: str,
+        expires_at: datetime
+    ) -> int:
+        """Create a new invitation."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                INSERT INTO invitations
+                (company_id, email, role, invited_by, token, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (company_id, email, role, invited_by, token, expires_at.isoformat()))
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_invitation_by_token(self, token: str) -> Optional[dict]:
+        """Get invitation by token."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("""
+                SELECT * FROM invitations WHERE token = ?
+            """, (token,)) as cursor:
+                row = await cursor.fetchone()
+                if not row:
+                    return None
+
+                inv = dict(row)
+                inv["expires_at"] = datetime.fromisoformat(inv["expires_at"])
+                return inv
+
+    async def get_invitation_by_email(self, email: str) -> Optional[dict]:
+        """Get pending invitation by email (most recent)."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("""
+                SELECT * FROM invitations
+                WHERE LOWER(email) = LOWER(?) AND status = 'PENDING'
+                ORDER BY created_at DESC
+                LIMIT 1
+            """, (email,)) as cursor:
+                row = await cursor.fetchone()
+                if not row:
+                    return None
+
+                inv = dict(row)
+                inv["expires_at"] = datetime.fromisoformat(inv["expires_at"])
+                return inv
+
+    async def list_company_invitations(
+        self,
+        company_id: int,
+        status: str = None
+    ) -> list[dict]:
+        """List all invitations for a company."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+
+            if status:
+                query = """
+                    SELECT * FROM invitations
+                    WHERE company_id = ? AND status = ?
+                    ORDER BY created_at DESC
+                """
+                params = (company_id, status)
+            else:
+                query = """
+                    SELECT * FROM invitations
+                    WHERE company_id = ?
+                    ORDER BY created_at DESC
+                """
+                params = (company_id,)
+
+            async with db.execute(query, params) as cursor:
+                rows = await cursor.fetchall()
+                invitations = []
+                for row in rows:
+                    inv = dict(row)
+                    inv["expires_at"] = datetime.fromisoformat(inv["expires_at"])
+                    invitations.append(inv)
+                return invitations
+
+    async def update_invitation_status(self, invitation_id: int, status: str):
+        """Update invitation status."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                UPDATE invitations
+                SET status = ?
+                WHERE id = ?
+            """, (status, invitation_id))
+            await db.commit()
+
+    async def delete_invitation(self, invitation_id: int):
+        """Delete an invitation."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                DELETE FROM invitations WHERE id = ?
+            """, (invitation_id,))
+            await db.commit()
+
+    # Auth Audit Log
+
+    async def log_auth_event(
+        self,
+        event_type: str,
+        company_id: int = None,
+        user_id: int = None,
+        email: str = None,
+        ip_address: str = None,
+        metadata: dict = None
+    ):
+        """Log an authentication event."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                INSERT INTO auth_audit_log
+                (company_id, user_id, event_type, email, ip_address, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                company_id,
+                user_id,
+                event_type,
+                email,
+                ip_address,
+                json.dumps(metadata) if metadata else None
+            ))
+            await db.commit()
 
 
 # Global storage instance

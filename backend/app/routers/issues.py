@@ -10,6 +10,7 @@ from typing import Optional
 from ..models import AppConfig, Worklog, DailyHours
 from ..config import get_config, get_users_from_db
 from ..cache import get_storage
+from ..auth.dependencies import get_current_user, require_admin, CurrentUser
 
 router = APIRouter(prefix="/api/issues", tags=["issues"])
 
@@ -51,9 +52,10 @@ async def get_issue_detail(
     issue_key: str,
     start_date: date = Query(None, description="Start date filter"),
     end_date: date = Query(None, description="End date filter"),
+    current_user: CurrentUser = Depends(get_current_user),
     config: AppConfig = Depends(get_config)
 ):
-    """Get issue details with all worklogs."""
+    """Get issue details with all worklogs (scoped to company)."""
     storage = get_storage()
 
     # Default to last 90 days if no dates specified
@@ -62,8 +64,8 @@ async def get_issue_detail(
     if not start_date:
         start_date = end_date - timedelta(days=90)
 
-    # Get all worklogs for this issue
-    all_worklogs = await storage.get_worklogs_in_range(start_date, end_date)
+    # Get all worklogs for this issue (scoped to company)
+    all_worklogs = await storage.get_worklogs_in_range(start_date, end_date, company_id=current_user.company_id)
     issue_worklogs = [w for w in all_worklogs if w.issue_key == issue_key]
 
     # Handle empty worklogs - return empty response instead of 404
@@ -149,19 +151,21 @@ async def get_issue_detail(
 @router.post("/{issue_key}/sync", response_model=IssueSyncResponse)
 async def sync_issue_worklogs(
     issue_key: str,
+    current_user: CurrentUser = Depends(require_admin),
     config: AppConfig = Depends(get_config)
 ):
     """
-    Fetch and sync worklogs for a specific issue from JIRA.
+    Fetch and sync worklogs for a specific issue from JIRA (ADMIN only).
     Updates all related worklogs in the database.
     """
     storage = get_storage()
 
     # Find which JIRA instance this issue belongs to
-    # First check existing worklogs
+    # First check existing worklogs (scoped to company)
     all_worklogs = await storage.get_worklogs_in_range(
         date.today() - timedelta(days=365),
-        date.today()
+        date.today(),
+        company_id=current_user.company_id
     )
 
     existing = [w for w in all_worklogs if w.issue_key == issue_key]
@@ -186,8 +190,8 @@ async def sync_issue_worklogs(
     if not inst_config:
         raise HTTPException(status_code=400, detail=f"JIRA instance {jira_instance_name} not found in config")
 
-    # Get users mapping for email resolution
-    users = await get_users_from_db()
+    # Get users mapping for email resolution (scoped to company)
+    users = await get_users_from_db(current_user.company_id)
     account_id_to_email = {}
     for user in users:
         email = user["email"]
@@ -261,8 +265,8 @@ async def sync_issue_worklogs(
             print(f"Error processing worklog: {e}")
             continue
 
-    # Save to database
-    inserted, updated = await storage.upsert_worklogs(worklogs_to_save)
+    # Save to database (with company_id)
+    inserted, updated = await storage.upsert_worklogs(worklogs_to_save, current_user.company_id)
 
     return IssueSyncResponse(
         success=True,

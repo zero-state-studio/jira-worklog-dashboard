@@ -696,3 +696,106 @@ class BulkFetchFactorialResponse(BaseModel):
     """Response from bulk Factorial employee fetch."""
     results: list[BulkFetchFactorialResult]
     summary: dict  # {total, success, failed, skipped}
+
+
+# ============ Authentication Models ============
+
+class CompanyCreate(BaseModel):
+    """Request to create a company."""
+    name: str
+    domain: Optional[str] = None
+
+
+class CompanyResponse(BaseModel):
+    """Company information."""
+    id: int
+    name: str
+    domain: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+
+
+class OAuthUserCreate(BaseModel):
+    """Request to create an OAuth user (internal use)."""
+    google_id: str
+    email: str
+    company_id: int
+    role: str = "USER"
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    picture_url: Optional[str] = None
+
+
+class OAuthUserResponse(BaseModel):
+    """OAuth user information."""
+    id: int
+    company_id: int
+    google_id: str
+    email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    picture_url: Optional[str] = None
+    role: str
+    is_active: bool
+    last_login_at: Optional[datetime] = None
+    created_at: datetime
+
+
+class OAuthUserUpdate(BaseModel):
+    """Request to update OAuth user."""
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    picture_url: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class TokenResponse(BaseModel):
+    """Authentication token response."""
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int  # seconds
+    user: OAuthUserResponse
+    company: CompanyResponse
+
+
+class RefreshTokenRequest(BaseModel):
+    """Request to refresh access token."""
+    refresh_token: str
+
+
+class InvitationCreate(BaseModel):
+    """Request to create an invitation."""
+    email: str
+    role: str = "USER"
+
+
+class InvitationResponse(BaseModel):
+    """Invitation information."""
+    id: int
+    company_id: int
+    email: str
+    role: str
+    invited_by: Optional[int] = None
+    token: str
+    status: str
+    expires_at: datetime
+    created_at: datetime
+
+
+class InvitationAccept(BaseModel):
+    """Request to accept an invitation."""
+    token: str
+
+
+class AuthAuditLogEntry(BaseModel):
+    """Authentication audit log entry."""
+    id: int
+    company_id: Optional[int] = None
+    user_id: Optional[int] = None
+    event_type: str
+    email: Optional[str] = None
+    ip_address: Optional[str] = None
+    metadata: Optional[dict] = None
+    created_at: datetime

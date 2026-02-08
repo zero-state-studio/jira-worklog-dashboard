@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from ..models import AppConfig
 from ..config import get_config, get_users_from_db, get_jira_instances_from_db
 from ..cache import get_storage
+from ..auth.dependencies import require_admin, CurrentUser
 from ..jira_client import JiraService
 from ..demo_data import DemoJiraService
 
@@ -53,18 +54,19 @@ def get_jira_service(config: AppConfig = Depends(get_config)):
 @router.post("", response_model=SyncResponse)
 async def sync_worklogs(
     request: SyncRequest,
+    current_user: CurrentUser = Depends(require_admin),
     config: AppConfig = Depends(get_config)
 ):
     """
-    Manually sync worklogs from JIRA to local storage.
-    
+    Manually sync worklogs from JIRA to local storage (ADMIN only).
+
     - start_date, end_date: Date range to sync
     - jira_instances: List of instance names to sync (None = all)
     """
     storage = get_storage()
 
-    # Get JIRA instances from database (with fallback to config.yaml)
-    db_instances = await get_jira_instances_from_db()
+    # Get JIRA instances from database (scoped to company)
+    db_instances = await get_jira_instances_from_db(current_user.company_id)
 
     # Determine which instances to sync
     all_instance_names = [inst.name for inst in db_instances]
@@ -88,8 +90,8 @@ async def sync_worklogs(
     )
     
     try:
-        # Get all configured users from database with their JIRA account mappings
-        users = await get_users_from_db()
+        # Get all configured users from database with their JIRA account mappings (scoped to company)
+        users = await get_users_from_db(current_user.company_id)
         all_emails = [u["email"] for u in users]
 
         # Build mapping of accountId -> email and collect account IDs per instance
@@ -207,7 +209,7 @@ async def sync_worklogs(
                         break
             
             # Upsert worklogs to storage
-            inserted, updated = await storage.upsert_worklogs(worklogs)
+            inserted, updated = await storage.upsert_worklogs(worklogs, current_user.company_id)
             total_synced += inserted
             total_updated += updated
             
@@ -247,10 +249,11 @@ async def sync_worklogs(
 @router.post("/stream")
 async def sync_worklogs_stream(
     request: SyncRequest,
+    current_user: CurrentUser = Depends(require_admin),
     config: AppConfig = Depends(get_config)
 ):
     """
-    Sync worklogs with real-time progress streaming via JSON lines.
+    Sync worklogs with real-time progress streaming via JSON lines (ADMIN only).
     Each line is a JSON object with a 'type' field indicating the event type.
     """
 
@@ -258,7 +261,7 @@ async def sync_worklogs_stream(
         storage = get_storage()
 
         # Get JIRA instances from database
-        db_instances = await get_jira_instances_from_db()
+        db_instances = await get_jira_instances_from_db(current_user.company_id)
 
         # Determine which instances to sync
         all_instance_names = [inst.name for inst in db_instances]
@@ -285,7 +288,7 @@ async def sync_worklogs_stream(
 
         try:
             # Get all configured users
-            users = await get_users_from_db()
+            users = await get_users_from_db(current_user.company_id)
             all_emails = [u["email"] for u in users]
 
             # Build mapping of accountId -> email and collect account IDs per instance
@@ -462,7 +465,7 @@ async def sync_worklogs_stream(
                 }) + "\n"
                 await asyncio.sleep(0)
 
-                inserted, updated = await storage.upsert_worklogs(worklogs)
+                inserted, updated = await storage.upsert_worklogs(worklogs, current_user.company_id)
                 total_synced += inserted
                 total_updated += updated
 
@@ -519,21 +522,24 @@ async def sync_worklogs_stream(
 
 
 @router.get("/history")
-async def get_sync_history(limit: int = Query(20, ge=1, le=100)):
-    """Get recent sync history."""
+async def get_sync_history(
+    limit: int = Query(20, ge=1, le=100),
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Get recent sync history (ADMIN only)."""
     storage = get_storage()
-    history = await storage.get_sync_history(limit)
+    history = await storage.get_sync_history(limit, current_user.company_id)
     return {"history": history}
 
 
 @router.get("/status", response_model=DataStatusResponse)
-async def get_data_status():
-    """Get status of locally stored data."""
+async def get_data_status(current_user: CurrentUser = Depends(require_admin)):
+    """Get status of locally stored data (ADMIN only, scoped to company)."""
     storage = get_storage()
-    
-    count = await storage.get_worklog_count()
-    date_range = await storage.get_data_date_range()
-    
+
+    count = await storage.get_worklog_count(current_user.company_id)
+    date_range = await storage.get_data_date_range(current_user.company_id)
+
     return DataStatusResponse(
         total_worklogs=count,
         date_range_start=date_range[0].isoformat() if date_range else None,
@@ -543,8 +549,11 @@ async def get_data_status():
 
 
 @router.get("/defaults")
-async def get_sync_defaults(config: AppConfig = Depends(get_config)):
-    """Get default values for sync UI."""
+async def get_sync_defaults(
+    current_user: CurrentUser = Depends(require_admin),
+    config: AppConfig = Depends(get_config)
+):
+    """Get default values for sync UI (ADMIN only)."""
     from datetime import date
 
     today = date.today()

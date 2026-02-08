@@ -3,7 +3,7 @@ Logs API router - view and manage application logs.
 """
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import csv
@@ -11,6 +11,7 @@ import io
 import json
 
 from ..cache import get_storage
+from ..auth.dependencies import require_admin, CurrentUser
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])
 
@@ -54,9 +55,10 @@ async def get_logs(
     endpoint: Optional[str] = Query(None, description="Filter by endpoint pattern"),
     request_id: Optional[str] = Query(None, description="Filter by request ID"),
     page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(50, ge=10, le=200, description="Items per page")
+    page_size: int = Query(50, ge=10, le=200, description="Items per page"),
+    current_user: CurrentUser = Depends(require_admin)
 ):
-    """Get paginated logs with optional filters."""
+    """Get paginated logs with optional filters (ADMIN only)."""
     storage = get_storage()
     offset = (page - 1) * page_size
 
@@ -82,8 +84,8 @@ async def get_logs(
 
 
 @router.get("/stats", response_model=LogStatsResponse)
-async def get_log_stats():
-    """Get log statistics."""
+async def get_log_stats(current_user: CurrentUser = Depends(require_admin)):
+    """Get log statistics (ADMIN only)."""
     storage = get_storage()
     stats = await storage.get_log_stats()
     return LogStatsResponse(**stats)
@@ -135,9 +137,10 @@ async def download_logs(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     endpoint: Optional[str] = Query(None, description="Filter by endpoint pattern"),
-    limit: int = Query(10000, ge=100, le=100000, description="Max logs to download")
+    limit: int = Query(10000, ge=100, le=100000, description="Max logs to download"),
+    current_user: CurrentUser = Depends(require_admin)
 ):
-    """Download logs as JSON, CSV, or TXT."""
+    """Download logs as JSON, CSV, or TXT (ADMIN only)."""
     storage = get_storage()
 
     logs, _ = await storage.get_logs(
@@ -208,9 +211,10 @@ async def download_logs(
 
 @router.delete("")
 async def delete_old_logs(
-    before_days: int = Query(30, ge=0, le=365, description="Delete logs older than N days. Use 0 to delete ALL logs.")
+    before_days: int = Query(30, ge=0, le=365, description="Delete logs older than N days. Use 0 to delete ALL logs."),
+    current_user: CurrentUser = Depends(require_admin)
 ):
-    """Delete logs older than specified number of days. Use before_days=0 to delete all logs."""
+    """Delete logs older than specified number of days. Use before_days=0 to delete all logs (ADMIN only)."""
     storage = get_storage()
 
     if before_days == 0:

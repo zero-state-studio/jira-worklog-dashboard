@@ -41,7 +41,10 @@
       "Bash(./venv/bin/python -m uvicorn:*)",
       "Bash(npm run dev:*)",
       "Bash(npx vite build)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(xargs kill:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(ls:*)"
     ]
   }
 }
