@@ -202,10 +202,13 @@ async def sync_worklogs(
                             from ..jira_client import JiraClient
                             print(f"Using JIRA API for {instance_name} (no Tempo token)")
                             client = JiraClient(inst_config)
+                            # Use account IDs for filtering (more reliable than email)
+                            user_account_ids = instance_account_ids.get(instance_name, [])
                             worklogs = await client.get_worklogs_in_range(
                                 request.start_date,
                                 request.end_date,
-                                all_emails
+                                user_account_ids=user_account_ids if user_account_ids else None,
+                                account_id_to_email=account_id_to_email
                             )
                         break
             
@@ -444,10 +447,13 @@ async def sync_worklogs_stream(
                                 await asyncio.sleep(0)
 
                                 client = JiraClient(inst_config)
+                                # Use account IDs for filtering (more reliable than email)
+                                user_account_ids = instance_account_ids.get(instance_name, [])
                                 worklogs = await client.get_worklogs_in_range(
                                     request.start_date,
                                     request.end_date,
-                                    all_emails
+                                    user_account_ids=user_account_ids if user_account_ids else None,
+                                    account_id_to_email=account_id_to_email
                                 )
 
                                 yield json.dumps({

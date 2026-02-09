@@ -416,132 +416,163 @@ class JiraClient:
         self,
         start_date: date,
         end_date: date,
-        user_emails: Optional[list[str]] = None
+        user_emails: Optional[list[str]] = None,
+        user_account_ids: Optional[list[str]] = None,
+        account_id_to_email: Optional[dict[str, str]] = None
     ) -> list[Worklog]:
         """
-        Get all worklogs in a date range for specified users.
-        Uses the worklog/updated endpoint to get worklog IDs updated since start_date,
-        then fetches details with worklog/list.
+        Get worklogs in a date range for specified users.
+        
+        Uses JQL with worklogAuthor to filter server-side by account ID.
+        Falls back to fetching all and filtering client-side if no account IDs provided.
+        
+        Args:
+            start_date: Start of date range
+            end_date: End of date range  
+            user_emails: Deprecated, use user_account_ids instead
+            user_account_ids: List of JIRA account IDs to fetch worklogs for
+            account_id_to_email: Mapping from account ID to email address
         """
-        # Convert start_date to Unix timestamp (milliseconds)
-        start_timestamp = int(datetime.combine(start_date, datetime.min.time()).timestamp() * 1000)
-        
-        # Step 1: Get all worklog IDs updated since start_date
-        all_worklog_ids = []
-        since = start_timestamp
-        
-        print(f"Fetching worklogs from {self.instance.name} since {start_date}...")
-        
-        while True:
-            try:
-                result = await self._request(
-                    "GET",
-                    "/worklog/updated",
-                    params={"since": since}
-                )
-                
-                values = result.get("values", [])
-                for item in values:
-                    all_worklog_ids.append(item["worklogId"])
-                
-                # Check if there are more pages
-                if result.get("lastPage", True):
-                    break
-                
-                # Get the next page using the 'until' timestamp
-                since = result.get("until", since)
-                if not since or since == start_timestamp:
-                    break
-                    
-            except httpx.HTTPError as e:
-                print(f"Error fetching worklog IDs: {e}")
-                break
-        
-        print(f"Found {len(all_worklog_ids)} worklog IDs")
-        
-        if not all_worklog_ids:
+        if not user_account_ids:
+            print("No user account IDs provided - skipping worklog fetch (privacy protection)")
             return []
         
-        # Step 2: Fetch worklog details in batches (max 1000 per request)
-        all_worklogs = []
-        batch_size = 1000
+        account_id_to_email = account_id_to_email or {}
         
-        for i in range(0, len(all_worklog_ids), batch_size):
-            batch_ids = all_worklog_ids[i:i + batch_size]
-            
-            try:
+        print(f"Fetching JIRA worklogs from {self.instance.name} for {start_date} to {end_date}...")
+        print(f"  Fetching for {len(user_account_ids)} users using per-user JQL")
+        
+        all_worklogs = []
+        
+        for account_id in user_account_ids:
+            user_worklogs = await self._get_worklogs_for_user(
+                account_id, start_date, end_date, account_id_to_email.get(account_id, "")
+            )
+            all_worklogs.extend(user_worklogs)
+        
+        print(f"Total JIRA worklogs fetched: {len(all_worklogs)}")
+        return all_worklogs
+    
+    async def _get_worklogs_for_user(
+        self,
+        account_id: str,
+        start_date: date,
+        end_date: date,
+        author_email: str = ""
+    ) -> list[Worklog]:
+        """Fetch worklogs for a single user using JQL worklogAuthor filter."""
+        # JQL to find issues with worklogs by this user in the date range
+        jql = f'worklogAuthor = "{account_id}" AND worklogDate >= "{start_date}" AND worklogDate <= "{end_date}"'
+        
+        all_worklogs = []
+        start_at = 0
+        max_results = 100
+        
+        try:
+            # Step 1: Find issues with worklogs by this user
+            issue_keys = []
+            while True:
                 result = await self._request(
-                    "POST",
-                    "/worklog/list",
-                    json={"ids": batch_ids}
+                    "GET",
+                    "/search",
+                    params={
+                        "jql": jql,
+                        "startAt": start_at,
+                        "maxResults": max_results,
+                        "fields": "key"
+                    }
                 )
                 
-                for wl in result:
-                    # Parse the worklog
-                    try:
-                        started = datetime.fromisoformat(wl["started"].replace("Z", "+00:00"))
-                    except (KeyError, ValueError) as e:
-                        print(f"Error parsing worklog date: {e}")
-                        continue
+                issues = result.get("issues", [])
+                issue_keys.extend([issue["key"] for issue in issues])
+                
+                if len(issues) < max_results:
+                    break
+                start_at += max_results
+            
+            if not issue_keys:
+                return []
+            
+            # Step 2: Fetch worklogs for each issue and filter by author
+            for issue_key in issue_keys:
+                try:
+                    issue_result = await self._request(
+                        "GET",
+                        f"/issue/{issue_key}",
+                        params={"fields": "summary,parent,customfield_10014,worklog"}
+                    )
                     
-                    # Check if worklog is in our date range
-                    if not (start_date <= started.date() <= end_date):
-                        continue
+                    fields = issue_result.get("fields", {})
+                    issue_summary = fields.get("summary", "")
                     
-                    # Check if author is in our user list
-                    author_email = wl.get("author", {}).get("emailAddress", "")
-                    if user_emails and author_email.lower() not in [e.lower() for e in user_emails]:
-                        continue
-                    
-                    # Get issue details for epic info
-                    issue_id = wl.get("issueId")
-                    issue_key = None
-                    issue_summary = ""
+                    # Get parent/epic info
+                    parent_key = None
+                    parent_name = None
+                    parent_type = None
                     epic_key = None
                     epic_name = None
                     
-                    if issue_id:
-                        # Try to get issue details
+                    parent = fields.get("parent", {})
+                    if parent and parent.get("key"):
+                        parent_key = parent.get("key")
+                        parent_name = parent.get("fields", {}).get("summary", "")
+                        parent_type = parent.get("fields", {}).get("issuetype", {}).get("name", "")
+                        if parent_type == "Epic":
+                            epic_key = parent_key
+                            epic_name = parent_name
+                    
+                    if not epic_key:
+                        epic_key = fields.get("customfield_10014")
+                    
+                    # Get worklogs from this issue
+                    worklog_data = fields.get("worklog", {})
+                    worklogs_list = worklog_data.get("worklogs", [])
+                    
+                    for wl in worklogs_list:
+                        wl_author = wl.get("author", {})
+                        wl_account_id = wl_author.get("accountId", "")
+                        
+                        # Only include worklogs by this user
+                        if wl_account_id != account_id:
+                            continue
+                        
+                        # Parse date
                         try:
-                            issue_data = await self._request(
-                                "GET",
-                                f"/issue/{issue_id}",
-                                params={"fields": "key,summary,parent,customfield_10014"}
-                            )
-                            issue_key = issue_data.get("key")
-                            fields = issue_data.get("fields", {})
-                            issue_summary = fields.get("summary", "")
-                            
-                            # Check parent for epic
-                            parent = fields.get("parent", {})
-                            if parent and parent.get("fields", {}).get("issuetype", {}).get("name") == "Epic":
-                                epic_key = parent.get("key")
-                                epic_name = parent.get("fields", {}).get("summary")
-                            
-                            # Check epic link field
-                            if not epic_key:
-                                epic_key = fields.get("customfield_10014")
-                        except httpx.HTTPError:
-                            issue_key = str(issue_id)
+                            started = datetime.fromisoformat(wl["started"].replace("Z", "+00:00"))
+                        except (KeyError, ValueError):
+                            continue
+                        
+                        # Check date range
+                        if not (start_date <= started.date() <= end_date):
+                            continue
+                        
+                        worklog = Worklog(
+                            id=f"{self.instance.name}_{wl['id']}",
+                            issue_key=issue_key,
+                            issue_summary=issue_summary,
+                            author_email=author_email,
+                            author_display_name=wl_author.get("displayName", ""),
+                            time_spent_seconds=wl.get("timeSpentSeconds", 0),
+                            started=started,
+                            jira_instance=self.instance.name,
+                            parent_key=parent_key,
+                            parent_name=parent_name,
+                            parent_type=parent_type,
+                            epic_key=epic_key,
+                            epic_name=epic_name
+                        )
+                        all_worklogs.append(worklog)
+                        
+                except httpx.HTTPError as e:
+                    print(f"Error fetching worklogs for issue {issue_key}: {e}")
+                    continue
                     
-                    worklog = Worklog(
-                        id=f"{self.instance.name}_{wl['id']}",
-                        issue_key=issue_key or str(issue_id),
-                        issue_summary=issue_summary,
-                        author_email=author_email,
-                        author_display_name=wl.get("author", {}).get("displayName", ""),
-                        time_spent_seconds=wl.get("timeSpentSeconds", 0),
-                        started=started,
-                        jira_instance=self.instance.name,
-                        epic_key=epic_key,
-                        epic_name=epic_name
-                    )
-                    all_worklogs.append(worklog)
-                    
-            except httpx.HTTPError as e:
-                print(f"Error fetching worklog details: {e}")
+        except httpx.HTTPError as e:
+            print(f"Error searching issues for user {account_id}: {e}")
         
-        print(f"Processed {len(all_worklogs)} worklogs for users")
+        if all_worklogs:
+            print(f"  User {account_id}: {len(all_worklogs)} worklogs")
+        
         return all_worklogs
 
 
