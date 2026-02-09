@@ -16,6 +16,7 @@ from ..config import (
     get_jira_instances_from_db
 )
 from ..cache import get_storage
+from ..auth.dependencies import get_current_user, CurrentUser
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -25,24 +26,26 @@ async def get_dashboard(
     start_date: date = Query(..., description="Start date for the period"),
     end_date: date = Query(..., description="End date for the period"),
     jira_instance: str = Query(None, description="Filter by JIRA instance name"),
+    current_user: CurrentUser = Depends(get_current_user),
     config: AppConfig = Depends(get_config)
 ):
-    """Get global dashboard statistics from local storage."""
+    """Get global dashboard statistics from local storage (scoped to company)."""
     storage = get_storage()
 
-    # Get all users from database (with fallback to config.yaml)
-    users = await get_users_from_db()
+    # Get all users from database (scoped to company)
+    users = await get_users_from_db(current_user.company_id)
     all_emails = [u["email"] for u in users]
 
     # Build email -> team mapping for quick lookup
     email_to_team = {u["email"].lower(): u.get("team_name") for u in users}
 
-    # Read worklogs from local storage
+    # Read worklogs from local storage (scoped to company)
     worklogs = await storage.get_worklogs_in_range(
         start_date,
         end_date,
         user_emails=all_emails,
-        jira_instance=jira_instance
+        jira_instance=jira_instance,
+        company_id=current_user.company_id
     )
 
     # Preserve ALL worklogs for per-instance breakdown (before filtering)
@@ -50,8 +53,8 @@ async def get_dashboard(
 
     # Handle complementary instances when no specific instance filter
     if not jira_instance:
-        # Build set of secondary instances to exclude (from database)
-        complementary_groups = await get_complementary_instances_from_db()
+        # Build set of secondary instances to exclude (from database, scoped to company)
+        complementary_groups = await get_complementary_instances_from_db(current_user.company_id)
         secondary_instances = set()
         for group_name, instances in complementary_groups.items():
             if len(instances) >= 2:
@@ -66,9 +69,9 @@ async def get_dashboard(
     total_seconds = sum(w.time_spent_seconds for w in worklogs)
     total_hours = total_seconds / 3600
 
-    # Calculate expected hours (working days only, excluding holidays)
+    # Calculate expected hours (working days only, excluding holidays, scoped to company)
     holiday_dates = await storage.get_active_holiday_dates(
-        start_date.isoformat(), end_date.isoformat()
+        start_date.isoformat(), end_date.isoformat(), current_user.company_id
     )
     expected_hours = calculate_expected_hours(
         start_date,
@@ -291,18 +294,19 @@ def calculate_epic_hours(worklogs: list[Worklog]) -> list[EpicHours]:
 async def get_multi_jira_overview(
     start_date: date = Query(..., description="Start date for the period"),
     end_date: date = Query(..., description="End date for the period"),
+    current_user: CurrentUser = Depends(get_current_user),
     config: AppConfig = Depends(get_config)
 ):
-    """Get overview data for all JIRA instances with complementary comparisons."""
+    """Get overview data for all JIRA instances with complementary comparisons (scoped to company)."""
     storage = get_storage()
 
-    users = await get_users_from_db()
+    users = await get_users_from_db(current_user.company_id)
     all_emails = [u["email"] for u in users]
-    jira_instances = await get_jira_instances_from_db()
+    jira_instances = await get_jira_instances_from_db(current_user.company_id)
 
-    # Calculate expected hours (shared across all instances, excluding holidays)
+    # Calculate expected hours (shared across all instances, excluding holidays, scoped to company)
     holiday_dates = await storage.get_active_holiday_dates(
-        start_date.isoformat(), end_date.isoformat()
+        start_date.isoformat(), end_date.isoformat(), current_user.company_id
     )
     expected_hours = calculate_expected_hours(
         start_date, end_date, len(all_emails), config.settings.daily_working_hours,
@@ -317,7 +321,8 @@ async def get_multi_jira_overview(
         worklogs = await storage.get_worklogs_in_range(
             start_date, end_date,
             user_emails=all_emails,
-            jira_instance=inst.name
+            jira_instance=inst.name,
+            company_id=current_user.company_id
         )
         instance_worklogs[inst.name] = worklogs
 
@@ -347,7 +352,7 @@ async def get_multi_jira_overview(
 
     # Build complementary comparisons
     complementary_comparisons = []
-    complementary_groups = await get_complementary_instances_from_db()
+    complementary_groups = await get_complementary_instances_from_db(current_user.company_id)
 
     for group_name, group_instances in complementary_groups.items():
         if len(group_instances) < 2:

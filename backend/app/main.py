@@ -7,7 +7,7 @@ import time
 import json
 import traceback
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -15,7 +15,9 @@ from starlette.responses import Response
 
 from .config import get_config, DEMO_CONFIG, get_teams_from_db, get_users_from_db
 from .cache import get_storage
-from .routers import dashboard, teams, users, epics, sync, settings, logs, issues, packages, billing
+from .routers import dashboard, teams, users, epics, sync, settings, logs, issues, packages, billing, factorial, auth, invitations
+from .auth.dependencies import get_current_user, CurrentUser
+from .middleware.company_context import CompanyContextMiddleware
 from .logging_config import (
     setup_logging, generate_request_id, request_id_var,
     get_logger, get_db_handler
@@ -191,6 +193,9 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 # Add logging middleware (before CORS)
 app.add_middleware(LoggingMiddleware)
 
+# Add company context middleware (after logging, before CORS)
+app.add_middleware(CompanyContextMiddleware)
+
 # Configure CORS for frontend (web and Tauri desktop)
 app.add_middleware(
     CORSMiddleware,
@@ -208,6 +213,11 @@ app.add_middleware(
 )
 
 # Include routers
+# Auth routers (public - no authentication required)
+app.include_router(auth.router)
+app.include_router(invitations.router)
+
+# Application routers (will require authentication after full migration)
 app.include_router(dashboard.router)
 app.include_router(teams.router)
 app.include_router(users.router)
@@ -218,6 +228,7 @@ app.include_router(settings.router)
 app.include_router(logs.router)
 app.include_router(packages.router)
 app.include_router(billing.router)
+app.include_router(factorial.router)
 
 
 # Global exception handler to log tracebacks
@@ -280,32 +291,25 @@ async def health_check():
 
 
 @app.get("/api/config")
-async def get_config_info():
-    """Get non-sensitive configuration info."""
+async def get_config_info(current_user: CurrentUser = Depends(get_current_user)):
+    """Get non-sensitive configuration info (scoped to company)."""
     try:
         config = get_config()
     except FileNotFoundError:
         config = DEMO_CONFIG
 
-    # Get teams and users from database
-    teams = await get_teams_from_db()
-    users = await get_users_from_db()
+    # Get teams and users from database (scoped to company)
+    teams = await get_teams_from_db(current_user.company_id)
+    users = await get_users_from_db(current_user.company_id)
 
-    # Get JIRA instances from database first, fallback to config.yaml
+    # Get JIRA instances from database only (no fallback to config.yaml)
     storage = get_storage()
-    db_instances = await storage.get_all_jira_instances()
+    db_instances = await storage.get_all_jira_instances(current_user.company_id)
 
-    if db_instances:
-        jira_instances = [
-            {"name": inst["name"], "url": inst["url"]}
-            for inst in db_instances if inst.get("is_active", True)
-        ]
-    else:
-        # Fallback to config.yaml
-        jira_instances = [
-            {"name": inst.name, "url": inst.url}
-            for inst in config.jira_instances
-        ]
+    jira_instances = [
+        {"name": inst["name"], "url": inst["url"]}
+        for inst in db_instances if inst.get("is_active", True)
+    ]
 
     # Group users by team
     team_members = {}
@@ -325,6 +329,7 @@ async def get_config_info():
         "timezone": config.settings.timezone,
         "complementary_instances": config.settings.complementary_instances,
         "jira_instances": jira_instances,
+        "user_count": len(users),
         "teams": [
             {
                 "name": team["name"],

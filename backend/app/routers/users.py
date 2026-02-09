@@ -11,6 +11,7 @@ from ..models import (
 )
 from ..config import get_config, get_users_from_db, get_complementary_instances_from_db
 from ..cache import get_storage
+from ..auth.dependencies import get_current_user, CurrentUser
 from .dashboard import calculate_expected_hours, calculate_daily_trend, calculate_daily_trend_by_instance, calculate_epic_hours
 
 router = APIRouter(prefix="/api/users", tags=["users"])
@@ -53,10 +54,11 @@ async def list_users(
     start_date: date = Query(None, description="Start date for the period"),
     end_date: date = Query(None, description="End date for the period"),
     jira_instance: str = Query(None, description="Filter by JIRA instance name"),
+    current_user: CurrentUser = Depends(get_current_user),
     config: AppConfig = Depends(get_config)
 ):
-    """List all configured users with optional worklog statistics for a period."""
-    users = await get_users_from_db()
+    """List all configured users with optional worklog statistics for a period (scoped to company)."""
+    users = await get_users_from_db(current_user.company_id)
 
     # If no date range, return basic user list
     if not start_date or not end_date:
@@ -72,11 +74,12 @@ async def list_users(
     storage = get_storage()
     all_emails = [u["email"] for u in users]
 
-    # Fetch all worklogs for the period
+    # Fetch all worklogs for the period (scoped to company)
     worklogs = await storage.get_worklogs_in_range(
         start_date, end_date,
         user_emails=all_emails,
-        jira_instance=jira_instance
+        jira_instance=jira_instance,
+        company_id=current_user.company_id
     )
 
     # Preserve all worklogs for instance breakdown
@@ -84,7 +87,7 @@ async def list_users(
 
     # Filter out complementary (secondary) instances to avoid double-counting in Totals
     if not jira_instance:
-        complementary_groups = await get_complementary_instances_from_db()
+        complementary_groups = await get_complementary_instances_from_db(current_user.company_id)
         secondary_instances = set()
         for group_name, instances in complementary_groups.items():
             if len(instances) >= 2:
@@ -106,7 +109,7 @@ async def list_users(
         user_worklog_count[email_lower] += 1
         if wl.parent_key:
             user_initiatives[email_lower].add(wl.parent_key)
-            
+
     # Calculate Instance Breakdown from ALL worklogs (complete view)
     for wl in all_worklogs:
         email_lower = wl.author_email.lower()
@@ -116,9 +119,9 @@ async def list_users(
         if wl.parent_key:
             user_initiatives[email_lower].add(wl.parent_key)
 
-    # Expected hours per user (excluding holidays)
+    # Expected hours per user (excluding holidays, scoped to company)
     holiday_dates = await storage.get_active_holiday_dates(
-        start_date.isoformat(), end_date.isoformat()
+        start_date.isoformat(), end_date.isoformat(), current_user.company_id
     )
     expected_hours_per_user = calculate_expected_hours(
         start_date, end_date, 1, config.settings.daily_working_hours, holiday_dates
@@ -156,11 +159,12 @@ async def get_user_detail(
     start_date: date = Query(..., description="Start date for the period"),
     end_date: date = Query(..., description="End date for the period"),
     jira_instance: str = Query(None, description="Filter by JIRA instance name"),
+    current_user: CurrentUser = Depends(get_current_user),
     config: AppConfig = Depends(get_config)
 ):
-    """Get detailed statistics for a specific user."""
-    # Get users from database
-    users = await get_users_from_db()
+    """Get detailed statistics for a specific user (scoped to company)."""
+    # Get users from database (scoped to company)
+    users = await get_users_from_db(current_user.company_id)
 
     # Find user by email
     user_data = None
@@ -177,18 +181,19 @@ async def get_user_detail(
 
     storage = get_storage()
 
-    # Read worklogs from local storage
+    # Read worklogs from local storage (scoped to company)
     worklogs = await storage.get_worklogs_in_range(
         start_date, end_date,
         user_emails=[email],
-        jira_instance=jira_instance
+        jira_instance=jira_instance,
+        company_id=current_user.company_id
     )
 
     # Separate all worklogs (for calendar/trend per instance) from filtered (for totals)
     all_worklogs = worklogs
 
     if not jira_instance:
-        complementary_groups = await get_complementary_instances_from_db()
+        complementary_groups = await get_complementary_instances_from_db(current_user.company_id)
         secondary_instances = set()
         for group_name, instances in complementary_groups.items():
             if len(instances) >= 2:
@@ -204,9 +209,9 @@ async def get_user_detail(
     total_seconds = sum(w.time_spent_seconds for w in filtered_worklogs)
     total_hours = total_seconds / 3600
 
-    # Expected hours for single user (excluding holidays)
+    # Expected hours for single user (excluding holidays, scoped to company)
     holiday_dates = await storage.get_active_holiday_dates(
-        start_date.isoformat(), end_date.isoformat()
+        start_date.isoformat(), end_date.isoformat(), current_user.company_id
     )
     expected_hours = calculate_expected_hours(
         start_date,

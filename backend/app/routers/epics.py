@@ -11,6 +11,7 @@ from ..models import (
 )
 from ..config import get_config, get_users_from_db, get_complementary_instances_from_db
 from ..cache import get_storage
+from ..auth.dependencies import get_current_user, CurrentUser
 from .dashboard import calculate_daily_trend, calculate_epic_hours
 
 router = APIRouter(prefix="/api/epics", tags=["epics"])
@@ -21,26 +22,28 @@ async def list_epics(
     start_date: date = Query(..., description="Start date for the period"),
     end_date: date = Query(..., description="End date for the period"),
     jira_instance: str = Query(None, description="Filter by JIRA instance name"),
+    current_user: CurrentUser = Depends(get_current_user),
     config: AppConfig = Depends(get_config)
 ):
-    """List all epics with hours in the given period."""
+    """List all epics with hours in the given period (scoped to company)."""
     storage = get_storage()
 
-    # Get all configured user emails from database
-    users = await get_users_from_db()
+    # Get all configured user emails from database (scoped to company)
+    users = await get_users_from_db(current_user.company_id)
     all_emails = [u["email"] for u in users]
 
-    # Read worklogs from local storage
+    # Read worklogs from local storage (scoped to company)
     worklogs = await storage.get_worklogs_in_range(
         start_date, end_date,
         user_emails=all_emails,
-        jira_instance=jira_instance
+        jira_instance=jira_instance,
+        company_id=current_user.company_id
     )
 
     # Handle complementary instances when no specific instance filter
     if not jira_instance:
-        # Build set of secondary instances to exclude (from database)
-        complementary_groups = await get_complementary_instances_from_db()
+        # Build set of secondary instances to exclude (from database, scoped to company)
+        complementary_groups = await get_complementary_instances_from_db(current_user.company_id)
         secondary_instances = set()
         for group_name, instances in complementary_groups.items():
             if len(instances) >= 2:
@@ -68,18 +71,20 @@ async def list_issues(
     start_date: date = Query(..., description="Start date for the period"),
     end_date: date = Query(..., description="End date for the period"),
     jira_instance: str = Query(None, description="Filter by JIRA instance name"),
+    current_user: CurrentUser = Depends(get_current_user),
     config: AppConfig = Depends(get_config)
 ):
-    """List all issues with logged hours in the given period."""
+    """List all issues with logged hours in the given period (scoped to company)."""
     storage = get_storage()
 
-    users = await get_users_from_db()
+    users = await get_users_from_db(current_user.company_id)
     all_emails = [u["email"] for u in users]
 
     worklogs = await storage.get_worklogs_in_range(
         start_date, end_date,
         user_emails=all_emails,
-        jira_instance=jira_instance
+        jira_instance=jira_instance,
+        company_id=current_user.company_id
     )
 
     # No complementary instance filtering - show ALL instances for "Tutti"
@@ -134,19 +139,21 @@ async def get_epic_detail(
     epic_key: str,
     start_date: date = Query(..., description="Start date for the period"),
     end_date: date = Query(..., description="End date for the period"),
+    current_user: CurrentUser = Depends(get_current_user),
     config: AppConfig = Depends(get_config)
 ):
-    """Get detailed statistics for a specific epic."""
+    """Get detailed statistics for a specific epic (scoped to company)."""
     storage = get_storage()
 
-    # Get all configured user emails from database
-    users = await get_users_from_db()
+    # Get all configured user emails from database (scoped to company)
+    users = await get_users_from_db(current_user.company_id)
     all_emails = [u["email"] for u in users]
 
-    # Read worklogs from local storage
+    # Read worklogs from local storage (scoped to company)
     all_worklogs = await storage.get_worklogs_in_range(
         start_date, end_date,
-        user_emails=all_emails
+        user_emails=all_emails,
+        company_id=current_user.company_id
     )
 
     # Filter to this initiative (using parent_key, with fallback to epic_key for backwards compatibility)

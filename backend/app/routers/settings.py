@@ -16,6 +16,7 @@ from ..models import (
 from ..config import get_config
 from ..cache import get_storage
 from ..jira_client import JiraClient
+from ..auth.dependencies import get_current_user, require_admin, CurrentUser
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -23,38 +24,38 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 # ========== Teams Endpoints ==========
 
 @router.get("/teams", response_model=list[TeamInDB])
-async def list_teams():
-    """List all teams with member counts."""
+async def list_teams(current_user: CurrentUser = Depends(get_current_user)):
+    """List all teams with member counts for current user's company."""
     storage = get_storage()
-    teams = await storage.get_all_teams()
+    teams = await storage.get_all_teams(current_user.company_id)
     return [TeamInDB(**t) for t in teams]
 
 
 @router.post("/teams", response_model=TeamInDB)
-async def create_team(team: TeamCreate):
-    """Create a new team."""
+async def create_team(team: TeamCreate, current_user: CurrentUser = Depends(require_admin)):
+    """Create a new team (ADMIN only)."""
     storage = get_storage()
 
-    # Check if team name already exists
-    existing = await storage.get_team_by_name(team.name)
+    # Check if team name already exists in this company
+    existing = await storage.get_team_by_name(team.name, current_user.company_id)
     if existing:
         raise HTTPException(status_code=400, detail="Team name already exists")
 
-    team_id = await storage.create_team(team.name)
-    created = await storage.get_team(team_id)
+    team_id = await storage.create_team(team.name, current_user.company_id)
+    created = await storage.get_team(team_id, current_user.company_id)
     return TeamInDB(**created, member_count=0)
 
 
 @router.get("/teams/{team_id}", response_model=TeamWithMembers)
-async def get_team(team_id: int):
-    """Get a team by ID with its members."""
+async def get_team(team_id: int, current_user: CurrentUser = Depends(get_current_user)):
+    """Get a team by ID with its members (scoped to current user's company)."""
     storage = get_storage()
 
-    team = await storage.get_team(team_id)
+    team = await storage.get_team(team_id, current_user.company_id)
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
 
-    members = await storage.get_users_by_team(team_id)
+    members = await storage.get_users_by_team(team_id, current_user.company_id)
     return TeamWithMembers(
         **team,
         member_count=len(members),
@@ -63,48 +64,48 @@ async def get_team(team_id: int):
 
 
 @router.put("/teams/{team_id}", response_model=TeamInDB)
-async def update_team(team_id: int, team: TeamUpdate):
-    """Update a team."""
+async def update_team(team_id: int, team: TeamUpdate, current_user: CurrentUser = Depends(require_admin)):
+    """Update a team (ADMIN only)."""
     storage = get_storage()
 
-    existing = await storage.get_team(team_id)
+    existing = await storage.get_team(team_id, current_user.company_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Team not found")
 
     if team.name:
-        # Check if new name already exists
-        name_check = await storage.get_team_by_name(team.name)
+        # Check if new name already exists in this company
+        name_check = await storage.get_team_by_name(team.name, current_user.company_id)
         if name_check and name_check["id"] != team_id:
             raise HTTPException(status_code=400, detail="Team name already exists")
 
-        await storage.update_team(team_id, team.name)
+        await storage.update_team(team_id, team.name, current_user.company_id)
 
-    updated = await storage.get_team(team_id)
-    teams = await storage.get_all_teams()
+    updated = await storage.get_team(team_id, current_user.company_id)
+    teams = await storage.get_all_teams(current_user.company_id)
     team_data = next((t for t in teams if t["id"] == team_id), updated)
     return TeamInDB(**team_data)
 
 
 @router.delete("/teams/{team_id}")
-async def delete_team(team_id: int):
-    """Delete a team."""
+async def delete_team(team_id: int, current_user: CurrentUser = Depends(require_admin)):
+    """Delete a team (ADMIN only)."""
     storage = get_storage()
 
-    existing = await storage.get_team(team_id)
+    existing = await storage.get_team(team_id, current_user.company_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Team not found")
 
-    await storage.delete_team(team_id)
+    await storage.delete_team(team_id, current_user.company_id)
     return {"success": True, "message": "Team deleted"}
 
 
 # ========== Users Endpoints ==========
 
 @router.get("/users", response_model=list[UserInDB])
-async def list_users():
-    """List all users with team info and JIRA accounts."""
+async def list_users(current_user: CurrentUser = Depends(get_current_user)):
+    """List all users with team info and JIRA accounts for current user's company."""
     storage = get_storage()
-    users = await storage.get_all_users()
+    users = await storage.get_all_users(current_user.company_id)
     return [UserInDB(
         id=u["id"],
         email=u["email"],
@@ -119,18 +120,18 @@ async def list_users():
 
 
 @router.post("/users", response_model=UserInDB)
-async def create_user(user: UserCreate):
-    """Create a new user."""
+async def create_user(user: UserCreate, current_user: CurrentUser = Depends(require_admin)):
+    """Create a new user (ADMIN only)."""
     storage = get_storage()
 
-    # Check if email already exists
-    existing = await storage.get_user_by_email(user.email)
+    # Check if email already exists in this company
+    existing = await storage.get_user_by_email(user.email, current_user.company_id)
     if existing:
         raise HTTPException(status_code=400, detail="Email already exists")
 
-    # Validate team_id if provided
+    # Validate team_id if provided (must belong to company)
     if user.team_id:
-        team = await storage.get_team(user.team_id)
+        team = await storage.get_team(user.team_id, current_user.company_id)
         if not team:
             raise HTTPException(status_code=400, detail="Team not found")
 
@@ -138,9 +139,10 @@ async def create_user(user: UserCreate):
         email=user.email,
         first_name=user.first_name,
         last_name=user.last_name,
-        team_id=user.team_id
+        team_id=user.team_id,
+        company_id=current_user.company_id
     )
-    created = await storage.get_user(user_id)
+    created = await storage.get_user(user_id, current_user.company_id)
     return UserInDB(
         id=created["id"],
         email=created["email"],
@@ -155,11 +157,11 @@ async def create_user(user: UserCreate):
 
 
 @router.get("/users/{user_id}", response_model=UserInDB)
-async def get_user(user_id: int):
-    """Get a user by ID."""
+async def get_user(user_id: int, current_user: CurrentUser = Depends(get_current_user)):
+    """Get a user by ID (scoped to current user's company)."""
     storage = get_storage()
 
-    user = await storage.get_user(user_id)
+    user = await storage.get_user(user_id, current_user.company_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -177,19 +179,19 @@ async def get_user(user_id: int):
 
 
 @router.put("/users/{user_id}", response_model=UserInDB)
-async def update_user(user_id: int, user: UserUpdate):
-    """Update a user."""
+async def update_user(user_id: int, user: UserUpdate, current_user: CurrentUser = Depends(require_admin)):
+    """Update a user (ADMIN only)."""
     storage = get_storage()
 
-    existing = await storage.get_user(user_id)
+    existing = await storage.get_user(user_id, current_user.company_id)
     if not existing:
         raise HTTPException(status_code=404, detail="User not found")
 
     update_data = {}
 
     if user.email is not None:
-        # Check if new email already exists
-        email_check = await storage.get_user_by_email(user.email)
+        # Check if new email already exists in this company
+        email_check = await storage.get_user_by_email(user.email, current_user.company_id)
         if email_check and email_check["id"] != user_id:
             raise HTTPException(status_code=400, detail="Email already exists")
         update_data["email"] = user.email
@@ -202,15 +204,15 @@ async def update_user(user_id: int, user: UserUpdate):
 
     if user.team_id is not None:
         if user.team_id > 0:
-            team = await storage.get_team(user.team_id)
+            team = await storage.get_team(user.team_id, current_user.company_id)
             if not team:
                 raise HTTPException(status_code=400, detail="Team not found")
         update_data["team_id"] = user.team_id if user.team_id > 0 else None
 
     if update_data:
-        await storage.update_user(user_id, **update_data)
+        await storage.update_user(user_id, current_user.company_id, **update_data)
 
-    updated = await storage.get_user(user_id)
+    updated = await storage.get_user(user_id, current_user.company_id)
     return UserInDB(
         id=updated["id"],
         email=updated["email"],
@@ -225,15 +227,15 @@ async def update_user(user_id: int, user: UserUpdate):
 
 
 @router.delete("/users/{user_id}")
-async def delete_user(user_id: int):
-    """Delete a user."""
+async def delete_user(user_id: int, current_user: CurrentUser = Depends(require_admin)):
+    """Delete a user (ADMIN only)."""
     storage = get_storage()
 
-    existing = await storage.get_user(user_id)
+    existing = await storage.get_user(user_id, current_user.company_id)
     if not existing:
         raise HTTPException(status_code=404, detail="User not found")
 
-    await storage.delete_user(user_id)
+    await storage.delete_user(user_id, current_user.company_id)
     return {"success": True, "message": "User deleted"}
 
 
@@ -273,9 +275,12 @@ def extract_name_from_email(email: str) -> tuple[str, str]:
 
 
 @router.post("/users/bulk", response_model=BulkUserCreateResponse)
-async def create_users_bulk(request: BulkUserCreateRequest):
+async def create_users_bulk(
+    request: BulkUserCreateRequest,
+    current_user: CurrentUser = Depends(require_admin)
+):
     """
-    Create multiple users from a list of emails.
+    Create multiple users from a list of emails (ADMIN only).
 
     Name and surname are extracted automatically from email addresses.
     Duplicate emails or already existing users are skipped.
@@ -290,9 +295,9 @@ async def create_users_bulk(request: BulkUserCreateRequest):
     # Email validation regex
     email_regex = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
 
-    # Validate team_id if provided
+    # Validate team_id if provided (must belong to company)
     if request.team_id:
-        team = await storage.get_team(request.team_id)
+        team = await storage.get_team(request.team_id, current_user.company_id)
         if not team:
             raise HTTPException(status_code=400, detail="Team not found")
 
@@ -326,8 +331,8 @@ async def create_users_bulk(request: BulkUserCreateRequest):
             failed_count += 1
             continue
 
-        # Check if user already exists
-        existing = await storage.get_user_by_email(email)
+        # Check if user already exists in this company
+        existing = await storage.get_user_by_email(email, current_user.company_id)
         if existing:
             results.append(BulkUserCreateResult(
                 email=email,
@@ -345,7 +350,8 @@ async def create_users_bulk(request: BulkUserCreateRequest):
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
-                team_id=request.team_id
+                team_id=request.team_id,
+                company_id=current_user.company_id
             )
             results.append(BulkUserCreateResult(
                 email=email,
@@ -375,22 +381,22 @@ async def create_users_bulk(request: BulkUserCreateRequest):
 async def fetch_jira_account_id(
     user_id: int,
     jira_instance: str,
+    current_user: CurrentUser = Depends(require_admin),
     config: AppConfig = Depends(get_config)
 ):
-    """Fetch and store JIRA accountId for a user from a specific instance."""
+    """Fetch and store JIRA accountId for a user from a specific instance (ADMIN only)."""
     from ..models import JiraInstanceConfig
     storage = get_storage()
 
-    # Get user
-    user = await storage.get_user(user_id)
+    # Get user (scoped to company)
+    user = await storage.get_user(user_id, current_user.company_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Find JIRA instance - first check database, then fallback to config.yaml
+    # Find JIRA instance from database only (no fallback to config.yaml)
     instance_config = None
 
-    # Try database first
-    db_instance = await storage.get_jira_instance_by_name(jira_instance)
+    db_instance = await storage.get_jira_instance_by_name(jira_instance, current_user.company_id)
     if db_instance:
         instance_config = JiraInstanceConfig(
             name=db_instance["name"],
@@ -399,12 +405,6 @@ async def fetch_jira_account_id(
             api_token=db_instance["api_token"],
             tempo_api_token=db_instance.get("tempo_api_token")
         )
-    else:
-        # Fallback to config.yaml
-        for inst in config.jira_instances:
-            if inst.name == jira_instance:
-                instance_config = inst
-                break
 
     if not instance_config:
         raise HTTPException(status_code=404, detail=f"JIRA instance '{jira_instance}' not found")
@@ -430,11 +430,16 @@ async def fetch_jira_account_id(
 
 
 @router.delete("/users/{user_id}/jira-accounts/{jira_instance}")
-async def delete_jira_account(user_id: int, jira_instance: str):
-    """Delete a user's JIRA account mapping."""
+async def delete_jira_account(
+    user_id: int,
+    jira_instance: str,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Delete a user's JIRA account mapping (ADMIN only)."""
     storage = get_storage()
 
-    user = await storage.get_user(user_id)
+    # Verify user belongs to company
+    user = await storage.get_user(user_id, current_user.company_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -446,13 +451,13 @@ async def delete_jira_account(user_id: int, jira_instance: str):
 
 
 @router.post("/users/bulk-fetch-accounts")
-async def bulk_fetch_jira_accounts():
-    """Fetch JIRA account IDs for all users across all JIRA instances."""
+async def bulk_fetch_jira_accounts(current_user: CurrentUser = Depends(require_admin)):
+    """Fetch JIRA account IDs for all users across all JIRA instances (ADMIN only, scoped to company)."""
     from ..models import JiraInstanceConfig
     storage = get_storage()
 
-    users = await storage.get_all_users()
-    instances = await storage.get_all_jira_instances()
+    users = await storage.get_all_users(current_user.company_id)
+    instances = await storage.get_all_jira_instances(current_user.company_id)
 
     if not users:
         return {"results": [], "summary": {"total": 0, "success": 0, "failed": 0, "skipped": 0}}
@@ -530,8 +535,11 @@ async def bulk_fetch_jira_accounts():
 # ========== Import Endpoints ==========
 
 @router.post("/import-config", response_model=ImportConfigResponse)
-async def import_from_config(config: AppConfig = Depends(get_config)):
-    """Import teams, users, and JIRA instances from config.yaml to database."""
+async def import_from_config(
+    current_user: CurrentUser = Depends(require_admin),
+    config: AppConfig = Depends(get_config)
+):
+    """Import teams, users, and JIRA instances from config.yaml to database (ADMIN only)."""
     storage = get_storage()
 
     # Convert config teams to dict format
@@ -550,20 +558,21 @@ async def import_from_config(config: AppConfig = Depends(get_config)):
         for team in config.teams
     ]
 
-    result = await storage.import_teams_from_config(teams_config)
+    result = await storage.import_teams_from_config(teams_config, current_user.company_id)
 
-    # Import JIRA instances
+    # Import JIRA instances (scoped to company)
     jira_instances_created = 0
     for instance in config.jira_instances:
-        # Check if instance already exists
-        existing = await storage.get_jira_instance_by_name(instance.name)
+        # Check if instance already exists in this company
+        existing = await storage.get_jira_instance_by_name(instance.name, current_user.company_id)
         if not existing:
             await storage.create_jira_instance(
                 name=instance.name,
                 url=instance.url,
                 email=instance.email,
                 api_token=instance.api_token,
-                tempo_api_token=instance.tempo_api_token
+                tempo_api_token=instance.tempo_api_token,
+                company_id=current_user.company_id
             )
             jira_instances_created += 1
 
@@ -575,37 +584,18 @@ async def import_from_config(config: AppConfig = Depends(get_config)):
 
 
 @router.get("/jira-instances")
-async def get_jira_instances():
-    """Get list of JIRA instances from database with fallback to config.yaml."""
+async def get_jira_instances(current_user: CurrentUser = Depends(get_current_user)):
+    """Get list of JIRA instances from database (scoped to company)."""
     storage = get_storage()
-    instances = await storage.get_all_jira_instances(include_credentials=False)
+    instances = await storage.get_all_jira_instances(current_user.company_id, include_credentials=False)
 
-    # If database is empty, fallback to config.yaml
-    if not instances:
-        try:
-            from ..config import get_config
-            config = get_config()
-            instances = [
-                {
-                    "id": idx,
-                    "name": inst.name,
-                    "url": inst.url,
-                    "is_active": True,
-                    "source": "config.yaml",  # Flag to indicate it's from config file
-                    "created_at": None,
-                    "updated_at": None
-                }
-                for idx, inst in enumerate(config.jira_instances, 1)
-            ]
-        except FileNotFoundError:
-            instances = []
-
+    # Return database instances only (no fallback to config.yaml)
     return {"instances": instances}
 
 
 @router.post("/jira-instances")
-async def create_jira_instance(data: dict):
-    """Create a new JIRA instance."""
+async def create_jira_instance(data: dict, current_user: CurrentUser = Depends(require_admin)):
+    """Create a new JIRA instance (ADMIN only)."""
     storage = get_storage()
 
     name = data.get("name")
@@ -618,8 +608,8 @@ async def create_jira_instance(data: dict):
     if not all([name, url, email, api_token]):
         raise HTTPException(status_code=400, detail="name, url, email, and api_token are required")
 
-    # Check if name already exists
-    existing = await storage.get_jira_instance_by_name(name)
+    # Check if name already exists in this company
+    existing = await storage.get_jira_instance_by_name(name, current_user.company_id)
     if existing:
         raise HTTPException(status_code=400, detail="Instance name already exists")
 
@@ -629,10 +619,11 @@ async def create_jira_instance(data: dict):
         email=email,
         api_token=api_token,
         tempo_api_token=tempo_api_token,
-        billing_client_id=billing_client_id
+        billing_client_id=billing_client_id,
+        company_id=current_user.company_id
     )
 
-    instance = await storage.get_jira_instance(instance_id)
+    instance = await storage.get_jira_instance(instance_id, current_user.company_id)
 
     # Try to fetch and cache issue types (non-blocking)
     try:
@@ -660,11 +651,15 @@ async def create_jira_instance(data: dict):
 
 
 @router.get("/jira-instances/{instance_id}")
-async def get_jira_instance(instance_id: int, include_credentials: bool = False):
-    """Get a JIRA instance by ID."""
+async def get_jira_instance(
+    instance_id: int,
+    include_credentials: bool = False,
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """Get a JIRA instance by ID (scoped to company)."""
     storage = get_storage()
 
-    instance = await storage.get_jira_instance(instance_id)
+    instance = await storage.get_jira_instance(instance_id, current_user.company_id)
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
 
@@ -689,23 +684,27 @@ async def get_jira_instance(instance_id: int, include_credentials: bool = False)
 
 
 @router.put("/jira-instances/{instance_id}")
-async def update_jira_instance(instance_id: int, data: dict):
-    """Update a JIRA instance."""
+async def update_jira_instance(
+    instance_id: int,
+    data: dict,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Update a JIRA instance (ADMIN only)."""
     storage = get_storage()
 
-    existing = await storage.get_jira_instance(instance_id)
+    existing = await storage.get_jira_instance(instance_id, current_user.company_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Instance not found")
 
-    # Check name uniqueness if changing
+    # Check name uniqueness if changing (within company)
     if data.get("name") and data["name"] != existing["name"]:
-        name_check = await storage.get_jira_instance_by_name(data["name"])
+        name_check = await storage.get_jira_instance_by_name(data["name"], current_user.company_id)
         if name_check:
             raise HTTPException(status_code=400, detail="Instance name already exists")
 
-    await storage.update_jira_instance(instance_id, **data)
+    await storage.update_jira_instance(instance_id, current_user.company_id, **data)
 
-    updated = await storage.get_jira_instance(instance_id)
+    updated = await storage.get_jira_instance(instance_id, current_user.company_id)
     return {
         "id": updated["id"],
         "name": updated["name"],
@@ -718,24 +717,24 @@ async def update_jira_instance(instance_id: int, data: dict):
 
 
 @router.delete("/jira-instances/{instance_id}")
-async def delete_jira_instance(instance_id: int):
-    """Delete a JIRA instance."""
+async def delete_jira_instance(instance_id: int, current_user: CurrentUser = Depends(require_admin)):
+    """Delete a JIRA instance (ADMIN only)."""
     storage = get_storage()
 
-    existing = await storage.get_jira_instance(instance_id)
+    existing = await storage.get_jira_instance(instance_id, current_user.company_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Instance not found")
 
-    await storage.delete_jira_instance(instance_id)
+    await storage.delete_jira_instance(instance_id, current_user.company_id)
     return {"success": True, "message": "Instance deleted"}
 
 
 @router.post("/jira-instances/{instance_id}/test")
-async def test_jira_instance(instance_id: int):
-    """Test connection to a JIRA instance."""
+async def test_jira_instance(instance_id: int, current_user: CurrentUser = Depends(require_admin)):
+    """Test connection to a JIRA instance (ADMIN only)."""
     storage = get_storage()
 
-    instance = await storage.get_jira_instance(instance_id)
+    instance = await storage.get_jira_instance(instance_id, current_user.company_id)
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
 
@@ -768,11 +767,11 @@ async def test_jira_instance(instance_id: int):
 
 
 @router.get("/jira-instances/{instance_id}/issue-types")
-async def get_instance_issue_types(instance_id: int):
+async def get_instance_issue_types(instance_id: int, current_user: CurrentUser = Depends(get_current_user)):
     """Get cached issue types for a JIRA instance."""
     storage = get_storage()
 
-    instance = await storage.get_jira_instance(instance_id)
+    instance = await storage.get_jira_instance(instance_id, current_user.company_id)
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
 
@@ -783,16 +782,16 @@ async def get_instance_issue_types(instance_id: int):
 # ========== Complementary Groups Endpoints ==========
 
 @router.get("/complementary-groups")
-async def list_complementary_groups():
-    """List all complementary groups with their members."""
+async def list_complementary_groups(current_user: CurrentUser = Depends(get_current_user)):
+    """List all complementary groups with their members (scoped to company)."""
     storage = get_storage()
-    groups = await storage.get_all_complementary_groups()
+    groups = await storage.get_all_complementary_groups(current_user.company_id)
     return {"groups": groups}
 
 
 @router.post("/complementary-groups")
-async def create_complementary_group(data: dict):
-    """Create a new complementary group."""
+async def create_complementary_group(data: dict, current_user: CurrentUser = Depends(require_admin)):
+    """Create a new complementary group (ADMIN only)."""
     storage = get_storage()
 
     name = data.get("name")
@@ -802,31 +801,34 @@ async def create_complementary_group(data: dict):
     primary_instance_id = data.get("primary_instance_id")
     member_ids = data.get("member_ids", [])
 
-    # Validate primary_instance_id if provided
+    # Validate primary_instance_id if provided (must belong to company)
     if primary_instance_id:
-        instance = await storage.get_jira_instance(primary_instance_id)
+        instance = await storage.get_jira_instance(primary_instance_id, current_user.company_id)
         if not instance:
             raise HTTPException(status_code=400, detail="Primary instance not found")
 
     group_id = await storage.create_complementary_group(
         name=name,
-        primary_instance_id=primary_instance_id
+        primary_instance_id=primary_instance_id,
+        company_id=current_user.company_id
     )
 
-    # Add members if provided
+    # Add members if provided (validate each belongs to company)
     for instance_id in member_ids:
-        await storage.add_instance_to_complementary_group(group_id, instance_id)
+        instance = await storage.get_jira_instance(instance_id, current_user.company_id)
+        if instance:
+            await storage.add_instance_to_complementary_group(group_id, instance_id)
 
-    group = await storage.get_complementary_group(group_id)
+    group = await storage.get_complementary_group(group_id, current_user.company_id)
     return group
 
 
 @router.get("/complementary-groups/{group_id}")
-async def get_complementary_group(group_id: int):
-    """Get a complementary group with its members."""
+async def get_complementary_group(group_id: int, current_user: CurrentUser = Depends(get_current_user)):
+    """Get a complementary group with its members (scoped to company)."""
     storage = get_storage()
 
-    group = await storage.get_complementary_group(group_id)
+    group = await storage.get_complementary_group(group_id, current_user.company_id)
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
 
@@ -834,11 +836,15 @@ async def get_complementary_group(group_id: int):
 
 
 @router.put("/complementary-groups/{group_id}")
-async def update_complementary_group(group_id: int, data: dict):
-    """Update a complementary group."""
+async def update_complementary_group(
+    group_id: int,
+    data: dict,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Update a complementary group (ADMIN only)."""
     storage = get_storage()
 
-    existing = await storage.get_complementary_group(group_id)
+    existing = await storage.get_complementary_group(group_id, current_user.company_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Group not found")
 
@@ -846,6 +852,7 @@ async def update_complementary_group(group_id: int, data: dict):
     if "name" in data or "primary_instance_id" in data:
         await storage.update_complementary_group(
             group_id,
+            current_user.company_id,
             name=data.get("name"),
             primary_instance_id=data.get("primary_instance_id")
         )
@@ -854,33 +861,39 @@ async def update_complementary_group(group_id: int, data: dict):
     if "member_ids" in data:
         await storage.set_complementary_group_members(group_id, data["member_ids"])
 
-    updated = await storage.get_complementary_group(group_id)
+    updated = await storage.get_complementary_group(group_id, current_user.company_id)
     return updated
 
 
 @router.delete("/complementary-groups/{group_id}")
-async def delete_complementary_group(group_id: int):
-    """Delete a complementary group."""
+async def delete_complementary_group(group_id: int, current_user: CurrentUser = Depends(require_admin)):
+    """Delete a complementary group (ADMIN only)."""
     storage = get_storage()
 
-    existing = await storage.get_complementary_group(group_id)
+    existing = await storage.get_complementary_group(group_id, current_user.company_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Group not found")
 
-    await storage.delete_complementary_group(group_id)
+    await storage.delete_complementary_group(group_id, current_user.company_id)
     return {"success": True, "message": "Group deleted"}
 
 
 @router.post("/complementary-groups/{group_id}/members/{instance_id}")
-async def add_member_to_group(group_id: int, instance_id: int):
-    """Add an instance to a complementary group."""
+async def add_member_to_group(
+    group_id: int,
+    instance_id: int,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Add an instance to a complementary group (ADMIN only)."""
     storage = get_storage()
 
-    group = await storage.get_complementary_group(group_id)
+    # Verify group belongs to company
+    group = await storage.get_complementary_group(group_id, current_user.company_id)
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
 
-    instance = await storage.get_jira_instance(instance_id)
+    # Verify instance belongs to company
+    instance = await storage.get_jira_instance(instance_id, current_user.company_id)
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
 
@@ -892,9 +905,18 @@ async def add_member_to_group(group_id: int, instance_id: int):
 
 
 @router.delete("/complementary-groups/{group_id}/members/{instance_id}")
-async def remove_member_from_group(group_id: int, instance_id: int):
-    """Remove an instance from a complementary group."""
+async def remove_member_from_group(
+    group_id: int,
+    instance_id: int,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Remove an instance from a complementary group (ADMIN only)."""
     storage = get_storage()
+
+    # Verify group belongs to company
+    group = await storage.get_complementary_group(group_id, current_user.company_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
 
     removed = await storage.remove_instance_from_complementary_group(group_id, instance_id)
     if not removed:
@@ -906,17 +928,17 @@ async def remove_member_from_group(group_id: int, instance_id: int):
 # ========== Holidays Endpoints ==========
 
 @router.get("/holidays/{year}")
-async def get_holidays(year: int, country: str = "IT"):
-    """Get holidays for a year. Auto-seeds defaults if none exist."""
+async def get_holidays(year: int, country: str = "IT", current_user: CurrentUser = Depends(get_current_user)):
+    """Get holidays for a year (scoped to company). Auto-seeds defaults if none exist."""
     storage = get_storage()
 
-    holidays = await storage.get_holidays_for_year(year, country)
+    holidays = await storage.get_holidays_for_year(year, country, current_user.company_id)
 
     # Auto-seed if empty for this year
     if not holidays:
-        inserted = await storage.seed_holidays_for_year(year, country)
+        inserted = await storage.seed_holidays_for_year(year, country, current_user.company_id)
         if inserted > 0:
-            holidays = await storage.get_holidays_for_year(year, country)
+            holidays = await storage.get_holidays_for_year(year, country, current_user.company_id)
 
     active_count = sum(1 for h in holidays if h["is_active"])
 
@@ -930,13 +952,13 @@ async def get_holidays(year: int, country: str = "IT"):
 
 
 @router.post("/holidays")
-async def create_holiday(data: HolidayCreate):
-    """Create a custom holiday."""
+async def create_holiday(data: HolidayCreate, current_user: CurrentUser = Depends(require_admin)):
+    """Create a custom holiday (ADMIN only)."""
     storage = get_storage()
 
     try:
         holiday_id = await storage.create_holiday(
-            data.name, data.holiday_date.isoformat(), data.country
+            data.name, data.holiday_date.isoformat(), data.country, current_user.company_id
         )
     except Exception:
         raise HTTPException(status_code=400, detail="Holiday already exists for this date")
@@ -945,8 +967,12 @@ async def create_holiday(data: HolidayCreate):
 
 
 @router.put("/holidays/{holiday_id}")
-async def update_holiday(holiday_id: int, data: HolidayUpdate):
-    """Update a holiday (name, is_active)."""
+async def update_holiday(
+    holiday_id: int,
+    data: HolidayUpdate,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Update a holiday (name, is_active) (ADMIN only)."""
     storage = get_storage()
 
     update_fields = {}
@@ -955,7 +981,7 @@ async def update_holiday(holiday_id: int, data: HolidayUpdate):
     if data.is_active is not None:
         update_fields["is_active"] = 1 if data.is_active else 0
 
-    updated = await storage.update_holiday(holiday_id, **update_fields)
+    updated = await storage.update_holiday(holiday_id, current_user.company_id, **update_fields)
     if not updated:
         raise HTTPException(status_code=404, detail="Holiday not found")
 
@@ -963,11 +989,11 @@ async def update_holiday(holiday_id: int, data: HolidayUpdate):
 
 
 @router.delete("/holidays/{holiday_id}")
-async def delete_holiday(holiday_id: int):
-    """Delete a holiday."""
+async def delete_holiday(holiday_id: int, current_user: CurrentUser = Depends(require_admin)):
+    """Delete a holiday (ADMIN only)."""
     storage = get_storage()
 
-    deleted = await storage.delete_holiday(holiday_id)
+    deleted = await storage.delete_holiday(holiday_id, current_user.company_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Holiday not found")
 
@@ -975,8 +1001,51 @@ async def delete_holiday(holiday_id: int):
 
 
 @router.post("/holidays/{year}/seed")
-async def seed_holidays(year: int, country: str = "IT"):
-    """Re-seed default holidays for a year (won't duplicate existing)."""
+async def seed_holidays(year: int, country: str = "IT", current_user: CurrentUser = Depends(require_admin)):
+    """Re-seed default holidays for a year (won't duplicate existing) (ADMIN only)."""
     storage = get_storage()
-    inserted = await storage.seed_holidays_for_year(year, country)
+    inserted = await storage.seed_holidays_for_year(year, country, current_user.company_id)
     return {"inserted": inserted, "year": year, "country": country}
+
+
+# ========== Migration Endpoints ==========
+
+@router.get("/migration/check")
+async def check_legacy_data(current_user: CurrentUser = Depends(require_admin)):
+    """
+    Check if there are legacy records (company_id IS NULL) that need migration (ADMIN only).
+
+    This endpoint checks all tables for records without a company_id assignment.
+    These are typically records created before the multi-tenant implementation.
+    """
+    storage = get_storage()
+    result = await storage.check_legacy_data()
+    return result
+
+
+@router.post("/migration/execute")
+async def execute_migration(
+    target_company_id: int = 1,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """
+    Migrate all legacy data (company_id IS NULL) to a specific company (ADMIN only).
+
+    This is a one-time operation that assigns all legacy data to the specified company_id.
+    By default, legacy data is assigned to company_id=1 for backward compatibility.
+
+    **WARNING**: This operation cannot be easily reversed. Make sure to backup your
+    database before running this migration.
+
+    Args:
+        target_company_id: The company ID to assign to legacy data (default: 1)
+    """
+    storage = get_storage()
+
+    try:
+        result = await storage.migrate_legacy_data(target_company_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")

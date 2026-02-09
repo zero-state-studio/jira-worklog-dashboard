@@ -10,6 +10,23 @@ const isTauri = () => typeof window !== 'undefined' && window.__TAURI_INTERNALS_
 const API_BASE = isTauri() ? 'http://localhost:8000/api' : '/api'
 
 /**
+ * Get access token from localStorage
+ */
+function getAccessToken() {
+    return localStorage.getItem('access_token')
+}
+
+/**
+ * Handle authentication errors by clearing tokens and redirecting to login
+ */
+function handleAuthError() {
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('user')
+    window.location.href = '/login'
+}
+
+/**
  * Format a date for API requests
  */
 function formatDate(date) {
@@ -42,7 +59,18 @@ async function fetchApi(endpoint, params = {}) {
         }
     })
 
-    const response = await fetch(url)
+    const token = getAccessToken()
+    const headers = {}
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const response = await fetch(url, { headers })
+
+    if (response.status === 401) {
+        handleAuthError()
+        throw new Error('Authentication required')
+    }
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({}))
@@ -145,7 +173,27 @@ export async function getHealth() {
 }
 
 export async function clearCache() {
-    const response = await fetch(`${API_BASE}/cache/clear`, { method: 'POST' })
+    const token = getAccessToken()
+    const headers = {}
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const response = await fetch(`${API_BASE}/cache/clear`, {
+        method: 'POST',
+        headers
+    })
+
+    if (response.status === 401) {
+        handleAuthError()
+        throw new Error('Authentication required')
+    }
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.detail || `API Error: ${response.status}`)
+    }
+
     return response.json()
 }
 
@@ -164,17 +212,28 @@ export async function getSyncHistory(limit = 20) {
 }
 
 export async function syncWorklogs(startDate, endDate, jiraInstances = null) {
+    const token = getAccessToken()
+    const headers = {
+        'Content-Type': 'application/json'
+    }
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+    }
+
     const response = await fetch(`${API_BASE}/sync`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify({
             start_date: formatDate(startDate),
             end_date: formatDate(endDate),
             jira_instances: jiraInstances
         })
     })
+
+    if (response.status === 401) {
+        handleAuthError()
+        throw new Error('Authentication required')
+    }
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({}))
@@ -185,15 +244,26 @@ export async function syncWorklogs(startDate, endDate, jiraInstances = null) {
 }
 
 export async function syncWorklogsStream(startDate, endDate, jiraInstances = null, onProgress) {
+    const token = getAccessToken()
+    const headers = { 'Content-Type': 'application/json' }
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+    }
+
     const response = await fetch(`${API_BASE}/sync/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
             start_date: formatDate(startDate),
             end_date: formatDate(endDate),
             jira_instances: jiraInstances
         })
     })
+
+    if (response.status === 401) {
+        handleAuthError()
+        throw new Error('Authentication required')
+    }
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({}))
@@ -244,11 +314,22 @@ export async function syncWorklogsStream(startDate, endDate, jiraInstances = nul
 // ============ Settings API - Helper functions ============
 
 async function fetchApiPost(endpoint, data = {}) {
+    const token = getAccessToken()
+    const headers = { 'Content-Type': 'application/json' }
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+    }
+
     const response = await fetch(`${API_BASE}${endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(data)
     })
+
+    if (response.status === 401) {
+        handleAuthError()
+        throw new Error('Authentication required')
+    }
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({}))
@@ -259,11 +340,22 @@ async function fetchApiPost(endpoint, data = {}) {
 }
 
 async function fetchApiPut(endpoint, data = {}) {
+    const token = getAccessToken()
+    const headers = { 'Content-Type': 'application/json' }
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+    }
+
     const response = await fetch(`${API_BASE}${endpoint}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(data)
     })
+
+    if (response.status === 401) {
+        handleAuthError()
+        throw new Error('Authentication required')
+    }
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({}))
@@ -274,9 +366,21 @@ async function fetchApiPut(endpoint, data = {}) {
 }
 
 async function fetchApiDelete(endpoint) {
+    const token = getAccessToken()
+    const headers = {}
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+    }
+
     const response = await fetch(`${API_BASE}${endpoint}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers
     })
+
+    if (response.status === 401) {
+        handleAuthError()
+        throw new Error('Authentication required')
+    }
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({}))
@@ -434,7 +538,19 @@ export async function downloadLogs(format = 'json', filters = {}) {
     if (filters.endDate) url.searchParams.set('end_date', filters.endDate)
     if (filters.endpoint) url.searchParams.set('endpoint', filters.endpoint)
 
-    const response = await fetch(url)
+    const token = getAccessToken()
+    const headers = {}
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const response = await fetch(url, { headers })
+
+    if (response.status === 401) {
+        handleAuthError()
+        throw new Error('Authentication required')
+    }
+
     if (!response.ok) {
         throw new Error(`Download failed: ${response.status}`)
     }
@@ -665,7 +781,19 @@ export async function exportInvoiceExcel(invoiceId) {
     const baseUrl = buildApiUrl(`/billing/invoices/${invoiceId}/export.xlsx`)
     const url = new URL(baseUrl, isTauri() ? undefined : window.location.origin)
 
-    const response = await fetch(url)
+    const token = getAccessToken()
+    const headers = {}
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const response = await fetch(url, { headers })
+
+    if (response.status === 401) {
+        handleAuthError()
+        throw new Error('Authentication required')
+    }
+
     if (!response.ok) {
         throw new Error(`Export failed: ${response.status}`)
     }
@@ -679,4 +807,51 @@ export async function exportInvoiceExcel(invoiceId) {
     link.download = filename
     link.click()
     URL.revokeObjectURL(link.href)
+}
+
+// ============ Factorial API ============
+
+// Configuration
+export async function getFactorialConfig() {
+    return fetchApi('/factorial/config')
+}
+
+export async function setFactorialConfig(apiKey) {
+    return fetchApiPost('/factorial/config', { api_key: apiKey })
+}
+
+export async function deleteFactorialConfig() {
+    return fetchApiDelete('/factorial/config')
+}
+
+// Employee Mapping (Single)
+export async function fetchFactorialEmployeeId(userId) {
+    return fetchApiPost(`/factorial/users/${userId}/fetch-employee-id`)
+}
+
+export async function deleteFactorialAccount(userId) {
+    return fetchApiDelete(`/factorial/users/${userId}/factorial-account`)
+}
+
+// Employee Mapping (Bulk)
+export async function bulkFetchFactorialEmployees() {
+    return fetchApiPost('/factorial/users/bulk-fetch-employees')
+}
+
+// Leaves Sync
+export async function syncFactorialLeaves(startDate, endDate) {
+    return fetchApiPost('/factorial/sync-leaves', {
+        start_date: formatDate(startDate),
+        end_date: formatDate(endDate)
+    })
+}
+
+export async function getFactorialLeaves(startDate, endDate, userId = null, status = null) {
+    const params = {
+        start_date: formatDate(startDate),
+        end_date: formatDate(endDate)
+    }
+    if (userId) params.user_id = userId
+    if (status) params.status = status
+    return fetchApi('/factorial/leaves', params)
 }
