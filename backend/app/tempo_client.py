@@ -55,22 +55,48 @@ class TempoClient:
         user_account_ids: Optional[list[str]] = None
     ) -> list[Worklog]:
         """
-        Get worklogs within a date range, optionally filtered by user emails.
+        Get worklogs within a date range for specified users.
+        
+        Uses per-user endpoint for privacy and efficiency - only fetches
+        worklogs for users that are configured in the system.
         
         Args:
             start_date: Start of date range (inclusive)
             end_date: End of date range (inclusive)
-            user_emails: Optional list of user email addresses to filter by
-            user_account_ids: Optional list of Atlassian account IDs to filter by
+            user_emails: Deprecated, not used
+            user_account_ids: List of Atlassian account IDs to fetch worklogs for
         """
-        all_worklogs = []
-        offset = 0
-        limit = 1000  # Max per Tempo API
+        if not user_account_ids:
+            print("No user account IDs provided - skipping worklog fetch (privacy protection)")
+            return []
         
         print(f"Fetching Tempo worklogs for {start_date} to {end_date}...")
+        print(f"  Fetching for {len(user_account_ids)} users using per-user endpoint")
         
-        # Convert emails to lowercase for comparison
-        email_filter = [e.lower() for e in user_emails] if user_emails else None
+        all_worklogs = []
+        
+        for account_id in user_account_ids:
+            user_worklogs = await self._get_user_worklogs_internal(
+                account_id, start_date, end_date
+            )
+            all_worklogs.extend(user_worklogs)
+        
+        print(f"Total Tempo worklogs fetched: {len(all_worklogs)}")
+        return all_worklogs
+    
+    async def _get_user_worklogs_internal(
+        self,
+        account_id: str,
+        start_date: date,
+        end_date: date
+    ) -> list[Worklog]:
+        """Internal method to fetch worklogs for a single user."""
+        all_worklogs = []
+        offset = 0
+        limit = 1000
+        
+        # Get email from mapping
+        author_email = self.account_id_to_email.get(account_id, "")
         
         while True:
             try:
@@ -81,26 +107,20 @@ class TempoClient:
                     "offset": offset
                 }
                 
-                result = await self._request("GET", "/worklogs", params=params)
+                result = await self._request(
+                    "GET", 
+                    f"/worklogs/user/{account_id}",
+                    params=params
+                )
                 
                 worklogs_data = result.get("results", [])
                 
                 for wl in worklogs_data:
-                    # Parse author info
                     author = wl.get("author", {})
-                    author_account_id = author.get("accountId", "")
                     author_display_name = author.get("displayName", "")
-
-                    # Map accountId to email using our mapping
-                    author_email = self.account_id_to_email.get(author_account_id, "")
-
-                    # Filter by account IDs if provided (only include configured users)
-                    if user_account_ids and author_account_id not in user_account_ids:
-                        continue
                     
                     # Parse dates
                     try:
-                        # Tempo uses "startDate" as YYYY-MM-DD and "startTime" as HH:MM:SS
                         start_date_str = wl.get("startDate", "")
                         start_time_str = wl.get("startTime", "00:00:00")
                         if start_date_str:
@@ -111,18 +131,14 @@ class TempoClient:
                         print(f"Error parsing Tempo worklog date: {e}")
                         continue
                     
-                    # Get issue info
                     issue = wl.get("issue", {})
                     issue_key = issue.get("key", "")
                     issue_id = issue.get("id", "")
                     
-                    # Note: Tempo doesn't include issue summary or epic directly
-                    # We would need to fetch these from JIRA if needed
-                    
                     worklog = Worklog(
                         id=f"{self.jira_instance_name}_tempo_{wl.get('tempoWorklogId', wl.get('jiraWorklogId', ''))}",
                         issue_key=issue_key or str(issue_id),
-                        issue_summary="",  # Will need to fetch from JIRA if needed
+                        issue_summary="",
                         author_email=author_email,
                         author_display_name=author_display_name,
                         time_spent_seconds=wl.get("timeSpentSeconds", 0),
@@ -133,28 +149,23 @@ class TempoClient:
                     )
                     all_worklogs.append(worklog)
                 
-                print(f"  Fetched {len(worklogs_data)} worklogs (offset {offset})")
-                
-                # Check if there are more pages
-                metadata = result.get("metadata", {})
-                total_count = metadata.get("count", 0)
-                
                 if len(worklogs_data) < limit:
                     break
                 
                 offset += limit
                 
-                # Safety limit
-                if offset > 50000:
-                    print("Warning: Hit safety limit of 50,000 worklogs")
+                # Safety limit per user
+                if offset > 10000:
+                    print(f"Warning: Hit safety limit of 10,000 worklogs for user {account_id}")
                     break
                     
             except httpx.HTTPError as e:
-                print(f"Error fetching Tempo worklogs: {e}")
+                print(f"Error fetching worklogs for user {account_id}: {e}")
                 break
         
-        print(f"Total Tempo worklogs fetched: {len(all_worklogs)}")
-
+        if all_worklogs:
+            print(f"  User {account_id}: {len(all_worklogs)} worklogs")
+        
         return all_worklogs
     
     async def get_user_worklogs(
