@@ -4360,12 +4360,13 @@ class WorklogStorage:
 
     # ========== Factorial HR Operations ==========
 
-    async def get_factorial_config(self) -> Optional[dict]:
+    async def get_factorial_config(self, company_id: int) -> Optional[dict]:
         """Get active Factorial configuration."""
         await self.initialize()
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT id, api_key, is_active, created_at, updated_at FROM factorial_config WHERE is_active = 1 ORDER BY id DESC LIMIT 1"
+                "SELECT id, api_key, is_active, created_at, updated_at FROM factorial_config WHERE is_active = 1 AND company_id = ? ORDER BY id DESC LIMIT 1",
+                (company_id,)
             ) as cursor:
                 row = await cursor.fetchone()
                 if row:
@@ -4378,22 +4379,22 @@ class WorklogStorage:
                     }
         return None
 
-    async def set_factorial_config(self, api_key: str) -> int:
+    async def set_factorial_config(self, api_key: str, company_id: int) -> int:
         """Create or update Factorial configuration."""
         await self.initialize()
         async with aiosqlite.connect(self.db_path) as db:
-            # Deactivate old configs
-            await db.execute("UPDATE factorial_config SET is_active = 0")
+            # Deactivate old configs for this company
+            await db.execute("UPDATE factorial_config SET is_active = 0 WHERE company_id = ?", (company_id,))
 
             # Insert new config
             cursor = await db.execute(
-                "INSERT INTO factorial_config (api_key, is_active) VALUES (?, 1)",
-                (api_key,)
+                "INSERT INTO factorial_config (api_key, is_active, company_id) VALUES (?, 1, ?)",
+                (api_key, company_id)
             )
             await db.commit()
             return cursor.lastrowid
 
-    async def get_user_factorial_account(self, user_id: int) -> Optional[dict]:
+    async def get_user_factorial_account(self, user_id: int, company_id: int) -> Optional[dict]:
         """Get Factorial employee ID for a user."""
         await self.initialize()
         async with aiosqlite.connect(self.db_path) as db:
@@ -4413,7 +4414,8 @@ class WorklogStorage:
         self,
         user_id: int,
         factorial_employee_id: int,
-        factorial_email: str = None
+        factorial_email: str = None,
+        company_id: int = None
     ) -> bool:
         """Set/update Factorial employee ID for a user."""
         await self.initialize()
@@ -4429,7 +4431,7 @@ class WorklogStorage:
             await db.commit()
         return True
 
-    async def delete_user_factorial_account(self, user_id: int) -> bool:
+    async def delete_user_factorial_account(self, user_id: int, company_id: int) -> bool:
         """Delete Factorial account mapping for a user."""
         await self.initialize()
         async with aiosqlite.connect(self.db_path) as db:
@@ -4497,7 +4499,7 @@ class WorklogStorage:
 
         return leaves
 
-    async def upsert_leaves(self, leaves: list[dict], user_id_map: dict[int, int]) -> tuple[int, int]:
+    async def upsert_leaves(self, leaves: list[dict], user_id_map: dict[int, int], company_id: int) -> tuple[int, int]:
         """
         Insert or update leaves.
 

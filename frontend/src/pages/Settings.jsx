@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getSettingsTeams, getSettingsUsers, getJiraInstances, getComplementaryGroups, importConfigToDatabase } from '../api/client'
+import { getSettingsTeams, getSettingsUsers, getJiraInstances, getComplementaryGroups } from '../api/client'
 import TeamsSection from '../components/settings/TeamsSection'
 import UsersSection from '../components/settings/UsersSection'
 import LogsSection from '../components/settings/LogsSection'
@@ -8,17 +8,36 @@ import PackageTemplatesSection from '../components/settings/PackageTemplatesSect
 import HolidaysSection from '../components/settings/HolidaysSection'
 import FactorialSection from '../components/settings/FactorialSection'
 
-const SettingsIcon = () => (
-    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+const CatIconSystem = () => (
+    <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
 )
 
-const ImportIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+const CatIconOrganization = () => (
+    <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+    </svg>
+)
+
+const CatIconIntegration = () => (
+    <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+    </svg>
+)
+
+const CatIconConfig = () => (
+    <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+    </svg>
+)
+
+const SettingsIcon = () => (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
 )
 
@@ -30,8 +49,6 @@ export default function Settings() {
     const [complementaryGroups, setComplementaryGroups] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
-    const [importing, setImporting] = useState(false)
-    const [importResult, setImportResult] = useState(null)
 
     const loadData = useCallback(async () => {
         try {
@@ -60,21 +77,6 @@ export default function Settings() {
         loadData()
     }, [loadData])
 
-    const handleImport = async () => {
-        try {
-            setImporting(true)
-            setImportResult(null)
-            const result = await importConfigToDatabase()
-            setImportResult(result)
-            // Reload data
-            await loadData()
-        } catch (err) {
-            setError(err.message)
-        } finally {
-            setImporting(false)
-        }
-    }
-
     const handleTeamsChange = async () => {
         const teamsData = await getSettingsTeams()
         setTeams(teamsData)
@@ -94,180 +96,148 @@ export default function Settings() {
         setComplementaryGroups(groupsData.groups || [])
     }
 
+    // Navigation configuration
+    const navigation = [
+        {
+            category: 'Generale',
+            icon: CatIconIntegration,
+            items: [
+                { id: 'jira', label: 'Integrazioni JIRA', count: jiraInstances.length },
+                { id: 'factorial', label: 'Integrazione Factorial' }
+            ]
+        },
+        {
+            category: 'Organizzazione',
+            icon: CatIconOrganization,
+            items: [
+                { id: 'teams', label: 'Gestione Team', count: teams.length },
+                { id: 'users', label: 'Gestione Utenti', count: users.length }
+            ]
+        },
+        {
+            category: 'Configurazione',
+            icon: CatIconConfig,
+            items: [
+                { id: 'packages', label: 'Pacchetti Ore' },
+                { id: 'holidays', label: 'Giorni Festivi' }
+            ]
+        },
+        {
+            category: 'Sistema',
+            icon: CatIconSystem,
+            items: [
+                { id: 'logs', label: 'Log Applicazione' }
+            ]
+        }
+    ]
+
     return (
-        <div className="animate-fade-in">
+        <div className="animate-fade-in h-[calc(100vh-2rem)] flex flex-col">
             {/* Header */}
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-6 flex-shrink-0">
                 <div className="flex items-center gap-3">
                     <div className="p-3 bg-gradient-primary rounded-xl shadow-glow">
                         <SettingsIcon />
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold text-dark-100">Impostazioni</h1>
-                        <p className="text-dark-400 text-sm">Gestisci team e utenti</p>
+                        <p className="text-dark-400 text-sm">Gestisci le configurazioni globali</p>
                     </div>
                 </div>
-
-                <button
-                    onClick={handleImport}
-                    disabled={importing}
-                    className="flex items-center gap-2 px-4 py-2 bg-dark-700 text-dark-200 border border-dark-600 rounded-lg hover:bg-dark-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    {importing ? (
-                        <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-dark-200"></div>
-                            Importazione...
-                        </>
-                    ) : (
-                        <>
-                            <ImportIcon />
-                            Importa da Config
-                        </>
-                    )}
-                </button>
             </div>
 
-            {/* Import Result */}
-            {importResult && (
-                <div className="mb-6 bg-accent-green/10 border border-accent-green/30 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-accent-green font-medium">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        Importazione completata: {importResult.jira_instances_created || 0} istanze JIRA, {importResult.teams_created} team e {importResult.users_created} utenti creati
-                    </div>
-                </div>
-            )}
-
-            {/* Error */}
             {error && (
-                <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-red-400">
-                    {error}
-                    <button
-                        onClick={() => setError(null)}
-                        className="ml-4 text-red-300 hover:text-red-200 underline"
-                    >
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm flex-shrink-0 flex justify-between items-center">
+                    <span>{error}</span>
+                    <button onClick={() => setError(null)} className="text-red-300 hover:text-red-200 underline">
                         Chiudi
                     </button>
                 </div>
             )}
 
-            {/* Tabs */}
-            <div className="flex gap-2 mb-6 flex-wrap">
-                <button
-                    onClick={() => setActiveTab('jira')}
-                    className={`px-6 py-3 rounded-lg font-medium transition-all ${
-                        activeTab === 'jira'
-                            ? 'bg-gradient-primary text-white shadow-glow'
-                            : 'bg-dark-800 text-dark-300 hover:bg-dark-700 hover:text-dark-100'
-                    }`}
-                >
-                    JIRA ({jiraInstances.length})
-                </button>
-                <button
-                    onClick={() => setActiveTab('teams')}
-                    className={`px-6 py-3 rounded-lg font-medium transition-all ${
-                        activeTab === 'teams'
-                            ? 'bg-gradient-primary text-white shadow-glow'
-                            : 'bg-dark-800 text-dark-300 hover:bg-dark-700 hover:text-dark-100'
-                    }`}
-                >
-                    Team ({teams.length})
-                </button>
-                <button
-                    onClick={() => setActiveTab('users')}
-                    className={`px-6 py-3 rounded-lg font-medium transition-all ${
-                        activeTab === 'users'
-                            ? 'bg-gradient-primary text-white shadow-glow'
-                            : 'bg-dark-800 text-dark-300 hover:bg-dark-700 hover:text-dark-100'
-                    }`}
-                >
-                    Utenti ({users.length})
-                </button>
-                <button
-                    onClick={() => setActiveTab('packages')}
-                    className={`px-6 py-3 rounded-lg font-medium transition-all ${
-                        activeTab === 'packages'
-                            ? 'bg-gradient-primary text-white shadow-glow'
-                            : 'bg-dark-800 text-dark-300 hover:bg-dark-700 hover:text-dark-100'
-                    }`}
-                >
-                    Pacchetti
-                </button>
-                <button
-                    onClick={() => setActiveTab('holidays')}
-                    className={`px-6 py-3 rounded-lg font-medium transition-all ${
-                        activeTab === 'holidays'
-                            ? 'bg-gradient-primary text-white shadow-glow'
-                            : 'bg-dark-800 text-dark-300 hover:bg-dark-700 hover:text-dark-100'
-                    }`}
-                >
-                    Festivita'
-                </button>
-                <button
-                    onClick={() => setActiveTab('logs')}
-                    className={`px-6 py-3 rounded-lg font-medium transition-all ${
-                        activeTab === 'logs'
-                            ? 'bg-gradient-primary text-white shadow-glow'
-                            : 'bg-dark-800 text-dark-300 hover:bg-dark-700 hover:text-dark-100'
-                    }`}
-                >
-                    Log Applicazione
-                </button>
-                <button
-                    onClick={() => setActiveTab('factorial')}
-                    className={`px-6 py-3 rounded-lg font-medium transition-all ${
-                        activeTab === 'factorial'
-                            ? 'bg-gradient-primary text-white shadow-glow'
-                            : 'bg-dark-800 text-dark-300 hover:bg-dark-700 hover:text-dark-100'
-                    }`}
-                >
-                    Factorial
-                </button>
-            </div>
-
-            {/* Content */}
-            {loading ? (
-                <div className="flex items-center justify-center py-16">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent-blue"></div>
+            {/* Main Layout */}
+            <div className="flex flex-1 gap-6 overflow-hidden">
+                {/* Sidebar Navigation */}
+                <div className="w-64 flex-shrink-0 overflow-y-auto pr-2">
+                    <div className="space-y-6">
+                        {navigation.map((section) => (
+                            <div key={section.category}>
+                                <div className="flex items-center gap-2 mb-2 px-3 text-xs font-semibold text-dark-400 uppercase tracking-wider">
+                                    <section.icon />
+                                    {section.category}
+                                </div>
+                                <div className="space-y-1">
+                                    {section.items.map((item) => (
+                                        <button
+                                            key={item.id}
+                                            onClick={() => setActiveTab(item.id)}
+                                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === item.id
+                                                ? 'bg-gradient-primary text-white shadow-sm'
+                                                : 'text-dark-300 hover:bg-dark-800 hover:text-dark-100'
+                                                }`}
+                                        >
+                                            <span>{item.label}</span>
+                                            {item.count !== undefined && (
+                                                <span className={`text-xs px-2 py-0.5 rounded-full ${activeTab === item.id
+                                                    ? 'bg-white/20 text-white'
+                                                    : 'bg-dark-800 text-dark-400'
+                                                    }`}>
+                                                    {item.count}
+                                                </span>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
-            ) : (
-                <>
-                    {activeTab === 'jira' && (
-                        <JiraInstancesSection
-                            instances={jiraInstances}
-                            complementaryGroups={complementaryGroups}
-                            onDataChange={handleJiraDataChange}
-                        />
+
+                {/* Content Area */}
+                <div className="flex-1 bg-dark-900/50 rounded-2xl border border-dark-800/50 p-6 overflow-y-auto custom-scrollbar">
+                    {loading ? (
+                        <div className="flex items-center justify-center h-full">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent-blue"></div>
+                        </div>
+                    ) : (
+                        <div className="max-w-4xl">
+                            {activeTab === 'jira' && (
+                                <JiraInstancesSection
+                                    instances={jiraInstances}
+                                    complementaryGroups={complementaryGroups}
+                                    onDataChange={handleJiraDataChange}
+                                />
+                            )}
+                            {activeTab === 'teams' && (
+                                <TeamsSection
+                                    teams={teams}
+                                    onTeamsChange={handleTeamsChange}
+                                />
+                            )}
+                            {activeTab === 'users' && (
+                                <UsersSection
+                                    users={users}
+                                    teams={teams}
+                                    jiraInstances={jiraInstances}
+                                    onUsersChange={handleUsersChange}
+                                />
+                            )}
+                            {activeTab === 'packages' && (
+                                <PackageTemplatesSection />
+                            )}
+                            {activeTab === 'holidays' && (
+                                <HolidaysSection />
+                            )}
+                            {activeTab === 'logs' && (
+                                <LogsSection />
+                            )}
+                            {activeTab === 'factorial' && (
+                                <FactorialSection />
+                            )}
+                        </div>
                     )}
-                    {activeTab === 'teams' && (
-                        <TeamsSection
-                            teams={teams}
-                            onTeamsChange={handleTeamsChange}
-                        />
-                    )}
-                    {activeTab === 'users' && (
-                        <UsersSection
-                            users={users}
-                            teams={teams}
-                            jiraInstances={jiraInstances}
-                            onUsersChange={handleUsersChange}
-                        />
-                    )}
-                    {activeTab === 'packages' && (
-                        <PackageTemplatesSection />
-                    )}
-                    {activeTab === 'holidays' && (
-                        <HolidaysSection />
-                    )}
-                    {activeTab === 'logs' && (
-                        <LogsSection />
-                    )}
-                    {activeTab === 'factorial' && (
-                        <FactorialSection />
-                    )}
-                </>
-            )}
+                </div>
+            </div>
         </div>
     )
 }
