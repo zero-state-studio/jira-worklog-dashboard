@@ -197,16 +197,29 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                         </div>
                     )}
 
-                    <NavLink
-                        to="/users"
-                        end
-                        className={({ isActive }) =>
-                            `nav-link ${isActive ? 'nav-link-active' : ''}`
-                        }
-                    >
-                        <UserIcon />
-                        {sidebarOpen && <span>Utenti</span>}
-                    </NavLink>
+                    {/* Utenti - disable if no users configured */}
+                    {config?.user_count > 0 ? (
+                        <NavLink
+                            to="/users"
+                            end
+                            className={({ isActive }) =>
+                                `nav-link ${isActive ? 'nav-link-active' : ''}`
+                            }
+                        >
+                            <UserIcon />
+                            {sidebarOpen && <span>Utenti</span>}
+                        </NavLink>
+                    ) : (
+                        <div className="nav-link opacity-50 cursor-not-allowed">
+                            <UserIcon />
+                            {sidebarOpen && (
+                                <>
+                                    <span>Utenti</span>
+                                    <span className="ml-auto text-xs text-dark-500">0</span>
+                                </>
+                            )}
+                        </div>
+                    )}
 
                     {/* Individual Teams Section */}
                     {sidebarOpen && config?.teams && config.teams.length > 0 && (

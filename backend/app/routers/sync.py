@@ -565,21 +565,14 @@ async def get_sync_defaults(
     today = date.today()
     start_of_month = today.replace(day=1)
 
-    # Get instances from database first, fallback to config.yaml (scoped to company)
+    # Get instances from database only (no fallback to config.yaml)
     storage = get_storage()
     db_instances = await storage.get_all_jira_instances(current_user.company_id)
 
-    if db_instances:
-        available_instances = [
-            {"name": inst["name"], "url": inst["url"]}
-            for inst in db_instances if inst.get("is_active", True)
-        ]
-    else:
-        # Fallback to config.yaml
-        available_instances = [
-            {"name": inst.name, "url": inst.url}
-            for inst in config.jira_instances
-        ]
+    available_instances = [
+        {"name": inst["name"], "url": inst["url"]}
+        for inst in db_instances if inst.get("is_active", True)
+    ]
 
     return {
         "default_start_date": start_of_month.isoformat(),

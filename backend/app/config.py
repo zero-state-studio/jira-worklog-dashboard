@@ -118,7 +118,7 @@ def get_all_configured_emails(config: AppConfig) -> Set[str]:
 
 
 # ============ Database-based configuration functions ============
-# These functions read from SQLite database with fallback to config.yaml
+# These functions read from SQLite database (multi-tenant, no fallback to config.yaml)
 
 async def get_teams_from_db(company_id: int):
     """
@@ -136,44 +136,17 @@ async def get_teams_from_db(company_id: int):
 
     teams = await storage.get_all_teams(company_id)
 
-    # If database has teams, use them
-    if teams:
-        result = []
-        for team in teams:
-            members = await storage.get_users_by_team(team["id"], company_id)
-            result.append({
-                "id": team["id"],
-                "name": team["name"],
-                "member_count": len(members),
-                "members": members
-            })
-        return result
-
-    # Fallback to config.yaml (only for backward compatibility, not multi-tenant)
-    try:
-        config = get_config()
-        return [
-            {
-                "id": idx,
-                "name": team.name,
-                "member_count": len(team.members),
-                "members": [
-                    {
-                        "id": midx,
-                        "email": m.email,
-                        "first_name": m.first_name,
-                        "last_name": m.last_name,
-                        "team_id": idx,
-                        "team_name": team.name,
-                        "jira_accounts": []
-                    }
-                    for midx, m in enumerate(team.members, 1)
-                ]
-            }
-            for idx, team in enumerate(config.teams, 1)
-        ]
-    except FileNotFoundError:
-        return []
+    # Return teams from database (no fallback to config.yaml)
+    result = []
+    for team in teams:
+        members = await storage.get_users_by_team(team["id"], company_id)
+        result.append({
+            "id": team["id"],
+            "name": team["name"],
+            "member_count": len(members),
+            "members": members
+        })
+    return result
 
 
 async def get_users_from_db(company_id: int):
@@ -192,30 +165,8 @@ async def get_users_from_db(company_id: int):
 
     users = await storage.get_all_users(company_id)
 
-    # If database has users, use them
-    if users:
-        return users
-
-    # Fallback to config.yaml (only for backward compatibility, not multi-tenant)
-    try:
-        config = get_config()
-        result = []
-        user_id = 1
-        for team_idx, team in enumerate(config.teams, 1):
-            for member in team.members:
-                result.append({
-                    "id": user_id,
-                    "email": member.email,
-                    "first_name": member.first_name,
-                    "last_name": member.last_name,
-                    "team_id": team_idx,
-                    "team_name": team.name,
-                    "jira_accounts": []
-                })
-                user_id += 1
-        return result
-    except FileNotFoundError:
-        return []
+    # Return users from database (no fallback to config.yaml)
+    return users
 
 
 async def get_all_emails_from_db(company_id: int) -> List[str]:
@@ -288,26 +239,18 @@ async def get_jira_instances_from_db(company_id: int) -> List[JiraInstanceConfig
 
     instances = await storage.get_all_jira_instances(company_id, include_credentials=True)
 
-    # If database has instances, use them
-    if instances:
-        return [
-            JiraInstanceConfig(
-                name=inst["name"],
-                url=inst["url"],
-                email=inst["email"],
-                api_token=inst["api_token"],
-                tempo_api_token=inst.get("tempo_api_token")
-            )
-            for inst in instances
-            if inst.get("is_active", True)  # Only include active instances
-        ]
-
-    # Fallback to config.yaml (only for backward compatibility, not multi-tenant)
-    try:
-        config = get_config()
-        return config.jira_instances
-    except FileNotFoundError:
-        return []
+    # Return JIRA instances from database (no fallback to config.yaml)
+    return [
+        JiraInstanceConfig(
+            name=inst["name"],
+            url=inst["url"],
+            email=inst["email"],
+            api_token=inst["api_token"],
+            tempo_api_token=inst.get("tempo_api_token")
+        )
+        for inst in instances
+        if inst.get("is_active", True)  # Only include active instances
+    ]
 
 
 async def get_complementary_instances_from_db(company_id: int) -> Dict[str, List[str]]:

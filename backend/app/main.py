@@ -302,21 +302,14 @@ async def get_config_info(current_user: CurrentUser = Depends(get_current_user))
     teams = await get_teams_from_db(current_user.company_id)
     users = await get_users_from_db(current_user.company_id)
 
-    # Get JIRA instances from database first, fallback to config.yaml
+    # Get JIRA instances from database only (no fallback to config.yaml)
     storage = get_storage()
     db_instances = await storage.get_all_jira_instances(current_user.company_id)
 
-    if db_instances:
-        jira_instances = [
-            {"name": inst["name"], "url": inst["url"]}
-            for inst in db_instances if inst.get("is_active", True)
-        ]
-    else:
-        # Fallback to config.yaml
-        jira_instances = [
-            {"name": inst.name, "url": inst.url}
-            for inst in config.jira_instances
-        ]
+    jira_instances = [
+        {"name": inst["name"], "url": inst["url"]}
+        for inst in db_instances if inst.get("is_active", True)
+    ]
 
     # Group users by team
     team_members = {}
@@ -336,6 +329,7 @@ async def get_config_info(current_user: CurrentUser = Depends(get_current_user))
         "timezone": config.settings.timezone,
         "complementary_instances": config.settings.complementary_instances,
         "jira_instances": jira_instances,
+        "user_count": len(users),
         "teams": [
             {
                 "name": team["name"],

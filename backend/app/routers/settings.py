@@ -393,10 +393,9 @@ async def fetch_jira_account_id(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Find JIRA instance - first check database, then fallback to config.yaml
+    # Find JIRA instance from database only (no fallback to config.yaml)
     instance_config = None
 
-    # Try database first (scoped to company)
     db_instance = await storage.get_jira_instance_by_name(jira_instance, current_user.company_id)
     if db_instance:
         instance_config = JiraInstanceConfig(
@@ -406,12 +405,6 @@ async def fetch_jira_account_id(
             api_token=db_instance["api_token"],
             tempo_api_token=db_instance.get("tempo_api_token")
         )
-    else:
-        # Fallback to config.yaml
-        for inst in config.jira_instances:
-            if inst.name == jira_instance:
-                instance_config = inst
-                break
 
     if not instance_config:
         raise HTTPException(status_code=404, detail=f"JIRA instance '{jira_instance}' not found")
@@ -592,30 +585,11 @@ async def import_from_config(
 
 @router.get("/jira-instances")
 async def get_jira_instances(current_user: CurrentUser = Depends(get_current_user)):
-    """Get list of JIRA instances from database with fallback to config.yaml (scoped to company)."""
+    """Get list of JIRA instances from database (scoped to company)."""
     storage = get_storage()
     instances = await storage.get_all_jira_instances(current_user.company_id, include_credentials=False)
 
-    # If database is empty, fallback to config.yaml
-    if not instances:
-        try:
-            from ..config import get_config
-            config = get_config()
-            instances = [
-                {
-                    "id": idx,
-                    "name": inst.name,
-                    "url": inst.url,
-                    "is_active": True,
-                    "source": "config.yaml",  # Flag to indicate it's from config file
-                    "created_at": None,
-                    "updated_at": None
-                }
-                for idx, inst in enumerate(config.jira_instances, 1)
-            ]
-        except FileNotFoundError:
-            instances = []
-
+    # Return database instances only (no fallback to config.yaml)
     return {"instances": instances}
 
 

@@ -45,7 +45,11 @@
       "Bash(xargs kill:*)",
       "Bash(python -m pytest:*)",
       "Bash(ls:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(python init_db.py:*)",
+      "Bash(jq:*)",
+      "Bash(echo:*)",
+      "Bash(open:*)"
     ]
   }
 }
