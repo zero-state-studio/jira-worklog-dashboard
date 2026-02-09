@@ -78,7 +78,31 @@ class WorklogStorage:
                         completed_at TIMESTAMP
                     )
                 """)
-                
+
+                # Migrate sync_history to add company_id column if not exists
+                try:
+                    # Check if company_id column exists
+                    async with db.execute("PRAGMA table_info(sync_history)") as cursor:
+                        columns = await cursor.fetchall()
+                        has_company_id = any(col[1] == 'company_id' for col in columns)
+
+                    if not has_company_id:
+                        # Add company_id column
+                        await db.execute("""
+                            ALTER TABLE sync_history
+                            ADD COLUMN company_id INTEGER
+                        """)
+                        # Backfill existing records with company_id = 1
+                        await db.execute("""
+                            UPDATE sync_history
+                            SET company_id = 1
+                            WHERE company_id IS NULL
+                        """)
+                        await db.commit()
+                except Exception as e:
+                    # If migration fails, log but continue (table might already be updated)
+                    print(f"sync_history migration warning: {e}")
+
                 # Create indexes for faster lookups
                 await db.execute("""
                     CREATE INDEX IF NOT EXISTS idx_worklogs_started 
@@ -1208,19 +1232,34 @@ class WorklogStorage:
     # ========== Sync History Operations ==========
     
     async def start_sync(
-        self, 
-        start_date: date, 
-        end_date: date, 
+        self,
+        company_id: int,
+        start_date: date,
+        end_date: date,
         jira_instances: list[str]
     ) -> int:
-        """Record the start of a sync operation. Returns sync_id."""
+        """Record the start of a sync operation. Returns sync_id.
+
+        Args:
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            start_date: Start date of sync range
+            end_date: End date of sync range
+            jira_instances: List of JIRA instance names being synced
+
+        Returns:
+            sync_id for tracking this sync operation
+        """
         await self.initialize()
-        
+
+        if not company_id:
+            raise ValueError("company_id is required")
+
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute("""
-                INSERT INTO sync_history (start_date, end_date, jira_instances, status)
-                VALUES (?, ?, ?, 'in_progress')
+                INSERT INTO sync_history (company_id, start_date, end_date, jira_instances, status)
+                VALUES (?, ?, ?, ?, 'in_progress')
             """, (
+                company_id,
                 start_date.isoformat(),
                 end_date.isoformat(),
                 json.dumps(jira_instances)
@@ -1229,18 +1268,31 @@ class WorklogStorage:
             return cursor.lastrowid
     
     async def complete_sync(
-        self, 
-        sync_id: int, 
-        synced: int, 
-        updated: int, 
+        self,
+        sync_id: int,
+        company_id: int,
+        synced: int,
+        updated: int,
         deleted: int,
         error: Optional[str] = None
     ):
-        """Record the completion of a sync operation."""
+        """Record the completion of a sync operation.
+
+        Args:
+            sync_id: ID of the sync operation
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            synced: Number of worklogs synced
+            updated: Number of worklogs updated
+            deleted: Number of worklogs deleted
+            error: Optional error message if sync failed
+        """
         await self.initialize()
-        
+
+        if not company_id:
+            raise ValueError("company_id is required")
+
         status = "failed" if error else "completed"
-        
+
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("""
                 UPDATE sync_history SET
@@ -1250,24 +1302,36 @@ class WorklogStorage:
                     status = ?,
                     error_message = ?,
                     completed_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            """, (synced, updated, deleted, status, error, sync_id))
+                WHERE id = ? AND company_id = ?
+            """, (synced, updated, deleted, status, error, sync_id, company_id))
             await db.commit()
     
-    async def get_sync_history(self, limit: int = 20) -> list[dict]:
-        """Get recent sync history."""
+    async def get_sync_history(self, company_id: int, limit: int = 20) -> list[dict]:
+        """Get recent sync history for a specific company.
+
+        Args:
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+            limit: Maximum number of records to return
+
+        Returns:
+            List of sync history records
+        """
         await self.initialize()
-        
+
+        if not company_id:
+            raise ValueError("company_id is required")
+
         history = []
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, start_date, end_date, jira_instances, 
+                SELECT id, start_date, end_date, jira_instances,
                        worklogs_synced, worklogs_updated, worklogs_deleted,
                        status, error_message, started_at, completed_at
                 FROM sync_history
+                WHERE company_id = ?
                 ORDER BY started_at DESC
                 LIMIT ?
-            """, (limit,)) as cursor:
+            """, (company_id, limit)) as cursor:
                 async for row in cursor:
                     history.append({
                         "id": row[0],
@@ -1282,7 +1346,7 @@ class WorklogStorage:
                         "started_at": row[9],
                         "completed_at": row[10]
                     })
-        
+
         return history
     
     # ========== Team Operations ==========
@@ -2141,12 +2205,12 @@ class WorklogStorage:
                     }
         return None
 
-    async def get_all_jira_instances(self, include_credentials: bool = False, company_id: Optional[int] = None) -> list[dict]:
+    async def get_all_jira_instances(self, company_id: int, include_credentials: bool = False) -> list[dict]:
         """Get all JIRA instances for a specific company. Optionally include credentials.
 
         Args:
-            include_credentials: Whether to include API tokens in response
             company_id: Company ID to filter instances by (REQUIRED for multi-tenant isolation)
+            include_credentials: Whether to include API tokens in response
 
         Returns:
             List of JIRA instances belonging to the company
@@ -2154,7 +2218,7 @@ class WorklogStorage:
         await self.initialize()
 
         # Multi-tenant security: require company_id
-        if company_id is None:
+        if not company_id:
             raise ValueError("company_id is required for multi-tenant operations")
 
         instances = []

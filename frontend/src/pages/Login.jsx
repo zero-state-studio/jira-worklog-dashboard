@@ -5,6 +5,7 @@ export default function Login() {
     const [authConfig, setAuthConfig] = useState(null)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState(null)
+    const [email, setEmail] = useState('dev@dev.local')
     const navigate = useNavigate()
 
     // Fetch auth config on mount to detect dev mode
@@ -27,13 +28,20 @@ export default function Login() {
         setLoading(true)
         setError(null)
 
+        // Validate email
+        if (!email || !email.includes('@')) {
+            setError('Please enter a valid email address')
+            setLoading(false)
+            return
+        }
+
         try {
             const response = await fetch('http://localhost:8000/api/auth/dev/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    email: 'dev@dev.local',
-                    first_name: 'Dev',
+                    email: email,
+                    first_name: email.split('@')[0],
                     last_name: 'User',
                     role: 'ADMIN'
                 })
@@ -127,6 +135,22 @@ export default function Login() {
                             </div>
                         </div>
 
+                        {/* Email Input Field */}
+                        <div className="mb-4">
+                            <label htmlFor="email" className="block text-sm font-medium text-dark-300 mb-2">
+                                Email Address
+                            </label>
+                            <input
+                                type="email"
+                                id="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="your.email@example.com"
+                                className="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white placeholder-dark-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                disabled={loading}
+                            />
+                        </div>
+
                         {/* Dev Login Button */}
                         <button
                             onClick={handleDevLogin}
@@ -148,7 +172,7 @@ export default function Login() {
 
                         {/* Dev mode explanation */}
                         <p className="text-dark-500 text-xs mt-2 text-center">
-                            Bypasses OAuth for local testing • Creates dev@dev.local with ADMIN role
+                            Bypasses OAuth for local testing • Creates user with ADMIN role
                         </p>
                     </>
                 )}

@@ -84,8 +84,9 @@ async def sync_worklogs(
     
     # Start sync record
     sync_id = await storage.start_sync(
-        request.start_date, 
-        request.end_date, 
+        current_user.company_id,
+        request.start_date,
+        request.end_date,
         instances_to_sync
     )
     
@@ -219,15 +220,17 @@ async def sync_worklogs(
                 worklog_ids,
                 request.start_date,
                 request.end_date,
-                instance_name
+                instance_name,
+                current_user.company_id
             )
             total_deleted += deleted
         
         # Complete sync record
         await storage.complete_sync(
-            sync_id, 
-            total_synced, 
-            total_updated, 
+            sync_id,
+            current_user.company_id,
+            total_synced,
+            total_updated,
             total_deleted
         )
         
@@ -242,7 +245,7 @@ async def sync_worklogs(
         
     except Exception as e:
         # Record sync failure
-        await storage.complete_sync(sync_id, 0, 0, 0, error=str(e))
+        await storage.complete_sync(sync_id, current_user.company_id, 0, 0, 0, error=str(e))
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
 
 
@@ -278,6 +281,7 @@ async def sync_worklogs_stream(
 
         # Start sync record
         sync_id = await storage.start_sync(
+            current_user.company_id,
             request.start_date,
             request.end_date,
             instances_to_sync
@@ -475,7 +479,8 @@ async def sync_worklogs_stream(
                     worklog_ids,
                     request.start_date,
                     request.end_date,
-                    instance_name
+                    instance_name,
+                    current_user.company_id
                 )
                 total_deleted += deleted
 
@@ -493,6 +498,7 @@ async def sync_worklogs_stream(
             # Complete sync record
             await storage.complete_sync(
                 sync_id,
+                current_user.company_id,
                 total_synced,
                 total_updated,
                 total_deleted
@@ -508,7 +514,7 @@ async def sync_worklogs_stream(
             }) + "\n"
 
         except Exception as e:
-            await storage.complete_sync(sync_id, 0, 0, 0, error=str(e))
+            await storage.complete_sync(sync_id, current_user.company_id, 0, 0, 0, error=str(e))
             yield json.dumps({"type": "error", "message": str(e)}) + "\n"
 
     return StreamingResponse(
@@ -528,7 +534,7 @@ async def get_sync_history(
 ):
     """Get recent sync history (ADMIN only)."""
     storage = get_storage()
-    history = await storage.get_sync_history(limit, current_user.company_id)
+    history = await storage.get_sync_history(current_user.company_id, limit)
     return {"history": history}
 
 
@@ -559,9 +565,9 @@ async def get_sync_defaults(
     today = date.today()
     start_of_month = today.replace(day=1)
 
-    # Get instances from database first, fallback to config.yaml
+    # Get instances from database first, fallback to config.yaml (scoped to company)
     storage = get_storage()
-    db_instances = await storage.get_all_jira_instances()
+    db_instances = await storage.get_all_jira_instances(current_user.company_id)
 
     if db_instances:
         available_instances = [
