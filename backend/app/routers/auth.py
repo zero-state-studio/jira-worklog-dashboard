@@ -5,12 +5,16 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Depends, Request, status
 from fastapi.responses import RedirectResponse
 from typing import Optional
+import json
+from urllib.parse import urlencode
 
 from ..models import (
-    TokenResponse, RefreshTokenRequest, OAuthUserResponse, CompanyResponse
+    TokenResponse, RefreshTokenRequest, OAuthUserResponse, CompanyResponse,
+    OnboardingRequiredResponse, CompleteOnboardingRequest,
+    UpdateProfileRequest, UpdateCompanyRequest, DevLoginRequest
 )
-from ..auth.jwt import create_access_token, create_refresh_token, verify_token
-from ..auth.dependencies import get_current_user, get_current_user_optional, CurrentUser
+from ..auth.jwt import create_access_token, create_refresh_token, create_onboarding_token, verify_token
+from ..auth.dependencies import get_current_user, get_current_user_optional, require_admin, CurrentUser
 from ..auth.google_oauth import oauth
 from ..auth_config import auth_settings
 from ..cache import get_storage
@@ -131,33 +135,28 @@ async def oauth_callback(request: Request):
                 company_count = await storage.count_companies()
 
                 if company_count == 0:
-                    # First user - create company and admin user
-                    logger.info(f"First user signup: {email} - creating company")
+                    # First user - redirect to onboarding
+                    logger.info(f"First user signup: {email} - redirecting to onboarding")
 
                     domain = email.split('@')[1]
-                    company_id = await storage.create_company(
-                        name=f"{domain} Organization",
-                        domain=domain
-                    )
-
-                    user_id = await storage.create_oauth_user(
+                    onboarding_token = create_onboarding_token(
                         google_id=google_id,
                         email=email,
-                        company_id=company_id,
-                        role="ADMIN",
                         first_name=user_info.get('given_name'),
                         last_name=user_info.get('family_name'),
                         picture_url=user_info.get('picture')
                     )
 
-                    await storage.log_auth_event(
-                        event_type="first_user_signup",
-                        company_id=company_id,
-                        user_id=user_id,
-                        email=email
-                    )
+                    frontend_url = auth_settings.FRONTEND_URL
+                    params = urlencode({
+                        "onboarding_token": onboarding_token,
+                        "email": email,
+                        "suggested_name": f"{domain} Organization"
+                    })
 
-                    role = "ADMIN"
+                    redirect_url = f"{frontend_url}/onboarding?{params}"
+                    logger.info(f"Redirecting to: {redirect_url}")
+                    return RedirectResponse(url=redirect_url)
 
                 else:
                     # Not first user and no invitation - reject
@@ -185,14 +184,18 @@ async def oauth_callback(request: Request):
 
         logger.info(f"Authentication successful for {email}")
 
-        return TokenResponse(
-            access_token=access_token,
-            refresh_token=refresh_token_str,
-            token_type="bearer",
-            expires_in=auth_settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            user=OAuthUserResponse(**user),
-            company=CompanyResponse(**company)
-        )
+        # Redirect to frontend with tokens in query params
+        frontend_url = auth_settings.FRONTEND_URL
+        params = urlencode({
+            "access_token": access_token,
+            "refresh_token": refresh_token_str,
+            "user": json.dumps(OAuthUserResponse(**user).dict()),
+            "company": json.dumps(CompanyResponse(**company).dict())
+        })
+
+        redirect_url = f"{frontend_url}/login?{params}"
+        logger.info(f"Redirecting authenticated user to: {redirect_url}")
+        return RedirectResponse(url=redirect_url)
 
     except HTTPException:
         raise
@@ -321,12 +324,7 @@ async def get_me(current_user: CurrentUser = Depends(get_current_user)):
 
 
 @router.post("/dev/login")
-async def dev_login(
-    email: str = "dev@dev.local",
-    first_name: str = "Dev",
-    last_name: str = "User",
-    role: str = "ADMIN"
-):
+async def dev_login(request: DevLoginRequest):
     """
     Development-only login endpoint that bypasses Google OAuth.
 
@@ -335,16 +333,22 @@ async def dev_login(
 
     Returns 403 Forbidden if DEV_MODE is not enabled (production safety).
 
+    If this is the first user (no companies exist), returns OnboardingRequiredResponse
+    to mirror the OAuth flow and allow testing the onboarding process.
+
     Args:
-        email: User email (default: dev@dev.local)
-        first_name: User first name (default: Dev)
-        last_name: User last name (default: User)
-        role: User role - ADMIN, MANAGER, or USER (default: ADMIN)
+        request: DevLoginRequest with email, first_name, last_name, role
 
     Returns:
         TokenResponse with access_token, refresh_token, user, company
+        OR OnboardingRequiredResponse if first user
     """
     storage = get_storage()
+
+    email = request.email
+    first_name = request.first_name
+    last_name = request.last_name
+    role = request.role
 
     # 1. Production safety guard
     if not auth_settings.DEV_MODE:
@@ -354,44 +358,59 @@ async def dev_login(
             detail="Development authentication is disabled. Set DEV_MODE=true in .env for local development."
         )
 
-    # 2. Validate role
-    valid_roles = ["ADMIN", "MANAGER", "USER"]
-    if role not in valid_roles:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid role '{role}'. Must be one of: {', '.join(valid_roles)}"
-        )
-
     logger.info(f"Dev login attempt for email: {email}, role: {role}")
 
-    # 3. Ensure company exists (auto-create if empty database)
+    # 3. Check if this is first user (no companies exist) - require onboarding
     company_count = await storage.count_companies()
 
     if company_count == 0:
-        logger.info("No companies found - creating default dev company")
-        company_id = await storage.create_company(
-            name=auth_settings.DEV_DEFAULT_COMPANY,
-            domain="dev.local"
+        logger.info("No companies found - first dev user requires onboarding")
+
+        # Generate onboarding token (like OAuth flow)
+        domain = email.split('@')[1] if '@' in email else 'dev.local'
+        onboarding_token = create_onboarding_token(
+            google_id=f"dev_{email}",
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            picture_url=None
         )
+
+        # Return onboarding response
+        return OnboardingRequiredResponse(
+            onboarding_required=True,
+            onboarding_token=onboarding_token,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            picture_url=None
+        )
+
+    # 4. Check if user already exists (by google_id, globally unique)
+    google_id = f"dev_{email}"
+    user = await storage.get_oauth_user_by_google_id(google_id)
+
+    if user:
+        # User exists - use their existing company_id
+        company_id = user["company_id"]
+        logger.info(f"Existing dev user login: {email}, company_id={company_id}")
+        user_id = user["id"]
+        await storage.update_oauth_user_last_login(user_id)
     else:
-        # Use first company (dev always uses company_id=1)
-        company_id = 1
-        company = await storage.get_company(company_id)
-        if not company:
-            # Fallback: create dev company
-            company_id = await storage.create_company(
-                name=auth_settings.DEV_DEFAULT_COMPANY,
-                domain="dev.local"
-            )
+        # User doesn't exist - create NEW company for this dev user
+        domain = email.split('@')[1] if '@' in email else 'dev.local'
+        company_name = f"Dev Company - {email}"
 
-    # 4. Get or create user
-    user = await storage.get_oauth_user_by_email(email, company_id=company_id)
+        logger.info(f"Creating new dev company for user: {email}")
+        company_id = await storage.create_company(
+            name=company_name,
+            domain=domain
+        )
 
-    if not user:
-        # Create new dev user with fake google_id
-        logger.info(f"Creating new dev user: {email}")
+        # Create new dev user in the new company
+        logger.info(f"Creating new dev user: {email} in company_id={company_id}")
         user_id = await storage.create_oauth_user(
-            google_id=f"dev_{email}",  # Fake google_id with "dev_" prefix
+            google_id=google_id,
             email=email,
             company_id=company_id,
             role=role,
@@ -399,11 +418,6 @@ async def dev_login(
             last_name=last_name,
             picture_url=None
         )
-    else:
-        # User exists - just update last login
-        logger.info(f"Existing dev user login: {email}")
-        user_id = user["id"]
-        await storage.update_oauth_user_last_login(user_id)
 
     # 5. Generate real JWT tokens (same as OAuth flow)
     access_token = create_access_token(user_id, company_id, email, role)
@@ -440,6 +454,212 @@ async def dev_login(
         user=OAuthUserResponse(**user),
         company=CompanyResponse(**company)
     )
+
+
+@router.post("/complete-onboarding")
+async def complete_onboarding(request: CompleteOnboardingRequest):
+    """
+    Complete onboarding for a new user who signed up via Google OAuth.
+
+    Creates company + admin user from a short-lived onboarding token.
+
+    Args:
+        request: Onboarding data with token, company name, and user name
+    """
+    storage = get_storage()
+
+    # 1. Verify onboarding token
+    payload = verify_token(request.onboarding_token)
+    if not payload or payload.get("type") != "onboarding":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired onboarding token"
+        )
+
+    google_id = payload["google_id"]
+    email = payload["email"]
+    first_name = payload.get("first_name")
+    last_name = payload.get("last_name")
+    picture_url = payload.get("picture_url")
+
+    # 2. Check user doesn't already exist
+    existing_user = await storage.get_oauth_user_by_google_id(google_id)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User already exists"
+        )
+
+    # 3. Create company
+    domain = email.split("@")[1] if "@" in email else None
+    company_id = await storage.create_company(
+        name=request.company_name,
+        domain=domain
+    )
+
+    # 4. Create admin user
+    user_id = await storage.create_oauth_user(
+        google_id=google_id,
+        email=email,
+        company_id=company_id,
+        role="ADMIN",
+        first_name=first_name,
+        last_name=last_name,
+        picture_url=picture_url
+    )
+
+    # 5. Log event
+    await storage.log_auth_event(
+        event_type="onboarding_complete",
+        company_id=company_id,
+        user_id=user_id,
+        email=email,
+        metadata={"company_name": request.company_name}
+    )
+
+    # 6. Generate tokens (same as normal login)
+    access_token = create_access_token(user_id, company_id, email, "ADMIN")
+    refresh_token_str = create_refresh_token()
+
+    expires_at = datetime.utcnow() + timedelta(days=auth_settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    await storage.create_session(user_id, refresh_token_str, expires_at)
+
+    # 7. Return full token response
+    user = await storage.get_oauth_user_by_id(user_id)
+    company = await storage.get_company(company_id)
+
+    logger.info(f"Onboarding complete for {email}, company: {request.company_name}")
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token_str,
+        token_type="bearer",
+        expires_in=auth_settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=OAuthUserResponse(**user),
+        company=CompanyResponse(**company)
+    )
+
+
+@router.put("/profile")
+async def update_profile(
+    request: UpdateProfileRequest,
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """
+    Update current user's profile (first name and last name).
+    """
+    storage = get_storage()
+
+    await storage.update_oauth_user(
+        user_id=current_user.id,
+        first_name=request.first_name,
+        last_name=request.last_name
+    )
+
+    # Return updated user
+    user = await storage.get_oauth_user_by_id(current_user.id)
+    company = await storage.get_company(current_user.company_id)
+
+    logger.info(f"Profile updated for {current_user.email}")
+
+    return {
+        "user": OAuthUserResponse(**user),
+        "company": CompanyResponse(**company)
+    }
+
+
+@router.put("/company")
+async def update_company(
+    request: UpdateCompanyRequest,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """
+    Update company name (admin only).
+    """
+    storage = get_storage()
+
+    success = await storage.update_company(
+        company_id=current_user.company_id,
+        name=request.name
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found"
+        )
+
+    company = await storage.get_company(current_user.company_id)
+
+    logger.info(f"Company updated by {current_user.email}: {request.name}")
+
+    return {"company": CompanyResponse(**company)}
+
+
+@router.delete("/account")
+async def delete_account(current_user: CurrentUser = Depends(get_current_user)):
+    """
+    Delete the current user's account.
+
+    If this is the last user in the company, all company data will be deleted in cascade.
+    This includes:
+    - All users in the company
+    - All teams
+    - All JIRA instances and configurations
+    - All worklogs, epics, and issues
+    - All billing data
+    - All logs and sessions
+
+    WARNING: This action is irreversible.
+
+    Returns:
+        - message: Success message
+        - company_deleted: True if company was also deleted (last user)
+    """
+    storage = get_storage()
+
+    user_id = current_user.id
+    company_id = current_user.company_id
+    email = current_user.email
+
+    # Log BEFORE deletion
+    await storage.log_auth_event(
+        event_type="account_deletion_initiated",
+        company_id=company_id,
+        user_id=user_id,
+        email=email
+    )
+
+    # Count users in company (before deletion)
+    user_count = await storage.count_users_in_company(company_id)
+
+    logger.warning(f"Account deletion initiated by {email}, company has {user_count} user(s)")
+
+    # Delete the user
+    deleted = await storage.delete_oauth_user(user_id)
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    company_deleted = False
+
+    # If this was the last user, delete the entire company and all data
+    if user_count == 1:
+        logger.warning(f"Last user deleted, cascading company deletion for company_id={company_id}")
+        company_deleted = await storage.delete_company_cascade(company_id)
+
+        if company_deleted:
+            logger.warning(f"Company {company_id} and all associated data deleted (cascade)")
+
+    logger.info(f"Account deleted successfully: {email}, company_deleted={company_deleted}")
+
+    return {
+        "message": "Account deleted successfully",
+        "company_deleted": company_deleted
+    }
 
 
 @router.get("/config")

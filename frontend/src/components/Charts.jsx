@@ -87,6 +87,8 @@ export function TrendChart({ data, dataKey = 'hours', height = 300 }) {
                     fill="url(#colorHours)"
                     dot={false}
                     activeDot={{ r: 6, fill: '#667eea', stroke: '#fff', strokeWidth: 2 }}
+                    animationDuration={800}
+                    animationEasing="ease-out"
                 />
             </AreaChart>
         </ResponsiveContainer>
@@ -129,6 +131,8 @@ export function ComparisonBarChart({ data, dataKey = 'total_hours', nameKey = 'n
                         fill="#667eea"
                         radius={[0, 4, 4, 0]}
                         maxBarSize={30}
+                        animationDuration={600}
+                        animationEasing="ease-in-out"
                     >
                         {data.map((entry, index) => (
                             <Cell key={index} fill={chartColors[index % chartColors.length]} />
@@ -164,6 +168,8 @@ export function ComparisonBarChart({ data, dataKey = 'total_hours', nameKey = 'n
                     dataKey={dataKey}
                     radius={[4, 4, 0, 0]}
                     maxBarSize={60}
+                    animationDuration={600}
+                    animationEasing="ease-in-out"
                 >
                     {data.map((entry, index) => (
                         <Cell key={index} fill={chartColors[index % chartColors.length]} />
@@ -231,6 +237,8 @@ export function GroupedBarChart({ data, keys, height = 300, colors = chartColors
                         fill={colors[i % colors.length]}
                         radius={[0, 4, 4, 0]}
                         maxBarSize={20}
+                        animationDuration={600}
+                        animationEasing="ease-in-out"
                     />
                 ))}
             </BarChart>
@@ -284,6 +292,8 @@ export function DistributionChart({ data, dataKey = 'value', nameKey = 'name', h
                         paddingAngle={2}
                         label={false}
                         labelLine={false}
+                        animationDuration={800}
+                        animationEasing="ease-out"
                     >
                         {visibleData.map((entry) => (
                             <Cell
@@ -400,6 +410,8 @@ export function MultiTrendChart({ series, height = 300 }) {
                         fill={`url(#multiColor${i})`}
                         dot={false}
                         activeDot={{ r: 5, fill: s.color, stroke: '#fff', strokeWidth: 2 }}
+                        animationDuration={800}
+                        animationEasing="ease-out"
                     />
                 ))}
             </AreaChart>
@@ -442,6 +454,8 @@ export function Sparkline({ data, dataKey = 'hours', width = 100, height = 30 })
                     strokeWidth={1.5}
                     fill="url(#sparklineGradient)"
                     dot={false}
+                    animationDuration={500}
+                    animationEasing="ease-out"
                 />
             </AreaChart>
         </ResponsiveContainer>

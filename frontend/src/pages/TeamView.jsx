@@ -206,7 +206,7 @@ export default function TeamView({ dateRange, selectedInstance }) {
                                         return (
                                             <div
                                                 key={member.email}
-                                                onClick={() => navigate(`/users/${encodeURIComponent(member.email)}`)}
+                                                onClick={() => navigate(`/app/users/${encodeURIComponent(member.email)}`)}
                                                 className="glass-card-hover p-4 flex items-center gap-4"
                                             >
                                                 <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center flex-shrink-0">
@@ -403,7 +403,7 @@ export default function TeamView({ dateRange, selectedInstance }) {
                                 email={member.email}
                                 hours={member.total_hours}
                                 teamName={data.team_name}
-                                onClick={() => navigate(`/users/${encodeURIComponent(member.email)}`)}
+                                onClick={() => navigate(`/app/users/${encodeURIComponent(member.email)}`)}
                             />
                         ))}
                     </div>
@@ -445,7 +445,7 @@ export default function TeamView({ dateRange, selectedInstance }) {
                                 contributorCount={epic.contributor_count}
                                 jiraInstance={epic.jira_instance}
                                 parentType={epic.parent_type}
-                                onClick={() => navigate(`/epics/${encodeURIComponent(epic.epic_key)}`)}
+                                onClick={() => navigate(`/app/epics/${encodeURIComponent(epic.epic_key)}`)}
                             />
                         ))}
                     </div>

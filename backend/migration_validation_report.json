@@ -1,0 +1,49 @@
+{
+  "timestamp": "2026-02-10T12:40:35.024343",
+  "database": "worklog_storage.db",
+  "migration_file": "migrations/001_add_composite_indexes.sql",
+  "checks": {
+    "connectivity": true,
+    "tables": {
+      "worklogs": 0,
+      "epics": 0,
+      "teams": 0,
+      "users": 0,
+      "billing_rates": 0,
+      "factorial_leaves": 0,
+      "invoices": 0
+    },
+    "target_indexes": {
+      "idx_worklogs_user_range": false,
+      "idx_worklogs_instance_range": false,
+      "idx_billing_rates_lookup": false,
+      "idx_factorial_leaves_company_status": false
+    },
+    "integrity": true,
+    "disk_space": {
+      "status": "OK",
+      "free_mb": 230148.98828125,
+      "required_mb": 0.18105468749999998
+    },
+    "sample_queries": {
+      "user_worklogs": {
+        "status": "OK",
+        "count": 0
+      },
+      "sync_instance": {
+        "status": "OK",
+        "count": 0
+      },
+      "billing_rates": {
+        "status": "OK",
+        "count": 0
+      },
+      "factorial_leaves": {
+        "status": "OK",
+        "count": 0
+      }
+    },
+    "migration_script": true
+  },
+  "overall_status": "READY"
+}

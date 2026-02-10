@@ -221,7 +221,7 @@ export default function Dashboard({ dateRange, selectedInstance }) {
                                 name={team.team_name}
                                 hours={team.total_hours}
                                 memberCount={team.member_count}
-                                onClick={() => navigate(`/teams/${encodeURIComponent(team.team_name)}`)}
+                                onClick={() => navigate(`/app/teams/${encodeURIComponent(team.team_name)}`)}
                             />
                         ))}
                     </div>
@@ -260,7 +260,7 @@ export default function Dashboard({ dateRange, selectedInstance }) {
                             contributorCount={epic.contributor_count}
                             jiraInstance={epic.jira_instance}
                             parentType={epic.parent_type}
-                            onClick={() => navigate(`/epics/${encodeURIComponent(epic.epic_key)}`)}
+                            onClick={() => navigate(`/app/epics/${encodeURIComponent(epic.epic_key)}`)}
                         />
                     ))}
                 </div>

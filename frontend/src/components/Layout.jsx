@@ -6,47 +6,48 @@ import { it } from 'date-fns/locale'
 import { getConfig, getEpics } from '../api/client'
 import SyncModal from './SyncModal'
 import CreatePackageModal from './CreatePackageModal'
+import UserMenu from './UserMenu'
 import 'react-datepicker/dist/react-datepicker.css'
 
-// Icons as SVG components
+// Icons as SVG components with hover animations
 const DashboardIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-5 h-5 transition-transform duration-200 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
     </svg>
 )
 
 const TeamIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-5 h-5 transition-transform duration-200 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
     </svg>
 )
 
 const UserIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-5 h-5 transition-transform duration-200 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
     </svg>
 )
 
 const EpicIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-5 h-5 transition-transform duration-200 group-hover:scale-110 group-hover:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
     </svg>
 )
 
 const CalendarIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-5 h-5 transition-transform duration-200 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
     </svg>
 )
 
 const RefreshIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-5 h-5 transition-transform duration-300 group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
     </svg>
 )
 
 const SettingsIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-5 h-5 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
             d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -70,7 +71,7 @@ const ProjectIcon = () => (
 
 export default function Layout({ children, dateRange, setDateRange, selectedInstance, setSelectedInstance }) {
     const location = useLocation()
-    const isSettingsPage = location.pathname === '/settings' || location.pathname === '/billing'
+    const isSettingsPage = location.pathname === '/app/settings' || location.pathname === '/app/billing'
     const [config, setConfig] = useState(null)
     const [epics, setEpics] = useState([])
     const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -159,7 +160,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                 {/* Navigation */}
                 <nav className="flex-1 p-4 space-y-2">
                     <NavLink
-                        to="/"
+                        to="/app/dashboard"
                         className={({ isActive }) =>
                             `nav-link ${isActive ? 'nav-link-active' : ''}`
                         }
@@ -171,7 +172,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                     {/* Tutti i Team - between Dashboard and Utenti */}
                     {config?.teams && config.teams.length > 0 ? (
                         <NavLink
-                            to="/teams"
+                            to="/app/teams"
                             end
                             className={({ isActive }) =>
                                 `nav-link ${isActive ? 'nav-link-active' : ''}`
@@ -200,7 +201,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                     {/* Utenti - disable if no users configured */}
                     {config?.user_count > 0 ? (
                         <NavLink
-                            to="/users"
+                            to="/app/users"
                             end
                             className={({ isActive }) =>
                                 `nav-link ${isActive ? 'nav-link-active' : ''}`
@@ -228,7 +229,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                             {config.teams.map((team) => (
                                 <NavLink
                                     key={team.name}
-                                    to={`/teams/${encodeURIComponent(team.name)}`}
+                                    to={`/app/teams/${encodeURIComponent(team.name)}`}
                                     className={({ isActive }) =>
                                         `nav-link pl-8 ${isActive ? 'nav-link-active' : ''}`
                                     }
@@ -247,7 +248,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                         {/* Projects Link */}
                         {epicsByType['Project'] && epicsByType['Project'].length > 0 && (
                             <NavLink
-                                to="/epics?type=Project"
+                                to="/app/epics?type=Project"
                                 className={({ isActive }) =>
                                     `nav-link ${isActive && window.location.search.includes('type=Project') ? 'nav-link-active' : ''}`
                                 }
@@ -265,7 +266,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                         {/* Epics Link */}
                         {epicsByType['Epic'] && epicsByType['Epic'].length > 0 && (
                             <NavLink
-                                to="/epics?type=Epic"
+                                to="/app/epics?type=Epic"
                                 className={({ isActive }) =>
                                     `nav-link ${isActive && window.location.search.includes('type=Epic') ? 'nav-link-active' : ''}`
                                 }
@@ -282,7 +283,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
 
                         {/* All Initiatives Link */}
                         <NavLink
-                            to="/epics"
+                            to="/app/epics"
                             className={({ isActive }) =>
                                 `nav-link ${isActive && !window.location.search.includes('type=') ? 'nav-link-active' : ''}`
                             }
@@ -296,7 +297,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                     <div className="pt-4">
                         {sidebarOpen && <p className="px-4 text-xs font-semibold text-dark-500 uppercase tracking-wider mb-2">Amministrazione</p>}
                         <NavLink
-                            to="/billing"
+                            to="/app/billing"
                             className={({ isActive }) =>
                                 `nav-link ${isActive ? 'nav-link-active' : ''}`
                             }
@@ -312,7 +313,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                     <div className="pt-4">
                         {sidebarOpen && <p className="px-4 text-xs font-semibold text-dark-500 uppercase tracking-wider mb-2">Configurazione</p>}
                         <NavLink
-                            to="/settings"
+                            to="/app/settings"
                             className={({ isActive }) =>
                                 `nav-link ${isActive ? 'nav-link-active' : ''}`
                             }
@@ -332,6 +333,11 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                         </div>
                     </div>
                 )}
+
+                {/* User Menu */}
+                <div className="p-4 border-t border-dark-700">
+                    <UserMenu sidebarOpen={sidebarOpen} />
+                </div>
 
                 {/* Collapse Button */}
                 <button

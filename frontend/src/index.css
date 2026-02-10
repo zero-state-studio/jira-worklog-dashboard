@@ -47,7 +47,7 @@ body {
   }
 
   .glass-card-hover {
-    @apply glass-card transition-all duration-300 hover:bg-dark-700/80 hover:border-dark-500/50 hover:shadow-glow cursor-pointer;
+    @apply glass-card transition-all duration-300 hover:bg-dark-700/80 hover:border-dark-500/50 hover:shadow-glow hover:-translate-y-1 active:scale-95 cursor-pointer;
   }
 
   .stat-card {
@@ -55,7 +55,7 @@ body {
   }
 
   .stat-value {
-    @apply text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent;
+    @apply text-5xl font-bold bg-gradient-primary bg-clip-text text-transparent leading-extra-tight tracking-tightest;
   }
 
   .stat-label {
@@ -71,11 +71,11 @@ body {
   }
 
   .btn-primary {
-    @apply px-4 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:shadow-lg transition-all duration-200 hover:scale-105;
+    @apply px-4 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:shadow-lg transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary-from/50;
   }
 
   .btn-secondary {
-    @apply px-4 py-2 bg-dark-700 text-dark-200 border border-dark-600 font-medium rounded-lg hover:bg-dark-600 transition-all duration-200;
+    @apply px-4 py-2 bg-dark-700 text-dark-200 border border-dark-600 font-medium rounded-lg hover:bg-dark-600 hover:border-dark-500 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-dark-500/50;
   }
 
   .input-field {
@@ -104,6 +104,27 @@ body {
 
   .table-cell {
     @apply py-4 px-4 text-dark-200 border-t border-dark-700;
+  }
+
+  .section-padding {
+    @apply py-20 lg:py-28 px-4;
+  }
+
+  .section-header {
+    @apply text-center mb-16;
+  }
+
+  .section-title {
+    @apply text-4xl md:text-5xl font-bold text-dark-100 mb-4;
+  }
+
+  .section-subtitle {
+    @apply text-xl text-dark-300 max-w-2xl mx-auto leading-relaxed;
+  }
+
+  .gradient-section-bg {
+    @apply relative overflow-hidden;
+    background: linear-gradient(180deg, rgba(102, 126, 234, 0.05) 0%, transparent 100%);
   }
 }
 
@@ -183,6 +204,15 @@ body {
   }
 }
 
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
 .loading-shimmer {
   background: linear-gradient(
     90deg,
@@ -191,5 +221,15 @@ body {
     #21262d 100%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+  animation: shimmer 1s infinite, pulse-subtle 2s ease-in-out infinite;
+}
+
+/* Accessibility: Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
