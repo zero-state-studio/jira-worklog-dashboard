@@ -908,3 +908,27 @@ export async function logout() {
         window.location.href = '/login'
     }
 }
+
+export async function deleteAccount() {
+    const response = await fetch(`${API_BASE}/auth/account`, {
+        method: 'DELETE',
+        headers: {
+            'Authorization': `Bearer ${getAccessToken()}`,
+            'Content-Type': 'application/json'
+        }
+    })
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.detail || 'Failed to delete account')
+    }
+
+    const result = await response.json()
+
+    // Clear local storage
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('user')
+
+    return result
+}

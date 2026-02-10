@@ -71,7 +71,19 @@ export default function Login() {
 
             const data = await response.json()
 
-            // Store tokens in localStorage
+            // Check if onboarding is required (first user)
+            if (data.onboarding_required || data.requires_onboarding) {
+                // Redirect to onboarding page with token
+                const params = new URLSearchParams({
+                    onboarding_token: data.onboarding_token,
+                    email: data.email,
+                    suggested_name: `${data.email.split('@')[1]} Organization`
+                })
+                navigate(`/onboarding?${params.toString()}`)
+                return
+            }
+
+            // Normal login - store tokens
             localStorage.setItem('access_token', data.access_token)
             localStorage.setItem('refresh_token', data.refresh_token)
 

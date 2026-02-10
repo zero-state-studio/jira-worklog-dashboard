@@ -816,6 +816,14 @@ class UpdateCompanyRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
 
 
+class DevLoginRequest(BaseModel):
+    """Request for development login (bypasses OAuth)."""
+    email: str = Field(..., min_length=3, max_length=255)
+    first_name: str = Field(default="Dev", min_length=1, max_length=100)
+    last_name: str = Field(default="User", min_length=1, max_length=100)
+    role: str = Field(default="ADMIN", pattern="^(ADMIN|MANAGER|USER)$")
+
+
 class AuthAuditLogEntry(BaseModel):
     """Authentication audit log entry."""
     id: int

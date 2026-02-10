@@ -4787,6 +4787,149 @@ class WorklogStorage:
             await db.execute(query, params)
             await db.commit()
 
+    async def count_users_in_company(self, company_id: int) -> int:
+        """Count number of active users in a company."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM oauth_users WHERE company_id = ? AND is_active = 1",
+                (company_id,)
+            )
+            result = await cursor.fetchone()
+            return result[0] if result else 0
+
+    async def delete_oauth_user(self, user_id: int) -> bool:
+        """
+        Delete a user account.
+
+        Returns True if user was deleted, False if not found.
+        """
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            # Delete user's sessions first
+            await db.execute("DELETE FROM auth_sessions WHERE user_id = ?", (user_id,))
+
+            # Delete the user
+            cursor = await db.execute("DELETE FROM oauth_users WHERE id = ?", (user_id,))
+            await db.commit()
+
+            return cursor.rowcount > 0
+
+    async def delete_company_cascade(self, company_id: int) -> bool:
+        """
+        Delete a company and ALL associated data in cascade.
+
+        WARNING: This is irreversible and will delete:
+        - The company record
+        - All users (oauth_users and legacy users)
+        - All teams
+        - All JIRA instances (+ child tables via CASCADE: jira_instance_issue_types, package_template_instances)
+        - All worklogs
+        - All epics
+        - All billing data:
+          - billing_clients
+          - billing_projects (+ child tables via CASCADE: billing_rates, billing_project_mappings)
+          - invoices (+ child tables via CASCADE: invoice_line_items)
+        - All package_templates (+ child tables via CASCADE: package_template_elements, package_template_instances)
+        - All holidays
+        - All configurations (factorial_config, user_factorial_accounts, user_jira_accounts)
+        - All complementary_groups (+ child table: complementary_group_members via foreign key)
+        - All logs, sync_history, auth logs
+        - All sessions
+
+        Returns True if company was deleted, False if not found.
+        """
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            # Order matters: delete children before parents to avoid FK constraints
+            # Many child tables have ON DELETE CASCADE, so they'll be auto-deleted
+
+            # 1. Delete all sessions for users in this company
+            await db.execute("""
+                DELETE FROM auth_sessions
+                WHERE user_id IN (SELECT id FROM oauth_users WHERE company_id = ?)
+            """, (company_id,))
+
+            # 2. Delete auth audit log for this company
+            try:
+                await db.execute("DELETE FROM auth_audit_log WHERE company_id = ?", (company_id,))
+            except:
+                pass  # Table might not exist in older DBs
+
+            # 3. Delete all invitations
+            await db.execute("DELETE FROM invitations WHERE company_id = ?", (company_id,))
+
+            # 4. Delete user account mappings
+            await db.execute("""
+                DELETE FROM user_factorial_accounts
+                WHERE user_id IN (SELECT id FROM oauth_users WHERE company_id = ?)
+            """, (company_id,))
+            await db.execute("""
+                DELETE FROM user_jira_accounts
+                WHERE user_id IN (SELECT id FROM oauth_users WHERE company_id = ?)
+            """, (company_id,))
+
+            # 5. Delete all users (oauth_users and legacy users table)
+            await db.execute("DELETE FROM oauth_users WHERE company_id = ?", (company_id,))
+            await db.execute("DELETE FROM users WHERE company_id = ?", (company_id,))
+
+            # 6. Delete all teams
+            await db.execute("DELETE FROM teams WHERE company_id = ?", (company_id,))
+
+            # 7. Delete complementary groups (members deleted via FK cascade)
+            await db.execute("DELETE FROM complementary_groups WHERE company_id = ?", (company_id,))
+
+            # 8. Delete all JIRA instances (auto-deletes: jira_instance_issue_types, package_template_instances via CASCADE)
+            await db.execute("DELETE FROM jira_instances WHERE company_id = ?", (company_id,))
+
+            # 9. Delete all worklogs
+            await db.execute("DELETE FROM worklogs WHERE company_id = ?", (company_id,))
+
+            # 10. Delete all epics
+            await db.execute("DELETE FROM epics WHERE company_id = ?", (company_id,))
+
+            # 11. Delete billing data (some children auto-delete via CASCADE)
+            await db.execute("DELETE FROM billing_clients WHERE company_id = ?", (company_id,))
+            # billing_projects deletion auto-deletes: billing_rates, billing_project_mappings via CASCADE
+            await db.execute("DELETE FROM billing_projects WHERE company_id = ?", (company_id,))
+            # invoices deletion auto-deletes: invoice_line_items via CASCADE
+            await db.execute("DELETE FROM invoices WHERE company_id = ?", (company_id,))
+
+            # 12. Delete package templates (auto-deletes: package_template_elements, package_template_instances via CASCADE)
+            await db.execute("DELETE FROM package_templates WHERE company_id = ?", (company_id,))
+
+            # 13. Delete holidays
+            await db.execute("DELETE FROM holidays WHERE company_id = ?", (company_id,))
+
+            # 14. Delete configurations
+            await db.execute("DELETE FROM factorial_config WHERE company_id = ?", (company_id,))
+
+            # 15. Delete sync history
+            try:
+                await db.execute("DELETE FROM sync_history WHERE company_id = ?", (company_id,))
+            except:
+                pass  # Table might not have company_id column
+
+            try:
+                await db.execute("DELETE FROM factorial_sync_history WHERE company_id = ?", (company_id,))
+            except:
+                pass  # Table might not exist or have company_id
+
+            # 16. Delete logs
+            await db.execute("DELETE FROM logs WHERE company_id = ?", (company_id,))
+
+            # 17. Delete billing classifications
+            try:
+                await db.execute("DELETE FROM billing_worklog_classifications WHERE company_id = ?", (company_id,))
+            except:
+                pass  # Table might not have company_id
+
+            # 18. Finally, delete the company itself
+            cursor = await db.execute("DELETE FROM companies WHERE id = ?", (company_id,))
+            await db.commit()
+
+            return cursor.rowcount > 0
+
     # Auth Sessions
 
     async def create_session(

@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 from ..models import (
     TokenResponse, RefreshTokenRequest, OAuthUserResponse, CompanyResponse,
     OnboardingRequiredResponse, CompleteOnboardingRequest,
-    UpdateProfileRequest, UpdateCompanyRequest
+    UpdateProfileRequest, UpdateCompanyRequest, DevLoginRequest
 )
 from ..auth.jwt import create_access_token, create_refresh_token, create_onboarding_token, verify_token
 from ..auth.dependencies import get_current_user, get_current_user_optional, require_admin, CurrentUser
@@ -324,12 +324,7 @@ async def get_me(current_user: CurrentUser = Depends(get_current_user)):
 
 
 @router.post("/dev/login")
-async def dev_login(
-    email: str = "dev@dev.local",
-    first_name: str = "Dev",
-    last_name: str = "User",
-    role: str = "ADMIN"
-):
+async def dev_login(request: DevLoginRequest):
     """
     Development-only login endpoint that bypasses Google OAuth.
 
@@ -338,16 +333,22 @@ async def dev_login(
 
     Returns 403 Forbidden if DEV_MODE is not enabled (production safety).
 
+    If this is the first user (no companies exist), returns OnboardingRequiredResponse
+    to mirror the OAuth flow and allow testing the onboarding process.
+
     Args:
-        email: User email (default: dev@dev.local)
-        first_name: User first name (default: Dev)
-        last_name: User last name (default: User)
-        role: User role - ADMIN, MANAGER, or USER (default: ADMIN)
+        request: DevLoginRequest with email, first_name, last_name, role
 
     Returns:
         TokenResponse with access_token, refresh_token, user, company
+        OR OnboardingRequiredResponse if first user
     """
     storage = get_storage()
+
+    email = request.email
+    first_name = request.first_name
+    last_name = request.last_name
+    role = request.role
 
     # 1. Production safety guard
     if not auth_settings.DEV_MODE:
@@ -357,35 +358,43 @@ async def dev_login(
             detail="Development authentication is disabled. Set DEV_MODE=true in .env for local development."
         )
 
-    # 2. Validate role
-    valid_roles = ["ADMIN", "MANAGER", "USER"]
-    if role not in valid_roles:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid role '{role}'. Must be one of: {', '.join(valid_roles)}"
-        )
-
     logger.info(f"Dev login attempt for email: {email}, role: {role}")
 
-    # 3. Ensure company exists (auto-create if empty database)
+    # 3. Check if this is first user (no companies exist) - require onboarding
     company_count = await storage.count_companies()
 
     if company_count == 0:
-        logger.info("No companies found - creating default dev company")
+        logger.info("No companies found - first dev user requires onboarding")
+
+        # Generate onboarding token (like OAuth flow)
+        domain = email.split('@')[1] if '@' in email else 'dev.local'
+        onboarding_token = create_onboarding_token(
+            google_id=f"dev_{email}",
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            picture_url=None
+        )
+
+        # Return onboarding response
+        return OnboardingRequiredResponse(
+            onboarding_required=True,
+            onboarding_token=onboarding_token,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            picture_url=None
+        )
+
+    # Company exists - use company_id=1 for dev
+    company_id = 1
+    company = await storage.get_company(company_id)
+    if not company:
+        # Fallback: create dev company
         company_id = await storage.create_company(
             name=auth_settings.DEV_DEFAULT_COMPANY,
             domain="dev.local"
         )
-    else:
-        # Use first company (dev always uses company_id=1)
-        company_id = 1
-        company = await storage.get_company(company_id)
-        if not company:
-            # Fallback: create dev company
-            company_id = await storage.create_company(
-                name=auth_settings.DEV_DEFAULT_COMPANY,
-                domain="dev.local"
-            )
 
     # 4. Get or create user
     user = await storage.get_oauth_user_by_email(email, company_id=company_id)
@@ -583,6 +592,72 @@ async def update_company(
     logger.info(f"Company updated by {current_user.email}: {request.name}")
 
     return {"company": CompanyResponse(**company)}
+
+
+@router.delete("/account")
+async def delete_account(current_user: CurrentUser = Depends(get_current_user)):
+    """
+    Delete the current user's account.
+
+    If this is the last user in the company, all company data will be deleted in cascade.
+    This includes:
+    - All users in the company
+    - All teams
+    - All JIRA instances and configurations
+    - All worklogs, epics, and issues
+    - All billing data
+    - All logs and sessions
+
+    WARNING: This action is irreversible.
+
+    Returns:
+        - message: Success message
+        - company_deleted: True if company was also deleted (last user)
+    """
+    storage = get_storage()
+
+    user_id = current_user.id
+    company_id = current_user.company_id
+    email = current_user.email
+
+    # Log BEFORE deletion
+    await storage.log_auth_event(
+        event_type="account_deletion_initiated",
+        company_id=company_id,
+        user_id=user_id,
+        email=email
+    )
+
+    # Count users in company (before deletion)
+    user_count = await storage.count_users_in_company(company_id)
+
+    logger.warning(f"Account deletion initiated by {email}, company has {user_count} user(s)")
+
+    # Delete the user
+    deleted = await storage.delete_oauth_user(user_id)
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    company_deleted = False
+
+    # If this was the last user, delete the entire company and all data
+    if user_count == 1:
+        logger.warning(f"Last user deleted, cascading company deletion for company_id={company_id}")
+        company_deleted = await storage.delete_company_cascade(company_id)
+
+        if company_deleted:
+            logger.warning(f"Company {company_id} and all associated data deleted (cascade)")
+
+    logger.info(f"Account deleted successfully: {email}, company_deleted={company_deleted}")
+
+    return {
+        "message": "Account deleted successfully",
+        "company_deleted": company_deleted
+    }
 
 
 @router.get("/config")
