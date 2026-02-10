@@ -855,3 +855,80 @@ export async function getFactorialLeaves(startDate, endDate, userId = null, stat
     if (status) params.status = status
     return fetchApi('/factorial/leaves', params)
 }
+
+// ============ Profile & Auth API ============
+
+export async function getProfile() {
+    const response = await fetchApi('/auth/me')
+    // Transform { user: {...}, company: {...} } to { ...user, company: {...} }
+    return { ...response.user, company: response.company }
+}
+
+export async function updateProfile(data) {
+    const response = await fetchApiPut('/auth/profile', data)
+    // Transform { user: {...}, company: {...} } to { ...user, company: {...} }
+    return { ...response.user, company: response.company }
+}
+
+export async function updateCompany(data) {
+    return fetchApiPut('/auth/company', data)
+}
+
+export async function completeOnboarding(onboardingToken, companyName) {
+    // No auth header needed - uses onboarding token
+    const response = await fetch(`${API_BASE}/auth/complete-onboarding`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            onboarding_token: onboardingToken,
+            company_name: companyName
+        })
+    })
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.detail || `Onboarding Error: ${response.status}`)
+    }
+
+    return response.json()
+}
+
+export async function logout() {
+    try {
+        const token = getAccessToken()
+        const headers = {}
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`
+        }
+        await fetch(`${API_BASE}/auth/logout`, { method: 'POST', headers })
+    } finally {
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('user')
+        window.location.href = '/login'
+    }
+}
+
+export async function deleteAccount() {
+    const response = await fetch(`${API_BASE}/auth/account`, {
+        method: 'DELETE',
+        headers: {
+            'Authorization': `Bearer ${getAccessToken()}`,
+            'Content-Type': 'application/json'
+        }
+    })
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.detail || 'Failed to delete account')
+    }
+
+    const result = await response.json()
+
+    // Clear local storage
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('user')
+
+    return result
+}

@@ -149,7 +149,7 @@ export default function UsersSection({ users, teams, jiraInstances, onUsersChang
                             {bulkFetchStatus === 'loading'
                                 ? 'Fetch in corso...'
                                 : bulkFetchStatus && bulkFetchStatus !== 'loading'
-                                ? `${bulkFetchStatus.summary.success} trovati, ${bulkFetchStatus.summary.skipped} gia configurati`
+                                ? `✓ ${bulkFetchStatus.summary.success} trovati, ${bulkFetchStatus.summary.failed} errori, ${bulkFetchStatus.summary.skipped} gia configurati`
                                 : 'Fetch Account JIRA'}
                         </button>
                     )}

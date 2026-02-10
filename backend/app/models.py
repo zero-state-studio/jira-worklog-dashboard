@@ -211,6 +211,31 @@ class BulkUserCreateResponse(BaseModel):
     results: list[BulkUserCreateResult]
 
 
+class BulkFetchAccountResult(BaseModel):
+    """Single user result from bulk JIRA account fetch."""
+    user_id: int
+    user_name: str  # Full name for display (first_name + last_name)
+    email: str
+    jira_instance: str
+    status: str  # "success", "failed", "skipped"
+    account_id: Optional[str] = None
+    error: Optional[str] = None
+
+
+class BulkFetchAccountSummary(BaseModel):
+    """Summary of bulk JIRA account fetch operation."""
+    total: int = 0
+    success: int = 0
+    failed: int = 0
+    skipped: int = 0
+
+
+class BulkFetchAccountResponse(BaseModel):
+    """Response from bulk JIRA account fetch."""
+    results: list[BulkFetchAccountResult]
+    summary: BulkFetchAccountSummary
+
+
 # ============ Holiday Models ============
 
 class HolidayCreate(BaseModel):
@@ -787,6 +812,41 @@ class InvitationResponse(BaseModel):
 class InvitationAccept(BaseModel):
     """Request to accept an invitation."""
     token: str
+
+
+class OnboardingRequiredResponse(BaseModel):
+    """Response when user needs to complete onboarding."""
+    onboarding_required: bool = True
+    onboarding_token: str
+    email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    picture_url: Optional[str] = None
+
+
+class CompleteOnboardingRequest(BaseModel):
+    """Request to complete onboarding (create company + user)."""
+    onboarding_token: str
+    company_name: str = Field(..., min_length=1, max_length=200)
+
+
+class UpdateProfileRequest(BaseModel):
+    """Request to update user profile."""
+    first_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
+
+
+class UpdateCompanyRequest(BaseModel):
+    """Request to update company information (admin only)."""
+    name: str = Field(..., min_length=1, max_length=200)
+
+
+class DevLoginRequest(BaseModel):
+    """Request for development login (bypasses OAuth)."""
+    email: str = Field(..., min_length=3, max_length=255)
+    first_name: str = Field(default="Dev", min_length=1, max_length=100)
+    last_name: str = Field(default="User", min_length=1, max_length=100)
+    role: str = Field(default="ADMIN", pattern="^(ADMIN|MANAGER|USER)$")
 
 
 class AuthAuditLogEntry(BaseModel):

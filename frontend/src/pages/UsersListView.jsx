@@ -81,7 +81,7 @@ export default function UsersListView({ dateRange, selectedInstance }) {
                             </svg>
                         }
                         actionLabel="Vai alle Impostazioni"
-                        onAction={() => navigate('/settings')}
+                        onAction={() => navigate('/app/settings')}
                     />
                 </div>
             </div>
@@ -291,7 +291,7 @@ export default function UsersListView({ dateRange, selectedInstance }) {
                                     <tr
                                         key={user.email}
                                         className="border-b border-dark-700/50 hover:bg-dark-700/30 transition-colors cursor-pointer"
-                                        onClick={() => navigate(`/users/${encodeURIComponent(user.email)}`)}
+                                        onClick={() => navigate(`/app/users/${encodeURIComponent(user.email)}`)}
                                     >
                                         <td className="py-3 px-4">
                                             <div className="flex items-center gap-3">

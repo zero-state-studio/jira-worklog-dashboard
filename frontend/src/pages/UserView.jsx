@@ -385,7 +385,7 @@ export default function UserView({ dateRange, selectedInstance }) {
                                     contributorCount={epic.contributor_count}
                                     jiraInstance={epic.jira_instance}
                                     parentType={epic.parent_type}
-                                    onClick={() => navigate(`/epics/${encodeURIComponent(epic.epic_key)}`)}
+                                    onClick={() => navigate(`/app/epics/${encodeURIComponent(epic.epic_key)}`)}
                                 />
                             ))}
                         </div>
@@ -399,7 +399,7 @@ export default function UserView({ dateRange, selectedInstance }) {
                 <WorklogCalendar
                     worklogs={data.worklogs}
                     leaves={leaves}
-                    onUserClick={(email) => navigate(`/users/${encodeURIComponent(email)}`)}
+                    onUserClick={(email) => navigate(`/app/users/${encodeURIComponent(email)}`)}
                 />
             </div>
         </div>

@@ -32,6 +32,9 @@ class AuthSettings(BaseSettings):
     DEV_DEFAULT_LAST_NAME: str = "User"
     DEV_DEFAULT_COMPANY: str = "Dev Company"
 
+    # Frontend URL (for OAuth redirects)
+    FRONTEND_URL: str = "http://localhost:5173"
+
     # Email Provider Configuration (SMTP or SendGrid)
     EMAIL_PROVIDER: str = "smtp"  # "smtp" or "sendgrid"
     SMTP_HOST: str = "localhost"

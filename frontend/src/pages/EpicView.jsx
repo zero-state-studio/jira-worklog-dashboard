@@ -209,7 +209,7 @@ export default function EpicView({ dateRange, selectedInstance }) {
                                         return (
                                             <tr
                                                 key={issue.issue_key}
-                                                onClick={() => navigate(`/issues/${encodeURIComponent(issue.issue_key)}`)}
+                                                onClick={() => navigate(`/app/issues/${encodeURIComponent(issue.issue_key)}`)}
                                                 className="border-b border-dark-800 hover:bg-dark-700/50 cursor-pointer transition-colors"
                                             >
                                                 <td className="px-4 py-3">
@@ -423,7 +423,7 @@ function EpicDetailView({ data, navigate }) {
                             email={contributor.email}
                             hours={contributor.total_hours}
                             teamName={contributor.team_name}
-                            onClick={() => navigate(`/users/${encodeURIComponent(contributor.email)}`)}
+                            onClick={() => navigate(`/app/users/${encodeURIComponent(contributor.email)}`)}
                         />
                     ))}
                 </div>
@@ -432,7 +432,7 @@ function EpicDetailView({ data, navigate }) {
             {/* Calendario Worklog */}
             <WorklogCalendar
                 worklogs={data.worklogs}
-                onUserClick={(email) => navigate(`/users/${encodeURIComponent(email)}`)}
+                onUserClick={(email) => navigate(`/app/users/${encodeURIComponent(email)}`)}
             />
         </div>
     )

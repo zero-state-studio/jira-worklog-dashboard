@@ -10,6 +10,7 @@ Tests verify that:
 """
 import pytest
 from datetime import date, datetime, timedelta
+from app.models import Worklog
 
 
 def make_auth_header(token: str) -> dict:
@@ -635,31 +636,31 @@ async def test_dashboard_data_isolation(client, setup_companies, company1_admin_
 
     # Create worklogs for Company 1
     worklogs_c1 = [
-        {
-            "id": "wl1",
-            "issue_key": "PROJ-1",
-            "user_email": "user1@company1.test",
-            "user_display_name": "User One",
-            "started": datetime(2024, 1, 15, 9, 0, 0).isoformat(),
-            "time_spent_seconds": 28800,  # 8 hours
-            "description": "Company 1 work",
-            "jira_instance": "Instance1"
-        }
+        Worklog(
+            id="wl1",
+            issue_key="PROJ-1",
+            issue_summary="Company 1 work",
+            author_email="user1@company1.test",
+            author_display_name="User One",
+            started=datetime(2024, 1, 15, 9, 0, 0),
+            time_spent_seconds=28800,  # 8 hours
+            jira_instance="Instance1"
+        )
     ]
     await storage.upsert_worklogs(worklogs_c1, company1_id)
 
     # Create worklogs for Company 2
     worklogs_c2 = [
-        {
-            "id": "wl2",
-            "issue_key": "TASK-1",
-            "user_email": "user2@company2.test",
-            "user_display_name": "User Two",
-            "started": datetime(2024, 1, 15, 10, 0, 0).isoformat(),
-            "time_spent_seconds": 14400,  # 4 hours
-            "description": "Company 2 work",
-            "jira_instance": "Instance2"
-        }
+        Worklog(
+            id="wl2",
+            issue_key="TASK-1",
+            issue_summary="Company 2 work",
+            author_email="user2@company2.test",
+            author_display_name="User Two",
+            started=datetime(2024, 1, 15, 10, 0, 0),
+            time_spent_seconds=14400,  # 4 hours
+            jira_instance="Instance2"
+        )
     ]
     await storage.upsert_worklogs(worklogs_c2, company2_id)
 

@@ -3,6 +3,10 @@ Settings API router - manage users and teams in database.
 """
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
 
 from ..models import (
     AppConfig,
@@ -11,6 +15,7 @@ from ..models import (
     FetchAccountIdRequest, FetchAccountIdResponse,
     ImportConfigResponse,
     BulkUserCreateRequest, BulkUserCreateResult, BulkUserCreateResponse,
+    BulkFetchAccountResult, BulkFetchAccountSummary, BulkFetchAccountResponse,
     HolidayCreate, HolidayUpdate,
 )
 from ..config import get_config
@@ -450,7 +455,7 @@ async def delete_jira_account(
     return {"success": True, "message": "JIRA account mapping deleted"}
 
 
-@router.post("/users/bulk-fetch-accounts")
+@router.post("/users/bulk-fetch-accounts", response_model=BulkFetchAccountResponse)
 async def bulk_fetch_jira_accounts(current_user: CurrentUser = Depends(require_admin)):
     """Fetch JIRA account IDs for all users across all JIRA instances (ADMIN only, scoped to company)."""
     from ..models import JiraInstanceConfig
@@ -460,9 +465,15 @@ async def bulk_fetch_jira_accounts(current_user: CurrentUser = Depends(require_a
     instances = await storage.get_all_jira_instances(current_user.company_id)
 
     if not users:
-        return {"results": [], "summary": {"total": 0, "success": 0, "failed": 0, "skipped": 0}}
+        return BulkFetchAccountResponse(
+            results=[],
+            summary=BulkFetchAccountSummary(total=0, success=0, failed=0, skipped=0)
+        )
     if not instances:
-        return {"results": [], "summary": {"total": 0, "success": 0, "failed": 0, "skipped": 0}}
+        return BulkFetchAccountResponse(
+            results=[],
+            summary=BulkFetchAccountSummary(total=0, success=0, failed=0, skipped=0)
+        )
 
     results = []
     success_count = 0
@@ -481,6 +492,9 @@ async def bulk_fetch_jira_accounts(current_user: CurrentUser = Depends(require_a
                 continue
 
             try:
+                # Try to fetch account ID from this JIRA instance
+                logger.info(f"Fetching account ID for {user['email']} from {instance_name}")
+
                 instance_config = JiraInstanceConfig(
                     name=inst["name"],
                     url=inst["url"],
@@ -491,45 +505,86 @@ async def bulk_fetch_jira_accounts(current_user: CurrentUser = Depends(require_a
                 client = JiraClient(instance_config)
                 account_id = await client.search_user_by_email(user["email"])
 
-                if account_id:
-                    await storage.set_user_jira_account(user["id"], instance_name, account_id)
-                    results.append({
-                        "user_email": user["email"],
-                        "user_name": f"{user['first_name']} {user['last_name']}",
-                        "jira_instance": instance_name,
-                        "success": True,
-                        "account_id": account_id
-                    })
-                    success_count += 1
-                else:
-                    results.append({
-                        "user_email": user["email"],
-                        "user_name": f"{user['first_name']} {user['last_name']}",
-                        "jira_instance": instance_name,
-                        "success": False,
-                        "error": "User not found in JIRA"
-                    })
+                if not account_id:
+                    logger.warning(f"No JIRA account found for {user['email']} in {instance_name}")
+                    results.append(BulkFetchAccountResult(
+                        user_id=user['id'],
+                        user_name=f"{user['first_name']} {user['last_name']}",
+                        email=user['email'],
+                        jira_instance=instance_name,
+                        status="failed",
+                        error="No JIRA account found"
+                    ))
                     failed_count += 1
+                    continue
 
-            except Exception as e:
-                results.append({
-                    "user_email": user["email"],
-                    "user_name": f"{user['first_name']} {user['last_name']}",
-                    "jira_instance": instance_name,
-                    "success": False,
-                    "error": str(e)
-                })
+                # Update in database
+                await storage.set_user_jira_account(
+                    user_id=user['id'],
+                    jira_instance=instance_name,
+                    account_id=account_id,
+                    company_id=current_user.company_id
+                )
+
+                logger.info(f"Successfully set account ID {account_id} for {user['email']} in {instance_name}")
+                results.append(BulkFetchAccountResult(
+                    user_id=user['id'],
+                    user_name=f"{user['first_name']} {user['last_name']}",
+                    email=user['email'],
+                    jira_instance=instance_name,
+                    status="success",
+                    account_id=account_id
+                ))
+                success_count += 1
+
+            except httpx.RequestError as e:
+                # Network/connection errors
+                logger.error(f"Connection error fetching account for {user['email']} from {instance_name}: {e}")
+                results.append(BulkFetchAccountResult(
+                    user_id=user['id'],
+                    user_name=f"{user['first_name']} {user['last_name']}",
+                    email=user['email'],
+                    jira_instance=instance_name,
+                    status="failed",
+                    error=f"Connection error: {str(e)}"
+                ))
                 failed_count += 1
 
-    return {
-        "results": results,
-        "summary": {
-            "total": success_count + failed_count + skipped_count,
-            "success": success_count,
-            "failed": failed_count,
-            "skipped": skipped_count
-        }
-    }
+            except httpx.HTTPStatusError as e:
+                # HTTP errors (401, 403, 404, etc.)
+                logger.error(f"HTTP error {e.response.status_code} for {user['email']} from {instance_name}")
+                results.append(BulkFetchAccountResult(
+                    user_id=user['id'],
+                    user_name=f"{user['first_name']} {user['last_name']}",
+                    email=user['email'],
+                    jira_instance=instance_name,
+                    status="failed",
+                    error=f"HTTP {e.response.status_code}: {e.response.text[:100]}"
+                ))
+                failed_count += 1
+
+            except Exception as e:
+                # Generic errors (should be rare now)
+                logger.exception(f"Unexpected error for {user['email']} from {instance_name}: {e}")
+                results.append(BulkFetchAccountResult(
+                    user_id=user['id'],
+                    user_name=f"{user['first_name']} {user['last_name']}",
+                    email=user['email'],
+                    jira_instance=instance_name,
+                    status="failed",
+                    error=f"Unexpected error: {str(e)}"
+                ))
+                failed_count += 1
+
+    return BulkFetchAccountResponse(
+        results=results,
+        summary=BulkFetchAccountSummary(
+            total=success_count + failed_count + skipped_count,
+            success=success_count,
+            failed=failed_count,
+            skipped=skipped_count
+        )
+    )
 
 
 # ========== Import Endpoints ==========

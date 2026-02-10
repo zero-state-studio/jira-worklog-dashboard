@@ -722,6 +722,13 @@ class WorklogStorage:
                         ALTER TABLE worklogs
                         ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE
                     """)
+                    # Backfill existing worklogs with company_id = 1 for backward compatibility
+                    await db.execute("""
+                        UPDATE worklogs
+                        SET company_id = 1
+                        WHERE company_id IS NULL
+                    """)
+                    await db.commit()
                 except Exception:
                     pass  # Column already exists
 
@@ -805,6 +812,51 @@ class WorklogStorage:
                     """)
                 except Exception:
                     pass  # Column already exists
+
+                # ========== Automatic Backfill for Legacy Data ==========
+                # Backfill any remaining NULL company_id values to company_id=1 for backward compatibility
+                # This ensures data created before multi-tenant implementation is visible
+
+                try:
+                    # Backfill worklogs
+                    await db.execute("""
+                        UPDATE worklogs
+                        SET company_id = 1
+                        WHERE company_id IS NULL
+                    """)
+
+                    # Backfill epics
+                    await db.execute("""
+                        UPDATE epics
+                        SET company_id = 1
+                        WHERE company_id IS NULL
+                    """)
+
+                    # Backfill teams
+                    await db.execute("""
+                        UPDATE teams
+                        SET company_id = 1
+                        WHERE company_id IS NULL
+                    """)
+
+                    # Backfill users
+                    await db.execute("""
+                        UPDATE users
+                        SET company_id = 1
+                        WHERE company_id IS NULL
+                    """)
+
+                    # Backfill jira_instances
+                    await db.execute("""
+                        UPDATE jira_instances
+                        SET company_id = 1
+                        WHERE company_id IS NULL
+                    """)
+
+                    await db.commit()
+                except Exception as e:
+                    # Silently ignore errors (tables might not have company_id yet)
+                    pass
 
                 # Create indexes for company_id columns
                 await db.execute("""
@@ -1010,15 +1062,18 @@ class WorklogStorage:
             WHERE company_id = ? AND date(started) >= ? AND date(started) <= ?
         """
         params = [company_id, start_date.isoformat(), end_date.isoformat()]
-        
+
         if jira_instance:
             query += " AND jira_instance = ?"
             params.append(jira_instance)
-        
+
         if user_emails:
             placeholders = ",".join("?" * len(user_emails))
             query += f" AND LOWER(author_email) IN ({placeholders})"
             params.extend([e.lower() for e in user_emails])
+
+        print(f"🔍 SQL QUERY: {query}")
+        print(f"🔍 SQL PARAMS: {params}")
         
         query += " ORDER BY started DESC"
         
@@ -1035,7 +1090,8 @@ class WorklogStorage:
     
     async def upsert_worklogs(self, worklogs: list[Worklog], company_id: int) -> tuple[int, int]:
         """
-        Insert or update worklogs.
+        Insert or update worklogs using batch operations.
+        Optimized to eliminate N+1 query problem.
 
         Args:
             worklogs: List of worklogs to insert/update
@@ -1050,63 +1106,31 @@ class WorklogStorage:
         if not company_id:
             raise ValueError("company_id is required for multi-tenant operations")
 
-        inserted = 0
-        updated = 0
-        
+        if not worklogs:
+            return 0, 0
+
         async with aiosqlite.connect(self.db_path) as db:
-            for wl in worklogs:
-                # Check if exists
-                async with db.execute(
-                    "SELECT id FROM worklogs WHERE id = ?", 
-                    (wl.id,)
-                ) as cursor:
-                    exists = await cursor.fetchone() is not None
-                
-                if exists:
-                    await db.execute("""
-                        UPDATE worklogs SET
-                            company_id = ?,
-                            issue_key = ?,
-                            issue_summary = ?,
-                            author_email = ?,
-                            author_display_name = ?,
-                            time_spent_seconds = ?,
-                            started = ?,
-                            jira_instance = ?,
-                            parent_key = ?,
-                            parent_name = ?,
-                            parent_type = ?,
-                            epic_key = ?,
-                            epic_name = ?,
-                            data = ?,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """, (
-                        company_id,
-                        wl.issue_key,
-                        wl.issue_summary,
-                        wl.author_email,
-                        wl.author_display_name,
-                        wl.time_spent_seconds,
-                        wl.started.isoformat(),
-                        wl.jira_instance,
-                        wl.parent_key,
-                        wl.parent_name,
-                        wl.parent_type,
-                        wl.epic_key,
-                        wl.epic_name,
-                        wl.model_dump_json(),
-                        wl.id
-                    ))
-                    updated += 1
-                else:
-                    await db.execute("""
-                        INSERT INTO worklogs
-                        (id, company_id, issue_key, issue_summary, author_email, author_display_name,
-                         time_spent_seconds, started, jira_instance, parent_key, parent_name,
-                         parent_type, epic_key, epic_name, data)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
+            # Step 1: Get all existing worklog IDs in a single query (no N+1!)
+            worklog_ids_to_check = [wl.id for wl in worklogs]
+            placeholders = ",".join("?" * len(worklog_ids_to_check))
+
+            async with db.execute(
+                f"SELECT id FROM worklogs WHERE id IN ({placeholders})",
+                worklog_ids_to_check
+            ) as cursor:
+                existing_ids = {row[0] for row in await cursor.fetchall()}
+
+            # Step 2: Separate worklogs into new and existing
+            new_worklogs = [wl for wl in worklogs if wl.id not in existing_ids]
+            existing_worklogs = [wl for wl in worklogs if wl.id in existing_ids]
+
+            inserted = 0
+            updated = 0
+
+            # Step 3: Batch insert new worklogs using executemany
+            if new_worklogs:
+                insert_data = [
+                    (
                         wl.id,
                         company_id,
                         wl.issue_key,
@@ -1122,11 +1146,67 @@ class WorklogStorage:
                         wl.epic_key,
                         wl.epic_name,
                         wl.model_dump_json()
-                    ))
-                    inserted += 1
-            
+                    )
+                    for wl in new_worklogs
+                ]
+
+                await db.executemany("""
+                    INSERT INTO worklogs
+                    (id, company_id, issue_key, issue_summary, author_email, author_display_name,
+                     time_spent_seconds, started, jira_instance, parent_key, parent_name,
+                     parent_type, epic_key, epic_name, data)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, insert_data)
+
+                inserted = len(new_worklogs)
+
+            # Step 4: Batch update existing worklogs using executemany
+            if existing_worklogs:
+                update_data = [
+                    (
+                        company_id,
+                        wl.issue_key,
+                        wl.issue_summary,
+                        wl.author_email,
+                        wl.author_display_name,
+                        wl.time_spent_seconds,
+                        wl.started.isoformat(),
+                        wl.jira_instance,
+                        wl.parent_key,
+                        wl.parent_name,
+                        wl.parent_type,
+                        wl.epic_key,
+                        wl.epic_name,
+                        wl.model_dump_json(),
+                        wl.id
+                    )
+                    for wl in existing_worklogs
+                ]
+
+                await db.executemany("""
+                    UPDATE worklogs SET
+                        company_id = ?,
+                        issue_key = ?,
+                        issue_summary = ?,
+                        author_email = ?,
+                        author_display_name = ?,
+                        time_spent_seconds = ?,
+                        started = ?,
+                        jira_instance = ?,
+                        parent_key = ?,
+                        parent_name = ?,
+                        parent_type = ?,
+                        epic_key = ?,
+                        epic_name = ?,
+                        data = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, update_data)
+
+                updated = len(existing_worklogs)
+
             await db.commit()
-        
+
         return inserted, updated
     
     async def delete_worklogs_not_in_list(
@@ -4612,6 +4692,16 @@ class WorklogStorage:
                 row = await cursor.fetchone()
                 return dict(row) if row else None
 
+    async def update_company(self, company_id: int, name: str) -> bool:
+        """Update company name."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                UPDATE companies SET name = ? WHERE id = ? AND is_active = 1
+            """, (name, company_id))
+            await db.commit()
+            return cursor.rowcount > 0
+
     async def count_companies(self) -> int:
         """Count total active companies."""
         await self.initialize()
@@ -4751,6 +4841,149 @@ class WorklogStorage:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(query, params)
             await db.commit()
+
+    async def count_users_in_company(self, company_id: int) -> int:
+        """Count number of active users in a company."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM oauth_users WHERE company_id = ? AND is_active = 1",
+                (company_id,)
+            )
+            result = await cursor.fetchone()
+            return result[0] if result else 0
+
+    async def delete_oauth_user(self, user_id: int) -> bool:
+        """
+        Delete a user account.
+
+        Returns True if user was deleted, False if not found.
+        """
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            # Delete user's sessions first
+            await db.execute("DELETE FROM auth_sessions WHERE user_id = ?", (user_id,))
+
+            # Delete the user
+            cursor = await db.execute("DELETE FROM oauth_users WHERE id = ?", (user_id,))
+            await db.commit()
+
+            return cursor.rowcount > 0
+
+    async def delete_company_cascade(self, company_id: int) -> bool:
+        """
+        Delete a company and ALL associated data in cascade.
+
+        WARNING: This is irreversible and will delete:
+        - The company record
+        - All users (oauth_users and legacy users)
+        - All teams
+        - All JIRA instances (+ child tables via CASCADE: jira_instance_issue_types, package_template_instances)
+        - All worklogs
+        - All epics
+        - All billing data:
+          - billing_clients
+          - billing_projects (+ child tables via CASCADE: billing_rates, billing_project_mappings)
+          - invoices (+ child tables via CASCADE: invoice_line_items)
+        - All package_templates (+ child tables via CASCADE: package_template_elements, package_template_instances)
+        - All holidays
+        - All configurations (factorial_config, user_factorial_accounts, user_jira_accounts)
+        - All complementary_groups (+ child table: complementary_group_members via foreign key)
+        - All logs, sync_history, auth logs
+        - All sessions
+
+        Returns True if company was deleted, False if not found.
+        """
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            # Order matters: delete children before parents to avoid FK constraints
+            # Many child tables have ON DELETE CASCADE, so they'll be auto-deleted
+
+            # 1. Delete all sessions for users in this company
+            await db.execute("""
+                DELETE FROM auth_sessions
+                WHERE user_id IN (SELECT id FROM oauth_users WHERE company_id = ?)
+            """, (company_id,))
+
+            # 2. Delete auth audit log for this company
+            try:
+                await db.execute("DELETE FROM auth_audit_log WHERE company_id = ?", (company_id,))
+            except:
+                pass  # Table might not exist in older DBs
+
+            # 3. Delete all invitations
+            await db.execute("DELETE FROM invitations WHERE company_id = ?", (company_id,))
+
+            # 4. Delete user account mappings
+            await db.execute("""
+                DELETE FROM user_factorial_accounts
+                WHERE user_id IN (SELECT id FROM oauth_users WHERE company_id = ?)
+            """, (company_id,))
+            await db.execute("""
+                DELETE FROM user_jira_accounts
+                WHERE user_id IN (SELECT id FROM oauth_users WHERE company_id = ?)
+            """, (company_id,))
+
+            # 5. Delete all users (oauth_users and legacy users table)
+            await db.execute("DELETE FROM oauth_users WHERE company_id = ?", (company_id,))
+            await db.execute("DELETE FROM users WHERE company_id = ?", (company_id,))
+
+            # 6. Delete all teams
+            await db.execute("DELETE FROM teams WHERE company_id = ?", (company_id,))
+
+            # 7. Delete complementary groups (members deleted via FK cascade)
+            await db.execute("DELETE FROM complementary_groups WHERE company_id = ?", (company_id,))
+
+            # 8. Delete all JIRA instances (auto-deletes: jira_instance_issue_types, package_template_instances via CASCADE)
+            await db.execute("DELETE FROM jira_instances WHERE company_id = ?", (company_id,))
+
+            # 9. Delete all worklogs
+            await db.execute("DELETE FROM worklogs WHERE company_id = ?", (company_id,))
+
+            # 10. Delete all epics
+            await db.execute("DELETE FROM epics WHERE company_id = ?", (company_id,))
+
+            # 11. Delete billing data (some children auto-delete via CASCADE)
+            await db.execute("DELETE FROM billing_clients WHERE company_id = ?", (company_id,))
+            # billing_projects deletion auto-deletes: billing_rates, billing_project_mappings via CASCADE
+            await db.execute("DELETE FROM billing_projects WHERE company_id = ?", (company_id,))
+            # invoices deletion auto-deletes: invoice_line_items via CASCADE
+            await db.execute("DELETE FROM invoices WHERE company_id = ?", (company_id,))
+
+            # 12. Delete package templates (auto-deletes: package_template_elements, package_template_instances via CASCADE)
+            await db.execute("DELETE FROM package_templates WHERE company_id = ?", (company_id,))
+
+            # 13. Delete holidays
+            await db.execute("DELETE FROM holidays WHERE company_id = ?", (company_id,))
+
+            # 14. Delete configurations
+            await db.execute("DELETE FROM factorial_config WHERE company_id = ?", (company_id,))
+
+            # 15. Delete sync history
+            try:
+                await db.execute("DELETE FROM sync_history WHERE company_id = ?", (company_id,))
+            except:
+                pass  # Table might not have company_id column
+
+            try:
+                await db.execute("DELETE FROM factorial_sync_history WHERE company_id = ?", (company_id,))
+            except:
+                pass  # Table might not exist or have company_id
+
+            # 16. Delete logs
+            await db.execute("DELETE FROM logs WHERE company_id = ?", (company_id,))
+
+            # 17. Delete billing classifications
+            try:
+                await db.execute("DELETE FROM billing_worklog_classifications WHERE company_id = ?", (company_id,))
+            except:
+                pass  # Table might not have company_id
+
+            # 18. Finally, delete the company itself
+            cursor = await db.execute("DELETE FROM companies WHERE id = ?", (company_id,))
+            await db.commit()
+
+            return cursor.rowcount > 0
 
     # Auth Sessions
 

@@ -225,7 +225,7 @@ export default function IssueView({ dateRange }) {
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs text-dark-500">Epic:</span>
                                     <button
-                                        onClick={() => navigate(`/epics/${encodeURIComponent(data.epic_key)}`)}
+                                        onClick={() => navigate(`/app/epics/${encodeURIComponent(data.epic_key)}`)}
                                         className="badge-purple hover:opacity-80"
                                     >
                                         {data.epic_key}
@@ -345,7 +345,7 @@ export default function IssueView({ dateRange }) {
                                 name={contributor.display_name}
                                 email={contributor.email}
                                 hours={contributor.total_hours}
-                                onClick={() => navigate(`/users/${encodeURIComponent(contributor.email)}`)}
+                                onClick={() => navigate(`/app/users/${encodeURIComponent(contributor.email)}`)}
                             />
                         ))}
                     </div>
@@ -375,7 +375,7 @@ export default function IssueView({ dateRange }) {
                                     </td>
                                     <td className="table-cell">
                                         <button
-                                            onClick={() => navigate(`/users/${encodeURIComponent(wl.author_email)}`)}
+                                            onClick={() => navigate(`/app/users/${encodeURIComponent(wl.author_email)}`)}
                                             className="text-accent-blue hover:underline"
                                         >
                                             {wl.author_display_name}

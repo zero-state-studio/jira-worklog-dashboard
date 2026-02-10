@@ -69,6 +69,44 @@ def verify_token(token: str) -> Optional[dict]:
         return None
 
 
+def create_onboarding_token(
+    google_id: str,
+    email: str,
+    first_name: str = None,
+    last_name: str = None,
+    picture_url: str = None
+) -> str:
+    """
+    Create a short-lived JWT token for the onboarding flow.
+
+    This token is issued when a new user (first signup, no company yet)
+    completes Google OAuth but hasn't created their company yet.
+
+    Args:
+        google_id: Google OAuth ID
+        email: User email from Google
+        first_name: First name from Google profile
+        last_name: Last name from Google profile
+        picture_url: Profile picture URL from Google
+
+    Returns:
+        Encoded JWT token string (10 min expiry)
+    """
+    expire = datetime.utcnow() + timedelta(minutes=10)
+
+    payload = {
+        "type": "onboarding",
+        "google_id": google_id,
+        "email": email,
+        "first_name": first_name,
+        "last_name": last_name,
+        "picture_url": picture_url,
+        "exp": expire,
+    }
+
+    return jwt.encode(payload, auth_settings.JWT_SECRET_KEY, algorithm=auth_settings.JWT_ALGORITHM)
+
+
 def decode_token_without_verification(token: str) -> Optional[dict]:
     """
     Decode a JWT token without verifying signature (for debugging/logging).
