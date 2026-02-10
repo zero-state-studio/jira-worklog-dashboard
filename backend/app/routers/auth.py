@@ -386,24 +386,31 @@ async def dev_login(request: DevLoginRequest):
             picture_url=None
         )
 
-    # Company exists - use company_id=1 for dev
-    company_id = 1
-    company = await storage.get_company(company_id)
-    if not company:
-        # Fallback: create dev company
+    # 4. Check if user already exists (by google_id, globally unique)
+    google_id = f"dev_{email}"
+    user = await storage.get_oauth_user_by_google_id(google_id)
+
+    if user:
+        # User exists - use their existing company_id
+        company_id = user["company_id"]
+        logger.info(f"Existing dev user login: {email}, company_id={company_id}")
+        user_id = user["id"]
+        await storage.update_oauth_user_last_login(user_id)
+    else:
+        # User doesn't exist - create NEW company for this dev user
+        domain = email.split('@')[1] if '@' in email else 'dev.local'
+        company_name = f"Dev Company - {email}"
+
+        logger.info(f"Creating new dev company for user: {email}")
         company_id = await storage.create_company(
-            name=auth_settings.DEV_DEFAULT_COMPANY,
-            domain="dev.local"
+            name=company_name,
+            domain=domain
         )
 
-    # 4. Get or create user
-    user = await storage.get_oauth_user_by_email(email, company_id=company_id)
-
-    if not user:
-        # Create new dev user with fake google_id
-        logger.info(f"Creating new dev user: {email}")
+        # Create new dev user in the new company
+        logger.info(f"Creating new dev user: {email} in company_id={company_id}")
         user_id = await storage.create_oauth_user(
-            google_id=f"dev_{email}",  # Fake google_id with "dev_" prefix
+            google_id=google_id,
             email=email,
             company_id=company_id,
             role=role,
@@ -411,11 +418,6 @@ async def dev_login(request: DevLoginRequest):
             last_name=last_name,
             picture_url=None
         )
-    else:
-        # User exists - just update last login
-        logger.info(f"Existing dev user login: {email}")
-        user_id = user["id"]
-        await storage.update_oauth_user_last_login(user_id)
 
     # 5. Generate real JWT tokens (same as OAuth flow)
     access_token = create_access_token(user_id, company_id, email, role)

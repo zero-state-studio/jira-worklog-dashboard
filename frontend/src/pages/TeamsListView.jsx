@@ -226,7 +226,7 @@ export default function TeamsListView({ dateRange, selectedInstance }) {
                                             {Math.round(completion)}% completato
                                         </span>
                                         <button
-                                            onClick={() => navigate(`/teams/${encodeURIComponent(team.name)}`)}
+                                            onClick={() => navigate(`/app/teams/${encodeURIComponent(team.name)}`)}
                                             className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-accent-purple bg-accent-purple/10 rounded-lg hover:bg-accent-purple/20 transition-colors"
                                         >
                                             Vai al Team

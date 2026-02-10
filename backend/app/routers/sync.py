@@ -365,12 +365,20 @@ async def sync_worklogs_stream(
 
                                 user_account_ids = instance_account_ids.get(instance_name, [])
 
-                                yield json.dumps({
-                                    "type": "fetching_worklogs",
-                                    "instance": instance_name,
-                                    "message": f"Scaricamento worklog via Tempo API per {len(user_account_ids)} utenti...",
-                                    "percent": base_percent + int(instance_percent_range * 0.15)
-                                }) + "\n"
+                                if not user_account_ids:
+                                    yield json.dumps({
+                                        "type": "warning",
+                                        "instance": instance_name,
+                                        "message": f"⚠️ Nessun account JIRA mappato per {instance_name}. Vai in Settings → Utenti e clicca 'Fetch Account JIRA'",
+                                        "percent": base_percent + int(instance_percent_range * 0.15)
+                                    }) + "\n"
+                                else:
+                                    yield json.dumps({
+                                        "type": "fetching_worklogs",
+                                        "instance": instance_name,
+                                        "message": f"Scaricamento worklog via Tempo API per {len(user_account_ids)} utenti...",
+                                        "percent": base_percent + int(instance_percent_range * 0.15)
+                                    }) + "\n"
                                 await asyncio.sleep(0)
 
                                 tempo_client = TempoClient(
@@ -438,17 +446,25 @@ async def sync_worklogs_stream(
                                         worklogs = enriched_worklogs
                             else:
                                 from ..jira_client import JiraClient
-                                yield json.dumps({
-                                    "type": "fetching_worklogs",
-                                    "instance": instance_name,
-                                    "message": f"Scaricamento worklog via JIRA API...",
-                                    "percent": base_percent + int(instance_percent_range * 0.15)
-                                }) + "\n"
+                                user_account_ids = instance_account_ids.get(instance_name, [])
+
+                                if not user_account_ids:
+                                    yield json.dumps({
+                                        "type": "warning",
+                                        "instance": instance_name,
+                                        "message": f"⚠️ Nessun account JIRA mappato per {instance_name}. Vai in Settings → Utenti e clicca 'Fetch Account JIRA'",
+                                        "percent": base_percent + int(instance_percent_range * 0.15)
+                                    }) + "\n"
+                                else:
+                                    yield json.dumps({
+                                        "type": "fetching_worklogs",
+                                        "instance": instance_name,
+                                        "message": f"Scaricamento worklog via JIRA API per {len(user_account_ids)} utenti...",
+                                        "percent": base_percent + int(instance_percent_range * 0.15)
+                                    }) + "\n"
                                 await asyncio.sleep(0)
 
                                 client = JiraClient(inst_config)
-                                # Use account IDs for filtering (more reliable than email)
-                                user_account_ids = instance_account_ids.get(instance_name, [])
                                 worklogs = await client.get_worklogs_in_range(
                                     request.start_date,
                                     request.end_date,

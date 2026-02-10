@@ -211,6 +211,31 @@ class BulkUserCreateResponse(BaseModel):
     results: list[BulkUserCreateResult]
 
 
+class BulkFetchAccountResult(BaseModel):
+    """Single user result from bulk JIRA account fetch."""
+    user_id: int
+    user_name: str  # Full name for display (first_name + last_name)
+    email: str
+    jira_instance: str
+    status: str  # "success", "failed", "skipped"
+    account_id: Optional[str] = None
+    error: Optional[str] = None
+
+
+class BulkFetchAccountSummary(BaseModel):
+    """Summary of bulk JIRA account fetch operation."""
+    total: int = 0
+    success: int = 0
+    failed: int = 0
+    skipped: int = 0
+
+
+class BulkFetchAccountResponse(BaseModel):
+    """Response from bulk JIRA account fetch."""
+    results: list[BulkFetchAccountResult]
+    summary: BulkFetchAccountSummary
+
+
 # ============ Holiday Models ============
 
 class HolidayCreate(BaseModel):

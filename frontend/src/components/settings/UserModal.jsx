@@ -120,7 +120,7 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
             />
 
             {/* Modal */}
-            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-dark-700 animate-fade-in max-h-[90vh] overflow-y-auto">
+            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-dark-700 animate-fade-in max-h-[90vh] flex flex-col overflow-hidden">
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-dark-700 sticky top-0 bg-dark-800 z-10">
                     <h2 className="text-xl font-bold text-dark-100">
@@ -137,8 +137,8 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                 </div>
 
                 {/* Content */}
-                <form onSubmit={handleSubmit}>
-                    <div className="p-6 space-y-4">
+                <div className="overflow-y-auto flex-1 min-h-0">
+                    <form id="user-form" onSubmit={handleSubmit} className="p-6 space-y-4">
                         {/* Email */}
                         <div>
                             <label className="block text-sm font-medium text-dark-300 mb-2">
@@ -278,10 +278,11 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                                 </p>
                             </div>
                         )}
-                    </div>
+                    </form>
+                </div>
 
-                    {/* Footer */}
-                    <div className="flex items-center justify-end gap-3 p-6 border-t border-dark-700 sticky bottom-0 bg-dark-800">
+                {/* Footer */}
+                <div className="flex items-center justify-end gap-3 p-6 border-t border-dark-700 sticky bottom-0 bg-dark-800">
                         <button
                             type="button"
                             onClick={onClose}
@@ -291,13 +292,13 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                         </button>
                         <button
                             type="submit"
+                            form="user-form"
                             disabled={!email.trim() || !firstName.trim() || !lastName.trim() || loading}
                             className="px-5 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {loading ? 'Salvataggio...' : 'Salva'}
                         </button>
                     </div>
-                </form>
             </div>
         </div>
     )

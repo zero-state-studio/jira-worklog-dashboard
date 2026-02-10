@@ -722,6 +722,13 @@ class WorklogStorage:
                         ALTER TABLE worklogs
                         ADD COLUMN company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE
                     """)
+                    # Backfill existing worklogs with company_id = 1 for backward compatibility
+                    await db.execute("""
+                        UPDATE worklogs
+                        SET company_id = 1
+                        WHERE company_id IS NULL
+                    """)
+                    await db.commit()
                 except Exception:
                     pass  # Column already exists
 
@@ -805,6 +812,51 @@ class WorklogStorage:
                     """)
                 except Exception:
                     pass  # Column already exists
+
+                # ========== Automatic Backfill for Legacy Data ==========
+                # Backfill any remaining NULL company_id values to company_id=1 for backward compatibility
+                # This ensures data created before multi-tenant implementation is visible
+
+                try:
+                    # Backfill worklogs
+                    await db.execute("""
+                        UPDATE worklogs
+                        SET company_id = 1
+                        WHERE company_id IS NULL
+                    """)
+
+                    # Backfill epics
+                    await db.execute("""
+                        UPDATE epics
+                        SET company_id = 1
+                        WHERE company_id IS NULL
+                    """)
+
+                    # Backfill teams
+                    await db.execute("""
+                        UPDATE teams
+                        SET company_id = 1
+                        WHERE company_id IS NULL
+                    """)
+
+                    # Backfill users
+                    await db.execute("""
+                        UPDATE users
+                        SET company_id = 1
+                        WHERE company_id IS NULL
+                    """)
+
+                    # Backfill jira_instances
+                    await db.execute("""
+                        UPDATE jira_instances
+                        SET company_id = 1
+                        WHERE company_id IS NULL
+                    """)
+
+                    await db.commit()
+                except Exception as e:
+                    # Silently ignore errors (tables might not have company_id yet)
+                    pass
 
                 # Create indexes for company_id columns
                 await db.execute("""
@@ -1010,15 +1062,18 @@ class WorklogStorage:
             WHERE company_id = ? AND date(started) >= ? AND date(started) <= ?
         """
         params = [company_id, start_date.isoformat(), end_date.isoformat()]
-        
+
         if jira_instance:
             query += " AND jira_instance = ?"
             params.append(jira_instance)
-        
+
         if user_emails:
             placeholders = ",".join("?" * len(user_emails))
             query += f" AND LOWER(author_email) IN ({placeholders})"
             params.extend([e.lower() for e in user_emails])
+
+        print(f"🔍 SQL QUERY: {query}")
+        print(f"🔍 SQL PARAMS: {params}")
         
         query += " ORDER BY started DESC"
         

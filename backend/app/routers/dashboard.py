@@ -40,6 +40,8 @@ async def get_dashboard(
     email_to_team = {u["email"].lower(): u.get("team_name") for u in users}
 
     # Read worklogs from local storage (scoped to company)
+    print(f"🔍 DASHBOARD QUERY: start={start_date}, end={end_date}, company_id={current_user.company_id}, instance={jira_instance}")
+    print(f"🔍 Searching for emails: {all_emails}")
     worklogs = await storage.get_worklogs_in_range(
         start_date,
         end_date,
@@ -47,6 +49,7 @@ async def get_dashboard(
         jira_instance=jira_instance,
         company_id=current_user.company_id
     )
+    print(f"🔍 WORKLOGS FOUND: {len(worklogs)} worklogs")
 
     # Preserve ALL worklogs for per-instance breakdown (before filtering)
     all_worklogs = worklogs
