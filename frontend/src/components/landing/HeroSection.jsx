@@ -3,15 +3,15 @@ import { useNavigate } from 'react-router-dom'
 export default function HeroSection() {
     const navigate = useNavigate()
 
-    const scrollToFeatures = () => {
-        const element = document.getElementById('features')
+    const scrollToHowItWorks = () => {
+        const element = document.getElementById('how-it-works')
         if (element) {
             element.scrollIntoView({ behavior: 'smooth' })
         }
     }
 
     return (
-        <section className="relative min-h-screen flex items-center justify-center px-4 py-20 overflow-hidden">
+        <section className="relative min-h-[90vh] flex items-center justify-center px-4 py-20 overflow-hidden">
             {/* Background gradient effect */}
             <div className="absolute inset-0 bg-gradient-radial from-primary-from/10 via-transparent to-transparent opacity-50" />
 
@@ -20,15 +20,15 @@ export default function HeroSection() {
                     {/* Left: Text Content */}
                     <div className="text-center lg:text-left animate-fade-in">
                         <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-dark-100 mb-6 leading-tight">
-                            Gestisci i Worklog del Tuo Team
+                            Smetti di Fare Report.
                             <span className="block bg-gradient-primary bg-clip-text text-transparent mt-2">
-                                in un Solo Posto
+                                Inizia a Decidere.
                             </span>
                         </h1>
 
                         <p className="text-xl md:text-2xl text-dark-300 mb-8 leading-relaxed">
-                            Dashboard JIRA real-time per team agili e data-driven.
-                            Traccia, analizza e fattura con semplicità.
+                            Connetti le tue istanze JIRA, visualizza i worklog del team in tempo reale
+                            e genera fatture con un click. Setup in 5 minuti, gratis per sempre.
                         </p>
 
                         {/* CTA Buttons */}
@@ -45,11 +45,11 @@ export default function HeroSection() {
                                 </span>
                             </button>
                             <button
-                                onClick={scrollToFeatures}
+                                onClick={scrollToHowItWorks}
                                 className="btn-secondary text-lg px-8 py-4"
                             >
                                 <span className="flex items-center gap-2">
-                                    Scopri di più
+                                    Scopri come funziona
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                     </svg>
@@ -69,7 +69,7 @@ export default function HeroSection() {
                                 <svg className="w-5 h-5 text-accent-green" fill="currentColor" viewBox="0 0 20 20">
                                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                                 </svg>
-                                <span>No carta richiesta</span>
+                                <span>Nessuna carta di credito</span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <svg className="w-5 h-5 text-accent-green" fill="currentColor" viewBox="0 0 20 20">
@@ -80,9 +80,9 @@ export default function HeroSection() {
                         </div>
                     </div>
 
-                    {/* Right: Hero Visual */}
-                    <div className="relative animate-slide-in-right">
-                        {/* Dashboard mockup placeholder */}
+                    {/* Right: Hero Visual - hidden on mobile */}
+                    <div className="relative animate-slide-in-right hidden lg:block">
+                        {/* Dashboard mockup */}
                         <div className="relative glass-card p-4 shadow-2xl">
                             {/* Mock browser chrome */}
                             <div className="flex items-center gap-2 mb-4 pb-4 border-b border-dark-600">
@@ -130,17 +130,24 @@ export default function HeroSection() {
                             </div>
                         </div>
 
-                        {/* Floating badges */}
+                        {/* Floating badge */}
                         <div className="absolute -top-6 -right-6 glass-card px-4 py-2 shadow-glow animate-pulse-slow">
                             <div className="flex items-center gap-2">
                                 <svg className="w-5 h-5 text-accent-green" fill="currentColor" viewBox="0 0 20 20">
                                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                                 </svg>
-                                <span className="text-dark-200 font-medium">Real-time Sync</span>
+                                <span className="text-dark-200 font-medium">Sync in tempo reale</span>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {/* Scroll hint indicator */}
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-scroll-hint">
+                <svg className="w-6 h-6 text-dark-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
             </div>
         </section>
     )

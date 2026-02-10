@@ -4,10 +4,15 @@ export default function LandingFooter() {
     const navigate = useNavigate()
     const currentYear = new Date().getFullYear()
 
+    const scrollToSection = (sectionId) => {
+        const element = document.getElementById(sectionId)
+        if (element) element.scrollIntoView({ behavior: 'smooth' })
+    }
+
     return (
         <footer className="bg-dark-800 border-t border-dark-700 py-12 px-4">
             <div className="container mx-auto max-w-7xl">
-                <div className="grid md:grid-cols-4 gap-8 mb-8">
+                <div className="grid md:grid-cols-5 gap-8 mb-8">
                     {/* Brand Column */}
                     <div className="md:col-span-2">
                         <div className="flex items-center gap-3 mb-4">
@@ -21,7 +26,8 @@ export default function LandingFooter() {
                             </div>
                         </div>
                         <p className="text-dark-400 text-sm max-w-sm">
-                            Dashboard JIRA real-time per team agili. Traccia, analizza e fattura i worklog del tuo team in un solo posto.
+                            La dashboard JIRA che trasforma i worklog del tuo team in decisioni.
+                            Tracking, analytics e billing in un'unica app.
                         </p>
                     </div>
 
@@ -31,24 +37,26 @@ export default function LandingFooter() {
                         <ul className="space-y-2">
                             <li>
                                 <button
-                                    onClick={() => {
-                                        const element = document.getElementById('features')
-                                        if (element) element.scrollIntoView({ behavior: 'smooth' })
-                                    }}
+                                    onClick={() => scrollToSection('features')}
                                     className="text-dark-400 hover:text-dark-200 transition-colors text-sm"
                                 >
-                                    Features
+                                    Funzionalita
                                 </button>
                             </li>
                             <li>
                                 <button
-                                    onClick={() => {
-                                        const element = document.getElementById('pricing')
-                                        if (element) element.scrollIntoView({ behavior: 'smooth' })
-                                    }}
+                                    onClick={() => scrollToSection('pricing')}
                                     className="text-dark-400 hover:text-dark-200 transition-colors text-sm"
                                 >
-                                    Pricing
+                                    Prezzi
+                                </button>
+                            </li>
+                            <li>
+                                <button
+                                    onClick={() => scrollToSection('how-it-works')}
+                                    className="text-dark-400 hover:text-dark-200 transition-colors text-sm"
+                                >
+                                    Come Funziona
                                 </button>
                             </li>
                             <li>
@@ -58,6 +66,31 @@ export default function LandingFooter() {
                                 >
                                     Login
                                 </button>
+                            </li>
+                        </ul>
+                    </div>
+
+                    {/* Resources Links */}
+                    <div>
+                        <h4 className="font-semibold text-dark-200 mb-4">Risorse</h4>
+                        <ul className="space-y-2">
+                            <li>
+                                <button
+                                    onClick={() => scrollToSection('faq')}
+                                    className="text-dark-400 hover:text-dark-200 transition-colors text-sm"
+                                >
+                                    FAQ
+                                </button>
+                            </li>
+                            <li>
+                                <a href="#" className="text-dark-400 hover:text-dark-200 transition-colors text-sm">
+                                    Documentazione
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" className="text-dark-400 hover:text-dark-200 transition-colors text-sm">
+                                    Changelog
+                                </a>
                             </li>
                         </ul>
                     </div>
@@ -73,12 +106,12 @@ export default function LandingFooter() {
                             </li>
                             <li>
                                 <a href="#" className="text-dark-400 hover:text-dark-200 transition-colors text-sm">
-                                    Terms of Service
+                                    Termini di Servizio
                                 </a>
                             </li>
                             <li>
                                 <a href="#" className="text-dark-400 hover:text-dark-200 transition-colors text-sm">
-                                    Contact
+                                    Contatti
                                 </a>
                             </li>
                         </ul>
@@ -88,10 +121,10 @@ export default function LandingFooter() {
                 {/* Bottom Bar */}
                 <div className="border-t border-dark-700 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
                     <p className="text-dark-500 text-sm">
-                        © {currentYear} Worklog Dashboard. All rights reserved.
+                        &copy; {currentYear} Worklog Dashboard. Tutti i diritti riservati.
                     </p>
 
-                    {/* Social Icons (placeholder) */}
+                    {/* Social Icons */}
                     <div className="flex items-center gap-4">
                         <a href="#" className="text-dark-500 hover:text-dark-300 transition-colors">
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">

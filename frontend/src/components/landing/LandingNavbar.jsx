@@ -7,7 +7,6 @@ export default function LandingNavbar() {
     const [isLoggedIn, setIsLoggedIn] = useState(false)
 
     useEffect(() => {
-        // Check if user is logged in
         const token = localStorage.getItem('access_token')
         setIsLoggedIn(!!token)
     }, [])
@@ -19,6 +18,13 @@ export default function LandingNavbar() {
             setMobileMenuOpen(false)
         }
     }
+
+    const navLinks = [
+        { label: 'Funzionalita', sectionId: 'features' },
+        { label: 'Come Funziona', sectionId: 'how-it-works' },
+        { label: 'Prezzi', sectionId: 'pricing' },
+        { label: 'FAQ', sectionId: 'faq' },
+    ]
 
     return (
         <nav className="sticky top-0 z-50 bg-dark-800/80 backdrop-blur-xl border-b border-dark-700">
@@ -38,24 +44,15 @@ export default function LandingNavbar() {
 
                     {/* Desktop Navigation */}
                     <div className="hidden md:flex items-center gap-8">
-                        <button
-                            onClick={() => scrollToSection('features')}
-                            className="text-dark-300 hover:text-dark-100 transition-colors font-medium"
-                        >
-                            Features
-                        </button>
-                        <button
-                            onClick={() => scrollToSection('pricing')}
-                            className="text-dark-300 hover:text-dark-100 transition-colors font-medium"
-                        >
-                            Pricing
-                        </button>
-                        <button
-                            onClick={() => scrollToSection('faq')}
-                            className="text-dark-300 hover:text-dark-100 transition-colors font-medium"
-                        >
-                            FAQ
-                        </button>
+                        {navLinks.map((link) => (
+                            <button
+                                key={link.sectionId}
+                                onClick={() => scrollToSection(link.sectionId)}
+                                className="text-dark-300 hover:text-dark-100 transition-colors font-medium"
+                            >
+                                {link.label}
+                            </button>
+                        ))}
                     </div>
 
                     {/* Desktop CTA Buttons */}
@@ -107,24 +104,15 @@ export default function LandingNavbar() {
                 {mobileMenuOpen && (
                     <div className="md:hidden py-4 border-t border-dark-700 animate-slide-up">
                         <div className="flex flex-col gap-4">
-                            <button
-                                onClick={() => scrollToSection('features')}
-                                className="text-dark-300 hover:text-dark-100 transition-colors font-medium text-left"
-                            >
-                                Features
-                            </button>
-                            <button
-                                onClick={() => scrollToSection('pricing')}
-                                className="text-dark-300 hover:text-dark-100 transition-colors font-medium text-left"
-                            >
-                                Pricing
-                            </button>
-                            <button
-                                onClick={() => scrollToSection('faq')}
-                                className="text-dark-300 hover:text-dark-100 transition-colors font-medium text-left"
-                            >
-                                FAQ
-                            </button>
+                            {navLinks.map((link) => (
+                                <button
+                                    key={link.sectionId}
+                                    onClick={() => scrollToSection(link.sectionId)}
+                                    className="text-dark-300 hover:text-dark-100 transition-colors font-medium text-left"
+                                >
+                                    {link.label}
+                                </button>
+                            ))}
                             <div className="flex flex-col gap-2 pt-2 border-t border-dark-700">
                                 {isLoggedIn ? (
                                     <button

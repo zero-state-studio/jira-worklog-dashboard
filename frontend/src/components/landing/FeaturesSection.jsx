@@ -1,7 +1,47 @@
 import FeatureCard from './FeatureCard'
+import KillerFeatureCard from './KillerFeatureCard'
 
 export default function FeaturesSection() {
-    const features = [
+    const killerFeatures = [
+        {
+            icon: (
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+            ),
+            badge: "Multi-JIRA",
+            title: "Connetti tutte le tue istanze JIRA in un'unica vista",
+            description: "2, 3 o 10 istanze JIRA Cloud? Le aggreghiamo tutte. Dashboard unificata con deduplicazione automatica per istanze complementari. Zero tab switching, visione completa.",
+            benefitLine: "L'unico tool che aggrega istanze JIRA illimitate con deduplicazione automatica.",
+            color: "blue"
+        },
+        {
+            icon: (
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z" />
+                </svg>
+            ),
+            badge: "Billing",
+            title: "Da worklog a fattura in 3 click",
+            description: "Rate orarie per utente, progetto o cliente. Seleziona il periodo, preview in-app, export Excel. Le ore vengono calcolate direttamente dai worklog JIRA, zero errori di trascrizione.",
+            benefitLine: "Elimina 2 giorni/mese di fatturazione manuale.",
+            color: "orange"
+        },
+        {
+            icon: (
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+            ),
+            badge: "HR Integration",
+            title: "Integrazione Factorial HR per assenze e festivita",
+            description: "Sincronizza automaticamente ferie, permessi e malattie da Factorial. Le ore attese si aggiornano da sole, i report riflettono la realta. Niente piu calcoli manuali.",
+            benefitLine: "Ore attese sempre corrette. Automaticamente.",
+            color: "green"
+        }
+    ]
+
+    const standardFeatures = [
         {
             icon: (
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -10,7 +50,7 @@ export default function FeaturesSection() {
             ),
             title: 'Dashboard Real-time',
             description: 'Visualizza ore lavorate, trend giornalieri e metriche team aggiornate in tempo reale con grafici interattivi.',
-            color: 'blue'
+            color: 'cyan'
         },
         {
             icon: (
@@ -19,38 +59,8 @@ export default function FeaturesSection() {
                 </svg>
             ),
             title: 'Multi-team Tracking',
-            description: 'Gestisci più team contemporaneamente con visibilità granulare per membro e aggregazione automatica.',
+            description: 'Gestisci piu team contemporaneamente con visibilita granulare per membro e aggregazione automatica.',
             color: 'green'
-        },
-        {
-            icon: (
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-            ),
-            title: 'Sync JIRA/Tempo',
-            description: 'Sincronizzazione automatica worklog da JIRA REST API e Tempo Timesheets con supporto multi-istanza.',
-            color: 'purple'
-        },
-        {
-            icon: (
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-            ),
-            title: 'Analytics Avanzate',
-            description: 'Grafici interattivi, breakdown per epic/issue, analisi contributori e trend storici con export dati.',
-            color: 'cyan'
-        },
-        {
-            icon: (
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z" />
-                </svg>
-            ),
-            title: 'Billing & Packages',
-            description: 'Crea pacchetti ore, traccia fatturazione, gestisci clienti e progetti con template riutilizzabili.',
-            color: 'orange'
         },
         {
             icon: (
@@ -65,21 +75,28 @@ export default function FeaturesSection() {
     ]
 
     return (
-        <section id="features" className="py-20 px-4 bg-dark-800/30">
+        <section id="features" className="section-padding bg-dark-800/30">
             <div className="container mx-auto max-w-7xl">
                 {/* Section Header */}
-                <div className="text-center mb-16">
-                    <h2 className="text-4xl md:text-5xl font-bold text-dark-100 mb-4">
-                        Tutto ciò che ti serve
+                <div className="section-header">
+                    <h2 className="section-title">
+                        Tutto cio che ti serve, niente che non ti serva
                     </h2>
-                    <p className="text-xl text-dark-300 max-w-2xl mx-auto">
-                        Tracking, analytics e billing in un'unica app. Nessuna configurazione complessa, solo risultati.
+                    <p className="section-subtitle">
+                        Tre funzionalita killer che ci distinguono, piu tutto il necessario per gestire i worklog del tuo team.
                     </p>
                 </div>
 
-                {/* Features Grid */}
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {features.map((feature, index) => (
+                {/* Killer Features */}
+                <div className="grid md:grid-cols-3 gap-6 mb-12">
+                    {killerFeatures.map((feature, index) => (
+                        <KillerFeatureCard key={index} {...feature} />
+                    ))}
+                </div>
+
+                {/* Standard Features */}
+                <div className="grid md:grid-cols-3 gap-6">
+                    {standardFeatures.map((feature, index) => (
                         <FeatureCard
                             key={index}
                             icon={feature.icon}
