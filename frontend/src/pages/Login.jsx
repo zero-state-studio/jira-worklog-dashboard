@@ -23,6 +23,23 @@ export default function Login() {
         loadConfig()
     }, [])
 
+    // Handle OAuth callback with tokens in query params
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search)
+        const accessToken = params.get('access_token')
+
+        if (accessToken) {
+            // Save tokens and user data from OAuth callback
+            localStorage.setItem('access_token', accessToken)
+            localStorage.setItem('refresh_token', params.get('refresh_token'))
+            localStorage.setItem('user', params.get('user'))
+
+            // Clean up URL and redirect to dashboard
+            window.history.replaceState({}, '', '/login')
+            navigate('/app/dashboard')
+        }
+    }, [navigate])
+
     // Handle dev login
     async function handleDevLogin() {
         setLoading(true)
@@ -62,7 +79,7 @@ export default function Login() {
             localStorage.setItem('user', JSON.stringify(data.user))
 
             // Redirect to dashboard
-            navigate('/')
+            navigate('/app/dashboard')
         } catch (err) {
             console.error('Dev login error:', err)
             setError(err.message)

@@ -1,4 +1,5 @@
 import { formatHours, getCompletionColor } from '../hooks/useData'
+import { useCountUp } from '../hooks/useCountUp'
 
 /**
  * Stat Card - displays a single statistic with optional trend
@@ -11,6 +12,29 @@ export function StatCard({ label, value, subtitle, icon, color = 'primary', tren
         blue: 'from-accent-blue to-blue-600',
         orange: 'from-accent-orange to-amber-600',
     }
+
+    // Extract numeric value and suffix for animation
+    const parseValue = (val) => {
+        if (typeof val !== 'string') return { number: null, suffix: val }
+
+        // Try to extract number and suffix (e.g., "123.5h" -> number: 123.5, suffix: "h")
+        const match = val.match(/^([\d.]+)(.*)$/)
+        if (match) {
+            const number = parseFloat(match[1])
+            const suffix = match[2] || ''
+            return { number: isNaN(number) ? null : number, suffix }
+        }
+        return { number: null, suffix: val }
+    }
+
+    const { number, suffix } = parseValue(value)
+
+    // Determine decimal places based on suffix
+    const decimals = suffix === 'h' ? 1 : suffix === '%' ? 0 : 0
+
+    // Use count-up animation if value is numeric
+    const animatedCount = useCountUp(number || 0, 1000, decimals, number !== null)
+    const displayValue = number !== null ? `${animatedCount}${suffix}` : value
 
     return (
         <div className="stat-card group">
@@ -27,8 +51,8 @@ export function StatCard({ label, value, subtitle, icon, color = 'primary', tren
             {/* Label */}
             <p className="stat-label mb-2">{label}</p>
 
-            {/* Value */}
-            <p className="stat-value text-4xl">{value}</p>
+            {/* Value with count-up animation */}
+            <p className="stat-value text-4xl">{displayValue}</p>
 
             {/* Subtitle / Trend */}
             {subtitle && (
@@ -278,13 +302,50 @@ export function CardSkeleton({ count = 1 }) {
     return (
         <>
             {Array.from({ length: count }).map((_, i) => (
-                <div key={i} className="glass-card p-5">
-                    <div className="loading-shimmer h-10 w-10 rounded-lg mb-4" />
-                    <div className="loading-shimmer h-4 w-1/2 rounded mb-2" />
-                    <div className="loading-shimmer h-8 w-3/4 rounded" />
+                <div key={i} className="stat-card">
+                    {/* Icon skeleton */}
+                    <div className="loading-shimmer h-12 w-12 rounded-xl mb-4" />
+
+                    {/* Label skeleton */}
+                    <div className="loading-shimmer h-3 w-24 rounded mb-3" />
+
+                    {/* Value skeleton - larger for prominence */}
+                    <div className="loading-shimmer h-12 w-32 rounded-lg mb-2" />
+
+                    {/* Subtitle skeleton */}
+                    <div className="loading-shimmer h-3 w-20 rounded" />
                 </div>
             ))}
         </>
+    )
+}
+
+/**
+ * Enhanced skeleton for chart cards
+ */
+export function ChartSkeleton({ height = 300 }) {
+    return (
+        <div className="glass-card p-6">
+            {/* Title skeleton */}
+            <div className="mb-4">
+                <div className="loading-shimmer h-6 w-40 rounded mb-2" />
+                <div className="loading-shimmer h-4 w-32 rounded" />
+            </div>
+
+            {/* Chart area skeleton - random height bars to simulate chart */}
+            <div className="space-y-3" style={{ height }}>
+                {[60, 80, 45, 90, 70, 55].map((percentage, i) => (
+                    <div
+                        key={i}
+                        className="loading-shimmer rounded"
+                        style={{
+                            height: `${percentage}%`,
+                            width: '100%'
+                        }}
+                    />
+                ))}
+            </div>
+        </div>
     )
 }
 

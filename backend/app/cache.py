@@ -1035,7 +1035,8 @@ class WorklogStorage:
     
     async def upsert_worklogs(self, worklogs: list[Worklog], company_id: int) -> tuple[int, int]:
         """
-        Insert or update worklogs.
+        Insert or update worklogs using batch operations.
+        Optimized to eliminate N+1 query problem.
 
         Args:
             worklogs: List of worklogs to insert/update
@@ -1050,63 +1051,31 @@ class WorklogStorage:
         if not company_id:
             raise ValueError("company_id is required for multi-tenant operations")
 
-        inserted = 0
-        updated = 0
-        
+        if not worklogs:
+            return 0, 0
+
         async with aiosqlite.connect(self.db_path) as db:
-            for wl in worklogs:
-                # Check if exists
-                async with db.execute(
-                    "SELECT id FROM worklogs WHERE id = ?", 
-                    (wl.id,)
-                ) as cursor:
-                    exists = await cursor.fetchone() is not None
-                
-                if exists:
-                    await db.execute("""
-                        UPDATE worklogs SET
-                            company_id = ?,
-                            issue_key = ?,
-                            issue_summary = ?,
-                            author_email = ?,
-                            author_display_name = ?,
-                            time_spent_seconds = ?,
-                            started = ?,
-                            jira_instance = ?,
-                            parent_key = ?,
-                            parent_name = ?,
-                            parent_type = ?,
-                            epic_key = ?,
-                            epic_name = ?,
-                            data = ?,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """, (
-                        company_id,
-                        wl.issue_key,
-                        wl.issue_summary,
-                        wl.author_email,
-                        wl.author_display_name,
-                        wl.time_spent_seconds,
-                        wl.started.isoformat(),
-                        wl.jira_instance,
-                        wl.parent_key,
-                        wl.parent_name,
-                        wl.parent_type,
-                        wl.epic_key,
-                        wl.epic_name,
-                        wl.model_dump_json(),
-                        wl.id
-                    ))
-                    updated += 1
-                else:
-                    await db.execute("""
-                        INSERT INTO worklogs
-                        (id, company_id, issue_key, issue_summary, author_email, author_display_name,
-                         time_spent_seconds, started, jira_instance, parent_key, parent_name,
-                         parent_type, epic_key, epic_name, data)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
+            # Step 1: Get all existing worklog IDs in a single query (no N+1!)
+            worklog_ids_to_check = [wl.id for wl in worklogs]
+            placeholders = ",".join("?" * len(worklog_ids_to_check))
+
+            async with db.execute(
+                f"SELECT id FROM worklogs WHERE id IN ({placeholders})",
+                worklog_ids_to_check
+            ) as cursor:
+                existing_ids = {row[0] for row in await cursor.fetchall()}
+
+            # Step 2: Separate worklogs into new and existing
+            new_worklogs = [wl for wl in worklogs if wl.id not in existing_ids]
+            existing_worklogs = [wl for wl in worklogs if wl.id in existing_ids]
+
+            inserted = 0
+            updated = 0
+
+            # Step 3: Batch insert new worklogs using executemany
+            if new_worklogs:
+                insert_data = [
+                    (
                         wl.id,
                         company_id,
                         wl.issue_key,
@@ -1122,11 +1091,67 @@ class WorklogStorage:
                         wl.epic_key,
                         wl.epic_name,
                         wl.model_dump_json()
-                    ))
-                    inserted += 1
-            
+                    )
+                    for wl in new_worklogs
+                ]
+
+                await db.executemany("""
+                    INSERT INTO worklogs
+                    (id, company_id, issue_key, issue_summary, author_email, author_display_name,
+                     time_spent_seconds, started, jira_instance, parent_key, parent_name,
+                     parent_type, epic_key, epic_name, data)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, insert_data)
+
+                inserted = len(new_worklogs)
+
+            # Step 4: Batch update existing worklogs using executemany
+            if existing_worklogs:
+                update_data = [
+                    (
+                        company_id,
+                        wl.issue_key,
+                        wl.issue_summary,
+                        wl.author_email,
+                        wl.author_display_name,
+                        wl.time_spent_seconds,
+                        wl.started.isoformat(),
+                        wl.jira_instance,
+                        wl.parent_key,
+                        wl.parent_name,
+                        wl.parent_type,
+                        wl.epic_key,
+                        wl.epic_name,
+                        wl.model_dump_json(),
+                        wl.id
+                    )
+                    for wl in existing_worklogs
+                ]
+
+                await db.executemany("""
+                    UPDATE worklogs SET
+                        company_id = ?,
+                        issue_key = ?,
+                        issue_summary = ?,
+                        author_email = ?,
+                        author_display_name = ?,
+                        time_spent_seconds = ?,
+                        started = ?,
+                        jira_instance = ?,
+                        parent_key = ?,
+                        parent_name = ?,
+                        parent_type = ?,
+                        epic_key = ?,
+                        epic_name = ?,
+                        data = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, update_data)
+
+                updated = len(existing_worklogs)
+
             await db.commit()
-        
+
         return inserted, updated
     
     async def delete_worklogs_not_in_list(
@@ -4611,6 +4636,16 @@ class WorklogStorage:
             """, (company_id,)) as cursor:
                 row = await cursor.fetchone()
                 return dict(row) if row else None
+
+    async def update_company(self, company_id: int, name: str) -> bool:
+        """Update company name."""
+        await self.initialize()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("""
+                UPDATE companies SET name = ? WHERE id = ? AND is_active = 1
+            """, (name, company_id))
+            await db.commit()
+            return cursor.rowcount > 0
 
     async def count_companies(self) -> int:
         """Count total active companies."""

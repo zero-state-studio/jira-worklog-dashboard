@@ -39,6 +39,20 @@ export default {
             fontFamily: {
                 sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
             },
+            fontSize: {
+                'xxs': '0.625rem',     // 10px
+                '4xl': '2.5rem',       // 40px
+                '5xl': '3rem',         // 48px
+                '6xl': '3.75rem',      // 60px
+                '7xl': '4.5rem',       // 72px
+            },
+            lineHeight: {
+                'extra-tight': '1.1',
+                'hero': '1',
+            },
+            letterSpacing: {
+                'tightest': '-0.05em',
+            },
             boxShadow: {
                 'glow': '0 0 20px rgba(102, 126, 234, 0.3)',
                 'glow-green': '0 0 20px rgba(63, 185, 80, 0.3)',

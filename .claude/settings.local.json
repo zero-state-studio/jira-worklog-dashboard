@@ -49,7 +49,10 @@
       "Bash(python init_db.py:*)",
       "Bash(jq:*)",
       "Bash(echo:*)",
-      "Bash(open:*)"
+      "Bash(open:*)",
+      "Bash(python scripts/run_migration.py:*)",
+      "Bash(for table in teams users jira_instances worklogs epics complementary_groups logs)",
+      "Bash(do echo \"=== $table ===\")"
     ]
   }
 }

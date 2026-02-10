@@ -789,6 +789,33 @@ class InvitationAccept(BaseModel):
     token: str
 
 
+class OnboardingRequiredResponse(BaseModel):
+    """Response when user needs to complete onboarding."""
+    onboarding_required: bool = True
+    onboarding_token: str
+    email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    picture_url: Optional[str] = None
+
+
+class CompleteOnboardingRequest(BaseModel):
+    """Request to complete onboarding (create company + user)."""
+    onboarding_token: str
+    company_name: str = Field(..., min_length=1, max_length=200)
+
+
+class UpdateProfileRequest(BaseModel):
+    """Request to update user profile."""
+    first_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
+
+
+class UpdateCompanyRequest(BaseModel):
+    """Request to update company information (admin only)."""
+    name: str = Field(..., min_length=1, max_length=200)
+
+
 class AuthAuditLogEntry(BaseModel):
     """Authentication audit log entry."""
     id: int
