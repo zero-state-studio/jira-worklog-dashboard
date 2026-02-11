@@ -21,7 +21,7 @@ export default function TeamModal({ isOpen, onClose, onSave, team, loading }) {
     if (!isOpen) return null
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-start justify-center py-8">
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-black/60 backdrop-blur-sm"
@@ -29,7 +29,7 @@ export default function TeamModal({ isOpen, onClose, onSave, team, loading }) {
             />
 
             {/* Modal */}
-            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 border border-dark-700 animate-fade-in">
+            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 border border-dark-700 max-h-[calc(100vh-4rem)] overflow-y-auto animate-fade-in">
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-dark-700">
                     <h2 className="text-xl font-bold text-dark-100">
