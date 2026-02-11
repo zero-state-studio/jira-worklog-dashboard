@@ -1109,20 +1109,40 @@ class WorklogStorage:
         if not worklogs:
             return 0, 0
 
+        # Deduplicate worklogs by (id, jira_instance) to prevent UNIQUE constraint errors
+        # This can happen if JIRA/Tempo API returns duplicates in the same response
+        seen = set()
+        unique_worklogs = []
+        duplicates_found = 0
+        for wl in worklogs:
+            key = (wl.id, wl.jira_instance)
+            if key not in seen:
+                seen.add(key)
+                unique_worklogs.append(wl)
+            else:
+                duplicates_found += 1
+
+        if duplicates_found > 0:
+            print(f"⚠️  Warning: Found {duplicates_found} duplicate worklogs in input, deduplicating...")
+
+        worklogs = unique_worklogs
+
         async with aiosqlite.connect(self.db_path) as db:
             # Step 1: Get all existing worklog IDs in a single query (no N+1!)
+            # Check using (id, jira_instance) as composite key to handle multiple JIRA instances
             worklog_ids_to_check = [wl.id for wl in worklogs]
             placeholders = ",".join("?" * len(worklog_ids_to_check))
 
             async with db.execute(
-                f"SELECT id FROM worklogs WHERE id IN ({placeholders})",
-                worklog_ids_to_check
+                f"SELECT id, jira_instance FROM worklogs WHERE id IN ({placeholders}) AND company_id = ?",
+                worklog_ids_to_check + [company_id]
             ) as cursor:
-                existing_ids = {row[0] for row in await cursor.fetchall()}
+                existing_ids = {(row[0], row[1]) for row in await cursor.fetchall()}
 
             # Step 2: Separate worklogs into new and existing
-            new_worklogs = [wl for wl in worklogs if wl.id not in existing_ids]
-            existing_worklogs = [wl for wl in worklogs if wl.id in existing_ids]
+            # Use (id, jira_instance) tuple as unique identifier
+            new_worklogs = [wl for wl in worklogs if (wl.id, wl.jira_instance) not in existing_ids]
+            existing_worklogs = [wl for wl in worklogs if (wl.id, wl.jira_instance) in existing_ids]
 
             inserted = 0
             updated = 0
