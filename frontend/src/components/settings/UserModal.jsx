@@ -112,20 +112,13 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
     if (!isOpen) return null
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-            {/* Backdrop */}
-            <div
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                onClick={onClose}
-            />
-
-            {/* Modal */}
-            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-dark-700 animate-fade-in max-h-[90vh] flex flex-col overflow-hidden">
-                {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-dark-700 sticky top-0 bg-dark-800 z-10">
-                    <h2 className="text-xl font-bold text-dark-100">
+        <div className="fixed inset-0 z-50 flex items-start justify-center py-8">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-dark-700 max-h-[calc(100vh-4rem)] overflow-y-auto">
+                <div className="p-6 border-b border-dark-700 flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-dark-100">
                         {user ? 'Modifica Utente' : 'Nuovo Utente'}
-                    </h2>
+                    </h3>
                     <button
                         onClick={onClose}
                         className="p-2 rounded-lg hover:bg-dark-700 transition-colors"
@@ -136,9 +129,7 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                     </button>
                 </div>
 
-                {/* Content */}
-                <div className="overflow-y-auto flex-1 min-h-0">
-                    <form id="user-form" onSubmit={handleSubmit} className="p-6 space-y-4">
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
                         {/* Email */}
                         <div>
                             <label className="block text-sm font-medium text-dark-300 mb-2">
@@ -278,27 +269,25 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                                 </p>
                             </div>
                         )}
-                    </form>
-                </div>
 
-                {/* Footer */}
-                <div className="flex items-center justify-end gap-3 p-6 border-t border-dark-700 sticky bottom-0 bg-dark-800">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors"
-                        >
-                            Annulla
-                        </button>
-                        <button
-                            type="submit"
-                            form="user-form"
-                            disabled={!email.trim() || !firstName.trim() || !lastName.trim() || loading}
-                            className="px-5 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {loading ? 'Salvataggio...' : 'Salva'}
-                        </button>
-                    </div>
+                        {/* Footer buttons inside form */}
+                        <div className="flex items-center justify-end gap-3 pt-6 mt-6 border-t border-dark-700">
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors"
+                            >
+                                Annulla
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={!email.trim() || !firstName.trim() || !lastName.trim() || loading}
+                                className="px-5 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {loading ? 'Salvataggio...' : 'Salva'}
+                            </button>
+                        </div>
+                    </form>
             </div>
         </div>
     )

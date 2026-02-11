@@ -462,7 +462,7 @@ async def bulk_fetch_jira_accounts(current_user: CurrentUser = Depends(require_a
     storage = get_storage()
 
     users = await storage.get_all_users(current_user.company_id)
-    instances = await storage.get_all_jira_instances(current_user.company_id)
+    instances = await storage.get_all_jira_instances(current_user.company_id, include_credentials=True)
 
     if not users:
         return BulkFetchAccountResponse(
@@ -522,8 +522,7 @@ async def bulk_fetch_jira_accounts(current_user: CurrentUser = Depends(require_a
                 await storage.set_user_jira_account(
                     user_id=user['id'],
                     jira_instance=instance_name,
-                    account_id=account_id,
-                    company_id=current_user.company_id
+                    account_id=account_id
                 )
 
                 logger.info(f"Successfully set account ID {account_id} for {user['email']} in {instance_name}")
