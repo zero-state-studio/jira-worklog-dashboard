@@ -987,13 +987,13 @@ async def get_holidays(year: int, country: str = "IT", current_user: CurrentUser
     """Get holidays for a year (scoped to company). Auto-seeds defaults if none exist."""
     storage = get_storage()
 
-    holidays = await storage.get_holidays_for_year(year, country, current_user.company_id)
+    holidays = await storage.get_holidays_for_year(year, current_user.company_id, country)
 
     # Auto-seed if empty for this year
     if not holidays:
-        inserted = await storage.seed_holidays_for_year(year, country, current_user.company_id)
+        inserted = await storage.seed_holidays_for_year(year, current_user.company_id, country)
         if inserted > 0:
-            holidays = await storage.get_holidays_for_year(year, country, current_user.company_id)
+            holidays = await storage.get_holidays_for_year(year, current_user.company_id, country)
 
     active_count = sum(1 for h in holidays if h["is_active"])
 
@@ -1059,7 +1059,7 @@ async def delete_holiday(holiday_id: int, current_user: CurrentUser = Depends(re
 async def seed_holidays(year: int, country: str = "IT", current_user: CurrentUser = Depends(require_admin)):
     """Re-seed default holidays for a year (won't duplicate existing) (ADMIN only)."""
     storage = get_storage()
-    inserted = await storage.seed_holidays_for_year(year, country, current_user.company_id)
+    inserted = await storage.seed_holidays_for_year(year, current_user.company_id, country)
     return {"inserted": inserted, "year": year, "country": country}
 
 
