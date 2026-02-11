@@ -1,6 +1,7 @@
 """
 Authentication Dependencies - FastAPI dependency injection for auth.
 """
+from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -110,7 +111,7 @@ async def get_current_user(
 
 async def get_current_user_optional(
     credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer(auto_error=False))
-) -> CurrentUser | None:
+) -> Optional[CurrentUser]:
     """
     Optional authentication - returns None if no token provided.
     Used for endpoints that work both authenticated and unauthenticated.

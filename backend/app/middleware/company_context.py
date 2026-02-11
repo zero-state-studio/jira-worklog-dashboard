@@ -1,6 +1,7 @@
 """
 Company Context Middleware - Inject company_id into request context from JWT.
 """
+from typing import Optional
 from contextvars import ContextVar
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -41,7 +42,7 @@ class CompanyContextMiddleware(BaseHTTPMiddleware):
         return response
 
 
-def get_current_company_id() -> int | None:
+def get_current_company_id() -> Optional[int]:
     """
     Get the current company_id from context.
 
