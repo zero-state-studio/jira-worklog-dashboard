@@ -53,7 +53,8 @@
       "Bash(python scripts/run_migration.py:*)",
       "Bash(for table in teams users jira_instances worklogs epics complementary_groups logs)",
       "Bash(do echo \"=== $table ===\")",
-      "Bash(for table in complementary_groups users billing_rates invoice_line_items package_template_instances)"
+      "Bash(for table in complementary_groups users billing_rates invoice_line_items package_template_instances)",
+      "Bash(tail:*)"
     ]
   }
 }

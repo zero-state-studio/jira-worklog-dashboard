@@ -871,7 +871,7 @@ async def create_complementary_group(data: dict, current_user: CurrentUser = Dep
     for instance_id in member_ids:
         instance = await storage.get_jira_instance(instance_id, current_user.company_id)
         if instance:
-            await storage.add_instance_to_complementary_group(group_id, instance_id)
+            await storage.add_instance_to_complementary_group(group_id, instance_id, current_user.company_id)
 
     group = await storage.get_complementary_group(group_id, current_user.company_id)
     return group
@@ -913,7 +913,7 @@ async def update_complementary_group(
 
     # Update members if provided
     if "member_ids" in data:
-        await storage.set_complementary_group_members(group_id, data["member_ids"])
+        await storage.set_complementary_group_members(group_id, data["member_ids"], current_user.company_id)
 
     updated = await storage.get_complementary_group(group_id, current_user.company_id)
     return updated
@@ -951,7 +951,7 @@ async def add_member_to_group(
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
 
-    added = await storage.add_instance_to_complementary_group(group_id, instance_id)
+    added = await storage.add_instance_to_complementary_group(group_id, instance_id, current_user.company_id)
     if not added:
         raise HTTPException(status_code=400, detail="Instance already in group")
 
@@ -972,7 +972,7 @@ async def remove_member_from_group(
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
 
-    removed = await storage.remove_instance_from_complementary_group(group_id, instance_id)
+    removed = await storage.remove_instance_from_complementary_group(group_id, instance_id, current_user.company_id)
     if not removed:
         raise HTTPException(status_code=404, detail="Instance not in group")
 
@@ -1103,3 +1103,42 @@ async def execute_migration(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+# ========== Database Management Endpoints ==========
+
+@router.delete("/worklogs/clear")
+async def clear_all_worklogs(
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """
+    Clear all worklogs for the current user's company.
+
+    **DEV/TEST ONLY** - Use with caution!
+
+    Security:
+    - Requires admin role
+    - Only deletes worklogs for current user's company (multi-tenant isolation)
+
+    Returns:
+        Number of worklogs deleted
+    """
+    storage = get_storage()
+
+    try:
+        # Delete all worklogs for this company
+        deleted_count = await storage.delete_all_worklogs(current_user.company_id)
+
+        logger.info(
+            f"Admin {current_user.email} (company_id={current_user.company_id}) "
+            f"cleared {deleted_count} worklogs"
+        )
+
+        return {
+            "success": True,
+            "deleted_count": deleted_count,
+            "message": f"Successfully deleted {deleted_count} worklogs"
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear worklogs: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear worklogs: {str(e)}")
