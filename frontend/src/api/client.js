@@ -480,6 +480,12 @@ export async function getInstanceIssueTypes(instanceId) {
     return fetchApi(`/settings/jira-instances/${instanceId}/issue-types`)
 }
 
+// ============ Settings API - Database Management ============
+
+export async function clearAllWorklogs() {
+    return fetchApiDelete('/settings/worklogs/clear')
+}
+
 // ============ Settings API - Complementary Groups ============
 
 export async function getComplementaryGroups() {

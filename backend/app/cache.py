@@ -908,6 +908,30 @@ class WorklogStorage:
                     ON complementary_groups(company_id)
                 """)
 
+                # Migrate worklog IDs to composite format (id__jira_instance)
+                # This allows multiple JIRA instances to have worklogs with the same original ID
+                try:
+                    # Check if migration is needed (worklogs with old ID format)
+                    cursor = await db.execute("""
+                        SELECT COUNT(*) FROM worklogs WHERE id NOT LIKE '%__%'
+                    """)
+                    old_format_count = (await cursor.fetchone())[0]
+
+                    if old_format_count > 0:
+                        print(f"🔄 Migrating {old_format_count} worklogs to new ID format (id__instance)...")
+
+                        # Update IDs to composite format
+                        await db.execute("""
+                            UPDATE worklogs
+                            SET id = id || '__' || REPLACE(jira_instance, ' ', '_')
+                            WHERE id NOT LIKE '%__%'
+                        """)
+
+                        print(f"✅ Migration completed: {old_format_count} worklogs updated")
+                except Exception as e:
+                    print(f"⚠️  Worklog ID migration skipped: {e}")
+                    pass
+
                 await db.commit()
 
             self._initialized = True
@@ -1127,22 +1151,49 @@ class WorklogStorage:
 
         worklogs = unique_worklogs
 
+        # Generate unique IDs by combining original ID + jira_instance
+        # This allows multiple JIRA instances to have worklogs with the same original ID
+        # The original ID is preserved in the 'data' JSON field
+        worklogs_with_unique_ids = []
+        for wl in worklogs:
+            # Create unique ID: "original_id__instance_name"
+            unique_id = f"{wl.id}__{wl.jira_instance.replace(' ', '_')}"
+
+            # Create new worklog with unique ID
+            wl_copy = Worklog(
+                id=unique_id,  # Unique composite ID
+                issue_key=wl.issue_key,
+                issue_summary=wl.issue_summary,
+                author_email=wl.author_email,
+                author_display_name=wl.author_display_name,
+                time_spent_seconds=wl.time_spent_seconds,
+                started=wl.started,
+                jira_instance=wl.jira_instance,
+                parent_key=wl.parent_key,
+                parent_name=wl.parent_name,
+                parent_type=wl.parent_type,
+                epic_key=wl.epic_key,
+                epic_name=wl.epic_name
+            )
+            worklogs_with_unique_ids.append(wl_copy)
+
+        worklogs = worklogs_with_unique_ids
+
         async with aiosqlite.connect(self.db_path) as db:
             # Step 1: Get all existing worklog IDs in a single query (no N+1!)
-            # Check using (id, jira_instance) as composite key to handle multiple JIRA instances
+            # IDs are now unique (composed of original_id__instance_name)
             worklog_ids_to_check = [wl.id for wl in worklogs]
             placeholders = ",".join("?" * len(worklog_ids_to_check))
 
             async with db.execute(
-                f"SELECT id, jira_instance FROM worklogs WHERE id IN ({placeholders}) AND company_id = ?",
+                f"SELECT id FROM worklogs WHERE id IN ({placeholders}) AND company_id = ?",
                 worklog_ids_to_check + [company_id]
             ) as cursor:
-                existing_ids = {(row[0], row[1]) for row in await cursor.fetchall()}
+                existing_ids = {row[0] for row in await cursor.fetchall()}
 
             # Step 2: Separate worklogs into new and existing
-            # Use (id, jira_instance) tuple as unique identifier
-            new_worklogs = [wl for wl in worklogs if (wl.id, wl.jira_instance) not in existing_ids]
-            existing_worklogs = [wl for wl in worklogs if (wl.id, wl.jira_instance) in existing_ids]
+            new_worklogs = [wl for wl in worklogs if wl.id not in existing_ids]
+            existing_worklogs = [wl for wl in worklogs if wl.id in existing_ids]
 
             inserted = 0
             updated = 0
@@ -1264,7 +1315,9 @@ class WorklogStorage:
             """
             params = [company_id, start_date.isoformat(), end_date.isoformat(), jira_instance]
         else:
-            placeholders = ",".join("?" * len(worklog_ids))
+            # Transform worklog_ids to composite format (id__instance) to match DB format
+            composite_ids = [f"{wl_id}__{jira_instance.replace(' ', '_')}" for wl_id in worklog_ids]
+            placeholders = ",".join("?" * len(composite_ids))
             query = f"""
                 DELETE FROM worklogs
                 WHERE company_id = ? AND date(started) >= ? AND date(started) <= ?
@@ -1272,7 +1325,7 @@ class WorklogStorage:
                 AND id NOT IN ({placeholders})
             """
             params = [company_id, start_date.isoformat(), end_date.isoformat(), jira_instance]
-            params.extend(worklog_ids)
+            params.extend(composite_ids)
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(query, params)
@@ -1280,7 +1333,33 @@ class WorklogStorage:
             await db.commit()
 
         return deleted
-    
+
+    async def delete_all_worklogs(self, company_id: int) -> int:
+        """Delete ALL worklogs for a specific company.
+
+        **DEV/TEST ONLY** - Use with caution!
+
+        Args:
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Count of deleted worklogs
+        """
+        await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "DELETE FROM worklogs WHERE company_id = ?",
+                (company_id,)
+            )
+            deleted = cursor.rowcount
+            await db.commit()
+
+        return deleted
+
     async def get_worklog_count(self, company_id: int) -> int:
         """Get total count of worklogs in storage for a specific company.
 

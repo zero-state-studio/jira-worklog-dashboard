@@ -7,6 +7,7 @@ import JiraInstancesSection from '../components/settings/JiraInstancesSection'
 import PackageTemplatesSection from '../components/settings/PackageTemplatesSection'
 import HolidaysSection from '../components/settings/HolidaysSection'
 import FactorialSection from '../components/settings/FactorialSection'
+import DatabaseSection from '../components/settings/DatabaseSection'
 
 const CatIconSystem = () => (
     <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -124,6 +125,7 @@ export default function Settings() {
             category: 'Sistema',
             icon: CatIconSystem,
             items: [
+                { id: 'database', label: 'Gestione Database' },
                 { id: 'logs', label: 'Log Applicazione' }
             ]
         }
@@ -225,6 +227,9 @@ export default function Settings() {
                             )}
                             {activeTab === 'holidays' && (
                                 <HolidaysSection />
+                            )}
+                            {activeTab === 'database' && (
+                                <DatabaseSection />
                             )}
                             {activeTab === 'logs' && (
                                 <LogsSection />
