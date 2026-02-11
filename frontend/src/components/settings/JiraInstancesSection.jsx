@@ -122,9 +122,9 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-start justify-center py-8">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-dark-700">
+            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-dark-700 max-h-[calc(100vh-4rem)] overflow-y-auto">
                 <div className="p-6 border-b border-dark-700">
                     <h3 className="text-lg font-semibold text-dark-100">
                         {instance ? 'Modifica Istanza JIRA' : 'Nuova Istanza JIRA'}
@@ -321,9 +321,9 @@ function ComplementaryGroupModal({ isOpen, onClose, onSave, group, instances, lo
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-start justify-center py-8">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-dark-700">
+            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-dark-700 max-h-[calc(100vh-4rem)] overflow-y-auto">
                 <div className="p-6 border-b border-dark-700">
                     <h3 className="text-lg font-semibold text-dark-100">
                         {group ? 'Modifica Gruppo Complementare' : 'Nuovo Gruppo Complementare'}
