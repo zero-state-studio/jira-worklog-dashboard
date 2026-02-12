@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getUsers } from '../api/client'
-import { KpiBar, DataTable, Badge } from '../components/common'
+import { KpiBar, DataTable, Badge, Input } from '../components/common'
 import { formatHours } from '../hooks/useData'
-import { Users as UsersIcon } from 'lucide-react'
+import { Users as UsersIcon, Search } from 'lucide-react'
 
 export default function UsersListView({ dateRange, selectedInstance }) {
     const navigate = useNavigate()
     const [users, setUsers] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
+    const [searchQuery, setSearchQuery] = useState('')
 
     const fetchData = useCallback(async () => {
         try {
@@ -207,7 +208,17 @@ export default function UsersListView({ dateRange, selectedInstance }) {
         },
     ]
 
-    const tableData = users.map((user) => ({
+    // Filter users by search query
+    const filteredUsers = users.filter((user) => {
+        const query = searchQuery.toLowerCase()
+        return (
+            user.full_name?.toLowerCase().includes(query) ||
+            user.email?.toLowerCase().includes(query) ||
+            user.team_name?.toLowerCase().includes(query)
+        )
+    })
+
+    const tableData = filteredUsers.map((user) => ({
         id: user.id,
         user: user.full_name,
         full_name: user.full_name,
@@ -236,13 +247,27 @@ export default function UsersListView({ dateRange, selectedInstance }) {
             {/* KPI Bar */}
             <KpiBar items={kpiItems} />
 
+            {/* Search Bar */}
+            <div className="max-w-md">
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-tertiary" size={16} />
+                    <input
+                        type="text"
+                        placeholder="Search by name, email, or team..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full h-9 pl-10 pr-3 bg-surface border border-solid rounded-md text-sm text-primary placeholder:text-tertiary focus:outline-none focus:ring-2 focus:ring-accent transition-shadow"
+                    />
+                </div>
+            </div>
+
             {/* Users Table */}
             <DataTable
                 columns={tableColumns}
                 data={tableData}
                 sortable
                 toolbar={{
-                    title: 'Users',
+                    title: `${filteredUsers.length} ${filteredUsers.length === 1 ? 'User' : 'Users'}${searchQuery ? ` (filtered from ${users.length})` : ''}`,
                 }}
             />
         </div>

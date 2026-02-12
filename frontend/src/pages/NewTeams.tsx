@@ -36,6 +36,7 @@ export default function NewTeams({ dateRange, selectedInstance }: {
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
   const [teamDetail, setTeamDetail] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [memberSearchQuery, setMemberSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState<'members' | 'worklogs'>('members')
   const [loading, setLoading] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -81,6 +82,7 @@ export default function NewTeams({ dateRange, selectedInstance }: {
   useEffect(() => {
     if (selectedTeam) {
       loadTeamDetail(selectedTeam.name)
+      setMemberSearchQuery('') // Reset search when switching teams
     }
   }, [selectedTeam, loadTeamDetail])
 
@@ -88,6 +90,16 @@ export default function NewTeams({ dateRange, selectedInstance }: {
   const filteredTeams = teams.filter((team) =>
     team.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
+
+  // Filter members by search
+  const filteredMembers = (teamDetail?.members || []).filter((member: TeamMember) => {
+    const query = memberSearchQuery.toLowerCase()
+    return (
+      member.name?.toLowerCase().includes(query) ||
+      member.email?.toLowerCase().includes(query) ||
+      member.role?.toLowerCase().includes(query)
+    )
+  })
 
   // Members columns
   const membersColumns: Column[] = [
@@ -351,23 +363,38 @@ export default function NewTeams({ dateRange, selectedInstance }: {
                 <>
                   {/* Members Tab */}
                   {activeTab === 'members' && (
-                    <DataTable
-                      columns={membersColumns}
-                      data={teamDetail?.members || []}
-                      toolbar={{
-                        title: `${teamDetail?.members?.length || 0} Members`,
-                        actions: (
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            icon={<UserPlus size={14} />}
-                            onClick={() => setShowAddMemberModal(true)}
-                          >
-                            Add Member
-                          </Button>
-                        ),
-                      }}
-                    />
+                    <div className="space-y-4">
+                      {/* Member Search */}
+                      <div className="flex items-center gap-3">
+                        <div className="relative flex-1 max-w-md">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-tertiary" size={16} />
+                          <input
+                            type="text"
+                            placeholder="Search members by name, email, or role..."
+                            value={memberSearchQuery}
+                            onChange={(e) => setMemberSearchQuery(e.target.value)}
+                            className="w-full h-9 pl-10 pr-3 bg-surface border border-solid rounded-md text-sm text-primary placeholder:text-tertiary focus:outline-none focus:ring-2 focus:ring-accent transition-shadow"
+                          />
+                        </div>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          icon={<UserPlus size={14} />}
+                          onClick={() => setShowAddMemberModal(true)}
+                        >
+                          Add Member
+                        </Button>
+                      </div>
+
+                      {/* Members Table */}
+                      <DataTable
+                        columns={membersColumns}
+                        data={filteredMembers}
+                        toolbar={{
+                          title: `${filteredMembers.length} ${filteredMembers.length === 1 ? 'Member' : 'Members'}${memberSearchQuery ? ` (filtered from ${teamDetail?.members?.length || 0})` : ''}`,
+                        }}
+                      />
+                    </div>
                   )}
 
                   {/* Worklogs Tab */}
