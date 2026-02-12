@@ -251,6 +251,7 @@ class WorklogStorage:
                 await db.execute("""
                     CREATE TABLE IF NOT EXISTS complementary_group_members (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
                         group_id INTEGER NOT NULL REFERENCES complementary_groups(id) ON DELETE CASCADE,
                         instance_id INTEGER NOT NULL REFERENCES jira_instances(id) ON DELETE CASCADE,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -2569,9 +2570,9 @@ class WorklogStorage:
                 SELECT ji.id, ji.name, ji.url
                 FROM complementary_group_members cgm
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
-                WHERE cgm.group_id = ? AND ji.company_id = ?
+                WHERE cgm.group_id = ? AND cgm.company_id = ? AND ji.company_id = ?
                 ORDER BY ji.name
-            """, (group_id, company_id)) as cursor:
+            """, (group_id, company_id, company_id)) as cursor:
                 async for row in cursor:
                     group["members"].append({
                         "id": row[0],
@@ -2620,12 +2621,12 @@ class WorklogStorage:
             group_ids = [g["id"] for g in groups]
             if group_ids:
                 placeholders = ",".join("?" * len(group_ids))
-                params = group_ids + [company_id]
+                params = group_ids + [company_id, company_id]
                 async with db.execute(f"""
                     SELECT cgm.group_id, ji.id, ji.name, ji.url
                     FROM complementary_group_members cgm
                     JOIN jira_instances ji ON ji.id = cgm.instance_id
-                    WHERE cgm.group_id IN ({placeholders}) AND ji.company_id = ?
+                    WHERE cgm.group_id IN ({placeholders}) AND cgm.company_id = ? AND ji.company_id = ?
                     ORDER BY ji.name
                 """, params) as cursor:
                     async for row in cursor:
@@ -2767,9 +2768,9 @@ class WorklogStorage:
 
             try:
                 await db.execute("""
-                    INSERT INTO complementary_group_members (group_id, instance_id)
-                    VALUES (?, ?)
-                """, (group_id, instance_id))
+                    INSERT INTO complementary_group_members (company_id, group_id, instance_id)
+                    VALUES (?, ?, ?)
+                """, (company_id, group_id, instance_id))
                 await db.commit()
                 return True
             except Exception:
@@ -2797,11 +2798,10 @@ class WorklogStorage:
             raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
-            # Verify group belongs to company before removing membership
+            # Verify group belongs to company before removing membership (direct company_id filter)
             cursor = await db.execute("""
                 DELETE FROM complementary_group_members
-                WHERE group_id = ? AND instance_id = ?
-                AND group_id IN (SELECT id FROM complementary_groups WHERE company_id = ?)
+                WHERE group_id = ? AND instance_id = ? AND company_id = ?
             """, (group_id, instance_id, company_id))
             await db.commit()
             return cursor.rowcount > 0
@@ -2851,18 +2851,19 @@ class WorklogStorage:
                     if count != len(instance_ids):
                         raise ValueError(f"Some instances don't belong to company {company_id}")
 
-            # Remove all existing members
-            await db.execute(
-                "DELETE FROM complementary_group_members WHERE group_id = ?",
-                (group_id,)
-            )
+            # Remove all existing members (filter by company_id for security)
+            await db.execute("""
+                DELETE FROM complementary_group_members
+                WHERE group_id = ?
+                AND group_id IN (SELECT id FROM complementary_groups WHERE company_id = ?)
+            """, (group_id, company_id))
 
             # Add new members
             for instance_id in instance_ids:
                 await db.execute("""
-                    INSERT INTO complementary_group_members (group_id, instance_id)
-                    VALUES (?, ?)
-                """, (group_id, instance_id))
+                    INSERT INTO complementary_group_members (company_id, group_id, instance_id)
+                    VALUES (?, ?, ?)
+                """, (company_id, group_id, instance_id))
 
             await db.commit()
             return True
@@ -2890,8 +2891,8 @@ class WorklogStorage:
                 FROM complementary_group_members cgm
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
                 JOIN complementary_groups cg ON cg.id = cgm.group_id
-                WHERE cg.company_id = ? AND ji.company_id = ?
-            """, (company_id, company_id)) as cursor:
+                WHERE cgm.company_id = ? AND cg.company_id = ? AND ji.company_id = ?
+            """, (company_id, company_id, company_id)) as cursor:
                 async for row in cursor:
                     names.append(row[0])
         return names
@@ -2918,9 +2919,9 @@ class WorklogStorage:
                 FROM complementary_group_members cgm
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
                 JOIN complementary_groups cg ON cg.id = cgm.group_id
-                WHERE cgm.group_id = ? AND cg.company_id = ? AND ji.company_id = ?
+                WHERE cgm.group_id = ? AND cgm.company_id = ? AND cg.company_id = ? AND ji.company_id = ?
                 ORDER BY ji.name
-            """, (group_id, company_id, company_id)) as cursor:
+            """, (group_id, company_id, company_id, company_id)) as cursor:
                 async for row in cursor:
                     names.append(row[0])
         return names
@@ -3467,8 +3468,8 @@ class WorklogStorage:
                 FROM complementary_group_members cgm
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
                 JOIN complementary_groups cg ON cg.id = cgm.group_id
-                WHERE ji.name = ? AND ji.company_id = ? AND cg.company_id = ?
-            """, (instance_name, company_id, company_id)) as cursor:
+                WHERE ji.name = ? AND cgm.company_id = ? AND ji.company_id = ? AND cg.company_id = ?
+            """, (instance_name, company_id, company_id, company_id)) as cursor:
                 group_ids = [row[0] async for row in cursor]
 
             if not group_ids:
@@ -3476,12 +3477,13 @@ class WorklogStorage:
 
             # Find all other instances in those groups (only from same company)
             placeholders = ",".join("?" * len(group_ids))
-            params = list(group_ids) + [company_id, instance_name]
+            params = list(group_ids) + [company_id, company_id, instance_name]
             async with db.execute(f"""
                 SELECT DISTINCT ji.name
                 FROM complementary_group_members cgm
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
                 WHERE cgm.group_id IN ({placeholders})
+                AND cgm.company_id = ?
                 AND ji.company_id = ?
                 AND ji.name != ?
                 ORDER BY ji.name

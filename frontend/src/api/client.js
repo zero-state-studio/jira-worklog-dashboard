@@ -717,6 +717,14 @@ export async function getHolidays(year, country = 'IT') {
     return fetchApi(`/settings/holidays/${year}`, { country })
 }
 
+export async function getHolidaysForRange(startDate, endDate, country = 'IT') {
+    return fetchApi(`/settings/holidays/range`, {
+        start_date: startDate,
+        end_date: endDate,
+        country
+    })
+}
+
 export async function createHoliday(data) {
     return fetchApiPost('/settings/holidays', data)
 }

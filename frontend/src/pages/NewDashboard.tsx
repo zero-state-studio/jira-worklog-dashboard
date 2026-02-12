@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getDashboard, getWorklogs, getJiraInstances } from '../api/client'
+import { getDashboard, getWorklogs, getJiraInstances, getComplementaryGroups, getHolidaysForRange } from '../api/client'
 import { KpiBar, DataTable, Column, Card, Badge } from '../components/common'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
 import { format, differenceInBusinessDays } from 'date-fns'
@@ -48,6 +48,9 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
   const [allWorklogs, setAllWorklogs] = useState<any[]>([])
   const [jiraInstances, setJiraInstances] = useState<any[]>([])
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodPreset>('this-month')
+  const [complementaryGroups, setComplementaryGroups] = useState<any[]>([])
+  const [holidayDates, setHolidayDates] = useState<string[]>([])
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   const handlePeriodChange = (period: PeriodPreset) => {
     setSelectedPeriod(period)
@@ -149,6 +152,27 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
     fetchWorklogs()
   }, [dateRange.startDate, dateRange.endDate, selectedInstance])
 
+  // Fetch complementary groups and holidays
+  useEffect(() => {
+    const fetchMetadata = async () => {
+      try {
+        // Fetch complementary groups
+        const groupsResult = await getComplementaryGroups()
+        setComplementaryGroups(groupsResult.groups || [])
+
+        // Fetch holidays for the date range
+        const startDate = dateRange.startDate.toISOString().split('T')[0]
+        const endDate = dateRange.endDate.toISOString().split('T')[0]
+        const holidaysResult = await getHolidaysForRange(startDate, endDate)
+        setHolidayDates(holidaysResult.holiday_dates || [])
+      } catch (err) {
+        console.error('[Dashboard] Failed to fetch complementary groups or holidays:', err)
+      }
+    }
+
+    fetchMetadata()
+  }, [dateRange.startDate, dateRange.endDate])
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -178,8 +202,9 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
 
   if (!data) return null
 
-  // Calculate working days in period (for Avg/Day KPI)
-  const workingDays = differenceInBusinessDays(dateRange.endDate, dateRange.startDate) + 1
+  // Calculate working days in period (for Avg/Day KPI) - excluding weekends and holidays
+  const businessDays = differenceInBusinessDays(dateRange.endDate, dateRange.startDate) + 1
+  const workingDays = businessDays - holidayDates.length // Subtract holidays from business days
   const avgHoursPerDay = workingDays > 0 ? data.total_hours / workingDays : 0
 
   // Calculate KPIs
@@ -284,7 +309,26 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
 
   // ============ BY INSTANCE SECTION ============
 
-  // Aggregate worklogs by instance
+  // Build complementary group map: instance_name -> group
+  const instanceToGroup = new Map()
+  const groupToPrimary = new Map()
+  const groupToMembers = new Map()
+
+  complementaryGroups.forEach((group) => {
+    const members = group.members || []
+    const primaryInstance = group.primary_instance
+    groupToMembers.set(group.name, members)
+
+    members.forEach((instanceName: string) => {
+      instanceToGroup.set(instanceName, group.name)
+    })
+
+    if (primaryInstance) {
+      groupToPrimary.set(group.name, primaryInstance)
+    }
+  })
+
+  // Aggregate worklogs by instance (keeping individual stats)
   const instanceStats = new Map()
   const instanceContributors = new Map()
   const instanceWorklogs = new Map()
@@ -304,8 +348,57 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
     instanceWorklogs.set(instance, instanceWorklogs.get(instance) + 1)
   })
 
-  // Calculate utilization per instance
-  const instanceData = Array.from(instanceStats.entries()).map(([instance, hours]) => {
+  // Group instances by complementary groups
+  const processedInstances = new Set()
+  const instanceData: any[] = []
+
+  // Process complementary groups first
+  complementaryGroups.forEach((group) => {
+    const members = group.members || []
+    const primaryInstance = group.primary_instance
+
+    // Check if any member has data
+    const hasData = members.some((m: string) => instanceStats.has(m))
+    if (!hasData) return
+
+    // Mark all members as processed
+    members.forEach((m: string) => processedInstances.add(m))
+
+    // Use primary instance data (do NOT sum)
+    const hours = instanceStats.get(primaryInstance) || 0
+    const contributors = instanceContributors.get(primaryInstance)?.size || 0
+    const worklogCount = instanceWorklogs.get(primaryInstance) || 0
+
+    // Calculate available hours (working days × 8h × contributors)
+    const availableHours = workingDays * 8 * contributors
+    const utilization = availableHours > 0 ? (hours / availableHours) * 100 : 0
+
+    // Build member details for expandable rows
+    const memberDetails = members.map((memberInstance: string) => ({
+      instance: memberInstance,
+      hours: instanceStats.get(memberInstance) || 0,
+      worklogCount: instanceWorklogs.get(memberInstance) || 0,
+      contributors: instanceContributors.get(memberInstance)?.size || 0,
+      isPrimary: memberInstance === primaryInstance,
+    }))
+
+    instanceData.push({
+      instance: group.name, // Show group name instead of instance name
+      hours,
+      worklogCount,
+      contributors,
+      availableHours,
+      utilization,
+      isGroup: true,
+      members: memberDetails,
+      groupName: group.name,
+    })
+  })
+
+  // Process standalone instances (not in any group)
+  Array.from(instanceStats.entries()).forEach(([instance, hours]) => {
+    if (processedInstances.has(instance)) return // Skip if already in a group
+
     const contributors = instanceContributors.get(instance).size
     const worklogCount = instanceWorklogs.get(instance)
 
@@ -313,14 +406,16 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
     const availableHours = workingDays * 8 * contributors
     const utilization = availableHours > 0 ? (hours / availableHours) * 100 : 0
 
-    return {
+    instanceData.push({
       instance,
       hours,
       worklogCount,
       contributors,
       availableHours,
       utilization,
-    }
+      isGroup: false,
+      members: [],
+    })
   })
 
   // Sort by hours descending
@@ -379,14 +474,48 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
     return bTotal - aTotal
   })
 
+  // Toggle expand/collapse for grouped instances
+  const toggleExpand = (groupName: string) => {
+    setExpandedGroups(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(groupName)) {
+        newSet.delete(groupName)
+      } else {
+        newSet.add(groupName)
+      }
+      return newSet
+    })
+  }
+
   // Prepare data for comparison table
   const comparisonTableColumns: Column[] = [
     {
       key: 'instance',
       label: 'Instance',
       type: 'text',
-      width: '150px',
-      render: (value) => <span className="text-sm font-medium">{value}</span>,
+      width: '200px',
+      render: (value, row: any) => {
+        const isExpanded = expandedGroups.has(row.groupName)
+        const hasMembers = row.isGroup && row.members && row.members.length > 1
+
+        return (
+          <div
+            className={`flex items-center gap-2 ${hasMembers ? 'cursor-pointer hover:text-accent' : ''} ${row.isChild ? 'pl-6 text-secondary' : ''}`}
+            onClick={() => hasMembers && toggleExpand(row.groupName)}
+          >
+            {hasMembers && (
+              <span className="text-xs">
+                {isExpanded ? '▼' : '▶'}
+              </span>
+            )}
+            {row.isChild && <span className="text-xs mr-1">└</span>}
+            <span className={`text-sm ${row.isChild ? '' : 'font-medium'}`}>
+              {value}
+              {row.isPrimary && <span className="ml-2 text-xs text-accent">(primary)</span>}
+            </span>
+          </div>
+        )
+      },
     },
     {
       key: 'hours',
@@ -447,16 +576,48 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
     },
   ]
 
-  const comparisonTableData = instanceData.map((item) => ({
-    id: item.instance,
-    instance: item.instance,
-    hours: formatHours(item.hours),
-    worklogs: item.worklogCount,
-    contributors: item.contributors,
-    available: formatHours(item.availableHours),
-    utilization: `${Math.round(item.utilization)}%`,
-    utilizationValue: item.utilization,
-  }))
+  // Build table data with expandable rows
+  const comparisonTableData: any[] = []
+
+  instanceData.forEach((item) => {
+    // Add parent row
+    comparisonTableData.push({
+      id: item.instance,
+      instance: item.instance,
+      hours: formatHours(item.hours),
+      worklogs: item.worklogCount,
+      contributors: item.contributors,
+      available: formatHours(item.availableHours),
+      utilization: `${Math.round(item.utilization)}%`,
+      utilizationValue: item.utilization,
+      isGroup: item.isGroup,
+      groupName: item.groupName,
+      members: item.members,
+      isChild: false,
+    })
+
+    // Add child rows if group is expanded
+    if (item.isGroup && expandedGroups.has(item.groupName)) {
+      item.members.forEach((member: any) => {
+        const memberAvailable = workingDays * 8 * member.contributors
+        const memberUtilization = memberAvailable > 0 ? (member.hours / memberAvailable) * 100 : 0
+
+        comparisonTableData.push({
+          id: `${item.instance}-${member.instance}`,
+          instance: member.instance,
+          hours: formatHours(member.hours),
+          worklogs: member.worklogCount,
+          contributors: member.contributors,
+          available: formatHours(memberAvailable),
+          utilization: `${Math.round(memberUtilization)}%`,
+          utilizationValue: memberUtilization,
+          isGroup: false,
+          isChild: true,
+          isPrimary: member.isPrimary,
+        })
+      })
+    }
+  })
 
   // Add TOTAL row
   const totalRow = {
@@ -512,162 +673,9 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
       {/* Row 1: KPI Bar */}
       <KpiBar items={kpiItems} />
 
-      {/* Row 2: Charts */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* Hours by Day */}
-        <div className="col-span-2">
-          <div className="flat-card p-4">
-            <div className="mb-4">
-              <h3 className="text-base font-semibold text-primary">Hours by Day</h3>
-              <p className="text-sm text-secondary">Daily tracking overview</p>
-            </div>
-            <ResponsiveContainer width="100%" height={250}>
-              <AreaChart data={dailyTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-accent)" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="var(--color-accent)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--color-border)"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="date"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
-                  dy={10}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
-                  tickFormatter={(value) => `${value}h`}
-                  dx={-10}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: 'var(--color-surface)',
-                    border: '1px solid var(--color-border-strong)',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                  }}
-                  labelStyle={{ color: 'var(--color-text-secondary)', fontSize: 12 }}
-                  itemStyle={{ color: 'var(--color-text-primary)', fontSize: 13 }}
-                  formatter={(value: any) => [formatHours(value), 'Hours']}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="hours"
-                  stroke="var(--color-accent)"
-                  strokeWidth={2}
-                  fill="url(#colorHours)"
-                  dot={false}
-                  activeDot={{ r: 6, fill: 'var(--color-accent)', stroke: '#fff', strokeWidth: 2 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* By Project */}
-        <div>
-          <div className="flat-card p-4">
-            <div className="mb-4">
-              <h3 className="text-base font-semibold text-primary">By Project</h3>
-              <p className="text-sm text-secondary">Top 5 initiatives</p>
-            </div>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart
-                data={projectsData}
-                layout="vertical"
-                margin={{ top: 10, right: 40, left: 10, bottom: 10 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--color-border)"
-                  horizontal
-                  vertical={false}
-                />
-                <XAxis
-                  type="number"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
-                  tickFormatter={(value) => `${Math.round(value)}h`}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: 'var(--color-text-primary)', fontSize: 11 }}
-                  width={80}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: 'var(--color-surface)',
-                    border: '1px solid var(--color-border-strong)',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                  }}
-                  formatter={(value: any, name: any, props: any) => [
-                    formatHours(value),
-                    props.payload.full_name,
-                  ]}
-                />
-                <Bar
-                  dataKey="hours"
-                  radius={[0, 4, 4, 0]}
-                  maxBarSize={24}
-                >
-                  {projectsData.map((entry, index) => {
-                    const colors = [
-                      'var(--color-accent)',      // #2563EB - first bar
-                      '#64748B',                   // slate-500
-                      '#94A3B8',                   // slate-400
-                      '#CBD5E1',                   // slate-300
-                      '#E2E8F0',                   // slate-200
-                      '#F1F5F9',                   // slate-100 - for "Other"
-                    ]
-                    return <Cell key={`cell-${index}`} fill={colors[index] || colors[colors.length - 1]} />
-                  })}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* Row 3: Recent Activity */}
-      <DataTable
-        columns={recentActivityColumns}
-        data={recentActivity}
-        toolbar={{
-          title: 'Recent Worklogs',
-          actions: (
-            <button
-              onClick={() => navigate('/app/worklogs')}
-              className="text-sm text-accent hover:text-accent-hover font-medium transition-colors"
-            >
-              View all →
-            </button>
-          ),
-        }}
-      />
-
       {/* ============ BY INSTANCE SECTION ============ */}
       {showInstanceSection && (
         <>
-          {/* Section Divider */}
-          <div className="flex items-center gap-4 mt-12">
-            <h2 className="text-base font-semibold text-primary whitespace-nowrap">By Instance</h2>
-            <div className="flex-1 border-b border-solid" />
-          </div>
-
           {/* Row 1: KPI Cards per Instance */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {instanceData.map((item, index) => {
@@ -827,6 +835,153 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
           />
         </>
       )}
+
+      {/* Row 2: Charts (Overview) */}
+      <div className="grid grid-cols-3 gap-6">
+        {/* Hours by Day */}
+        <div className="col-span-2">
+          <div className="flat-card p-4">
+            <div className="mb-4">
+              <h3 className="text-base font-semibold text-primary">Hours by Day</h3>
+              <p className="text-sm text-secondary">Daily tracking overview</p>
+            </div>
+            <ResponsiveContainer width="100%" height={250}>
+              <AreaChart data={dailyTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--color-accent)" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="var(--color-accent)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="var(--color-border)"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="date"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
+                  dy={10}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
+                  tickFormatter={(value) => `${value}h`}
+                  dx={-10}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-border-strong)',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
+                  }}
+                  labelStyle={{ color: 'var(--color-text-secondary)', fontSize: 12 }}
+                  itemStyle={{ color: 'var(--color-text-primary)', fontSize: 13 }}
+                  formatter={(value: any) => [formatHours(value), 'Hours']}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="hours"
+                  stroke="var(--color-accent)"
+                  strokeWidth={2}
+                  fill="url(#colorHours)"
+                  dot={false}
+                  activeDot={{ r: 6, fill: 'var(--color-accent)', stroke: '#fff', strokeWidth: 2 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* By Project */}
+        <div>
+          <div className="flat-card p-4">
+            <div className="mb-4">
+              <h3 className="text-base font-semibold text-primary">By Project</h3>
+              <p className="text-sm text-secondary">Top 5 initiatives</p>
+            </div>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart
+                data={projectsData}
+                layout="vertical"
+                margin={{ top: 10, right: 40, left: 10, bottom: 10 }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="var(--color-border)"
+                  horizontal
+                  vertical={false}
+                />
+                <XAxis
+                  type="number"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
+                  tickFormatter={(value) => `${Math.round(value)}h`}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: 'var(--color-text-primary)', fontSize: 11 }}
+                  width={80}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-border-strong)',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
+                  }}
+                  formatter={(value: any, name: any, props: any) => [
+                    formatHours(value),
+                    props.payload.full_name,
+                  ]}
+                />
+                <Bar
+                  dataKey="hours"
+                  radius={[0, 4, 4, 0]}
+                  maxBarSize={24}
+                >
+                  {projectsData.map((entry, index) => {
+                    const colors = [
+                      'var(--color-accent)',      // #2563EB - first bar
+                      '#64748B',                   // slate-500
+                      '#94A3B8',                   // slate-400
+                      '#CBD5E1',                   // slate-300
+                      '#E2E8F0',                   // slate-200
+                      '#F1F5F9',                   // slate-100 - for "Other"
+                    ]
+                    return <Cell key={`cell-${index}`} fill={colors[index] || colors[colors.length - 1]} />
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3: Recent Activity */}
+      <DataTable
+        columns={recentActivityColumns}
+        data={recentActivity}
+        toolbar={{
+          title: 'Recent Worklogs',
+          actions: (
+            <button
+              onClick={() => navigate('/app/worklogs')}
+              className="text-sm text-accent hover:text-accent-hover font-medium transition-colors"
+            >
+              View all →
+            </button>
+          ),
+        }}
+      />
     </div>
   )
 }
