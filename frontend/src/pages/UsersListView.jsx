@@ -289,9 +289,9 @@ export default function UsersListView({ dateRange, selectedInstance }) {
 
                                 return (
                                     <tr
-                                        key={user.email}
+                                        key={user.id}
                                         className="border-b border-dark-700/50 hover:bg-dark-700/30 transition-colors cursor-pointer"
-                                        onClick={() => navigate(`/app/users/${encodeURIComponent(user.email)}`)}
+                                        onClick={() => navigate(`/app/users/${user.id}`)}
                                     >
                                         <td className="py-3 px-4">
                                             <div className="flex items-center gap-3">

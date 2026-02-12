@@ -423,7 +423,7 @@ function EpicDetailView({ data, navigate }) {
                             email={contributor.email}
                             hours={contributor.total_hours}
                             teamName={contributor.team_name}
-                            onClick={() => navigate(`/app/users/${encodeURIComponent(contributor.email)}`)}
+                            onClick={() => contributor.user_id && navigate(`/app/users/${contributor.user_id}`)}
                         />
                     ))}
                 </div>
@@ -432,7 +432,6 @@ function EpicDetailView({ data, navigate }) {
             {/* Calendario Worklog */}
             <WorklogCalendar
                 worklogs={data.worklogs}
-                onUserClick={(email) => navigate(`/app/users/${encodeURIComponent(email)}`)}
             />
         </div>
     )

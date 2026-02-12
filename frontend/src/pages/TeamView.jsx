@@ -206,7 +206,7 @@ export default function TeamView({ dateRange, selectedInstance }) {
                                         return (
                                             <div
                                                 key={member.email}
-                                                onClick={() => navigate(`/app/users/${encodeURIComponent(member.email)}`)}
+                                                onClick={() => member.user_id && navigate(`/app/users/${member.user_id}`)}
                                                 className="glass-card-hover p-4 flex items-center gap-4"
                                             >
                                                 <div className="w-12 h-12 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
@@ -403,7 +403,7 @@ export default function TeamView({ dateRange, selectedInstance }) {
                                 email={member.email}
                                 hours={member.total_hours}
                                 teamName={data.team_name}
-                                onClick={() => navigate(`/app/users/${encodeURIComponent(member.email)}`)}
+                                onClick={() => member.user_id && navigate(`/app/users/${member.user_id}`)}
                             />
                         ))}
                     </div>

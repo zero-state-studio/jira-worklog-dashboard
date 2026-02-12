@@ -246,30 +246,34 @@ def enrich_worklogs_with_names(worklogs: list[Worklog], users: list[dict]) -> li
 async def calculate_contributors_from_db(worklogs: list[Worklog], users: list[dict]) -> list[UserHours]:
     """Calculate hours per contributor for an epic (using database data)."""
     # Build lookup maps from users
-    email_to_name = {}
-    email_to_team = {}
+    email_to_data = {}
     for u in users:
         email_lower = u["email"].lower()
-        email_to_name[email_lower] = f"{u['first_name']} {u['last_name']}"
-        email_to_team[email_lower] = u.get("team_name")
+        email_to_data[email_lower] = {
+            "name": f"{u['first_name']} {u['last_name']}",
+            "team": u.get("team_name"),
+            "user_id": u["id"]
+        }
 
-    contributor_data = defaultdict(lambda: {"hours": 0, "name": "Unknown"})
+    contributor_data = defaultdict(lambda: {"hours": 0, "name": "Unknown", "user_id": None})
 
     for wl in worklogs:
         email = wl.author_email.lower()
         contributor_data[email]["hours"] += wl.time_spent_seconds / 3600
 
-        # Get display name from database or worklog
-        if email in email_to_name:
-            contributor_data[email]["name"] = email_to_name[email]
+        # Get display name and user_id from database or worklog
+        if email in email_to_data:
+            contributor_data[email]["name"] = email_to_data[email]["name"]
+            contributor_data[email]["user_id"] = email_to_data[email]["user_id"]
         else:
             contributor_data[email]["name"] = wl.author_display_name
 
     result = []
     for email, data in contributor_data.items():
-        team_name = email_to_team.get(email, "External")
+        team_name = email_to_data.get(email, {}).get("team", "External")
         result.append(UserHours(
             email=email,
+            user_id=data["user_id"],
             full_name=data["name"],
             total_hours=round(data["hours"], 2),
             team_name=team_name or "External"

@@ -60,6 +60,7 @@ export default function NewLayout({
         { path: '/app/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
         { path: '/app/worklogs', label: 'Worklogs', icon: <Clock size={16} /> },
         { path: '/app/teams', label: 'Teams', icon: <Users size={16} /> },
+        { path: '/app/users', label: 'Users', icon: <Users size={16} /> },
         { path: '/app/sync', label: 'Sync', icon: <RefreshCw size={16} /> },
       ],
     },

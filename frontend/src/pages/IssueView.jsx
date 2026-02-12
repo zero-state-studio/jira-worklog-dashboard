@@ -345,7 +345,7 @@ export default function IssueView({ dateRange }) {
                                 name={contributor.display_name}
                                 email={contributor.email}
                                 hours={contributor.total_hours}
-                                onClick={() => navigate(`/app/users/${encodeURIComponent(contributor.email)}`)}
+                                onClick={() => contributor.user_id && navigate(`/app/users/${contributor.user_id}`)}
                             />
                         ))}
                     </div>
@@ -375,7 +375,7 @@ export default function IssueView({ dateRange }) {
                                     </td>
                                     <td className="table-cell">
                                         <button
-                                            onClick={() => navigate(`/app/users/${encodeURIComponent(wl.author_email)}`)}
+                                            onClick={() => wl.author_user_id && navigate(`/app/users/${wl.author_user_id}`)}
                                             className="text-accent-blue hover:underline"
                                         >
                                             {wl.author_display_name}

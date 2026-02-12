@@ -53,7 +53,7 @@ function App() {
                             <Route path="teams" element={<NewTeams dateRange={dateRange} selectedInstance={selectedInstance} />} />
                             <Route path="teams/:teamName" element={<TeamView dateRange={dateRange} selectedInstance={selectedInstance} />} />
                             <Route path="users" element={<UsersListView dateRange={dateRange} selectedInstance={selectedInstance} />} />
-                            <Route path="users/:email" element={<UserView dateRange={dateRange} selectedInstance={selectedInstance} />} />
+                            <Route path="users/:userId" element={<UserView dateRange={dateRange} selectedInstance={selectedInstance} />} />
                             <Route path="epics" element={<EpicView dateRange={dateRange} selectedInstance={selectedInstance} />} />
                             <Route path="epics/:epicKey" element={<EpicView dateRange={dateRange} selectedInstance={selectedInstance} />} />
                             <Route path="issues/:issueKey" element={<IssueView dateRange={dateRange} />} />

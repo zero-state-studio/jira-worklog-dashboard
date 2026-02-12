@@ -136,8 +136,8 @@ export async function getUsers(startDate = null, endDate = null, jiraInstance = 
     return fetchApi('/users', params)
 }
 
-export async function getUserDetail(email, startDate, endDate, jiraInstance = null) {
-    return fetchApi(`/users/${encodeURIComponent(email)}`, {
+export async function getUserDetail(userId, startDate, endDate, jiraInstance = null) {
+    return fetchApi(`/users/${userId}`, {
         start_date: formatDate(startDate),
         end_date: formatDate(endDate),
         jira_instance: jiraInstance

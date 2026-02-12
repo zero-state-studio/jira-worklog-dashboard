@@ -9,7 +9,7 @@ import { getInstanceColor } from '../components/WorklogCalendar/calendarUtils'
 import WorklogCalendar from '../components/WorklogCalendar'
 
 export default function UserView({ dateRange, selectedInstance }) {
-    const { email } = useParams()
+    const { userId } = useParams()
     const navigate = useNavigate()
     const [data, setData] = useState(null)
     const [loading, setLoading] = useState(true)
@@ -22,7 +22,7 @@ export default function UserView({ dateRange, selectedInstance }) {
         try {
             setLoading(true)
             setError(null)
-            const result = await getUserDetail(email, dateRange.startDate, dateRange.endDate, selectedInstance)
+            const result = await getUserDetail(parseInt(userId), dateRange.startDate, dateRange.endDate, selectedInstance)
             setData(result)
 
             if (!selectedInstance) {
@@ -52,7 +52,7 @@ export default function UserView({ dateRange, selectedInstance }) {
         } finally {
             setLoading(false)
         }
-    }, [email, dateRange.startDate, dateRange.endDate, selectedInstance])
+    }, [userId, dateRange.startDate, dateRange.endDate, selectedInstance])
 
     useEffect(() => {
         fetchData()
@@ -399,7 +399,6 @@ export default function UserView({ dateRange, selectedInstance }) {
                 <WorklogCalendar
                     worklogs={data.worklogs}
                     leaves={leaves}
-                    onUserClick={(email) => navigate(`/app/users/${encodeURIComponent(email)}`)}
                 />
             </div>
         </div>

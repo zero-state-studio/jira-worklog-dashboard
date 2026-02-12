@@ -374,7 +374,15 @@ export default function NewTeams({ dateRange, selectedInstance }: {
                   {activeTab === 'worklogs' && (
                     <DataTable
                       columns={worklogsColumns}
-                      data={teamDetail?.worklogs || []}
+                      data={(teamDetail?.worklogs || []).map((w: any) => ({
+                        id: w.id,
+                        issue_key: w.issue_key,
+                        summary: w.issue_summary || '',
+                        author: w.author_display_name || w.author_email,
+                        duration: w.time_spent_seconds,
+                        date: w.started?.split('T')[0] || w.started,
+                        project: w.epic_key || (w.issue_key?.split('-')[0] || ''),
+                      }))}
                       sortable
                       pagination={{
                         page: 1,

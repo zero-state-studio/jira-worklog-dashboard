@@ -61,6 +61,7 @@ class Worklog(BaseModel):
     issue_key: str
     issue_summary: str
     author_email: str
+    author_user_id: Optional[int] = None
     author_display_name: str
     time_spent_seconds: int
     started: datetime
@@ -284,6 +285,7 @@ class TeamHours(BaseModel):
 class UserHours(BaseModel):
     """Hours logged by a user."""
     email: str
+    user_id: Optional[int] = None
     full_name: str
     total_hours: float
     team_name: str
@@ -319,11 +321,13 @@ class TeamDetailResponse(BaseModel):
     members: list[UserHours]
     epics: list[EpicHours]
     daily_trend: list[DailyHours]
+    worklogs: list[Worklog] = []
 
 
 class UserDetailResponse(BaseModel):
     """Response for user detail view."""
     email: str
+    user_id: int = None
     full_name: str
     team_name: str
     total_hours: float

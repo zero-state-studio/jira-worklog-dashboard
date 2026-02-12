@@ -12,7 +12,7 @@ from datetime import date
 from app.auth.dependencies import get_current_user, CurrentUser
 from app.cache import get_storage
 
-router = APIRouter()
+router = APIRouter(prefix="/api", tags=["worklogs"])
 
 
 @router.get("/worklogs")
@@ -77,7 +77,7 @@ async def list_worklogs(
             "author": w.author_display_name or w.author_email,
             "author_email": w.author_email,
             "duration": w.time_spent_seconds,
-            "date": w.started.split("T")[0] if "T" in w.started else w.started,
+            "date": w.started.split("T")[0] if isinstance(w.started, str) and "T" in w.started else (w.started.isoformat().split("T")[0] if hasattr(w.started, 'isoformat') else str(w.started)),
             "project": w.epic_key or w.issue_key.split("-")[0] if w.issue_key else "",
             "epic_key": w.epic_key,
             "epic_name": w.epic_name,

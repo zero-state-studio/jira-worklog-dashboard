@@ -114,15 +114,15 @@ export default function Worklogs({ dateRange, selectedInstance }: WorklogsProps)
         if (usersData && Array.isArray(usersData)) {
           const authors = usersData.map((user: any) => ({
             value: user.email,
-            label: user.display_name || user.email
+            label: user.full_name || user.email
           }))
           setAuthorOptions(authors)
         }
 
         // Fetch JIRA instances
         const instancesData = await getJiraInstances()
-        if (instancesData && Array.isArray(instancesData)) {
-          const instances = instancesData.map((inst: any) => ({
+        if (instancesData && instancesData.instances && Array.isArray(instancesData.instances)) {
+          const instances = instancesData.instances.map((inst: any) => ({
             value: inst.name,
             label: inst.name
           }))
