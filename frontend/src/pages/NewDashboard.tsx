@@ -315,16 +315,16 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
   const groupToMembers = new Map()
 
   complementaryGroups.forEach((group) => {
-    const members = group.members || []
-    const primaryInstance = group.primary_instance
+    const members = group.members || []  // Array of { id, name, url }
+    const primaryInstanceName = group.primary_instance_name  // ✅ correct field
     groupToMembers.set(group.name, members)
 
-    members.forEach((instanceName: string) => {
-      instanceToGroup.set(instanceName, group.name)
+    members.forEach((member) => {  // ✅ member is object
+      instanceToGroup.set(member.name, group.name)  // ✅ access member.name
     })
 
-    if (primaryInstance) {
-      groupToPrimary.set(group.name, primaryInstance)
+    if (primaryInstanceName) {
+      groupToPrimary.set(group.name, primaryInstanceName)
     }
   })
 
@@ -354,32 +354,32 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
 
   // Process complementary groups first
   complementaryGroups.forEach((group) => {
-    const members = group.members || []
-    const primaryInstance = group.primary_instance
+    const members = group.members || []  // Array of { id, name, url }
+    const primaryInstanceName = group.primary_instance_name  // ✅ correct field
 
-    // Check if any member has data
-    const hasData = members.some((m: string) => instanceStats.has(m))
+    // Check if any member has data (using member.name)
+    const hasData = members.some((member) => instanceStats.has(member.name))  // ✅
     if (!hasData) return
 
-    // Mark all members as processed
-    members.forEach((m: string) => processedInstances.add(m))
+    // Mark all members as processed (using member.name)
+    members.forEach((member) => processedInstances.add(member.name))  // ✅
 
     // Use primary instance data (do NOT sum)
-    const hours = instanceStats.get(primaryInstance) || 0
-    const contributors = instanceContributors.get(primaryInstance)?.size || 0
-    const worklogCount = instanceWorklogs.get(primaryInstance) || 0
+    const hours = instanceStats.get(primaryInstanceName) || 0  // ✅
+    const contributors = instanceContributors.get(primaryInstanceName)?.size || 0
+    const worklogCount = instanceWorklogs.get(primaryInstanceName) || 0
 
     // Calculate available hours (working days × 8h × contributors)
     const availableHours = workingDays * 8 * contributors
     const utilization = availableHours > 0 ? (hours / availableHours) * 100 : 0
 
-    // Build member details for expandable rows
-    const memberDetails = members.map((memberInstance: string) => ({
-      instance: memberInstance,
-      hours: instanceStats.get(memberInstance) || 0,
-      worklogCount: instanceWorklogs.get(memberInstance) || 0,
-      contributors: instanceContributors.get(memberInstance)?.size || 0,
-      isPrimary: memberInstance === primaryInstance,
+    // Build member details for expandable rows (using member.name)
+    const memberDetails = members.map((member) => ({  // ✅
+      instance: member.name,  // ✅
+      hours: instanceStats.get(member.name) || 0,  // ✅
+      worklogCount: instanceWorklogs.get(member.name) || 0,
+      contributors: instanceContributors.get(member.name)?.size || 0,
+      isPrimary: member.name === primaryInstanceName,  // ✅
     }))
 
     instanceData.push({
@@ -420,6 +420,13 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
 
   // Sort by hours descending
   instanceData.sort((a, b) => b.hours - a.hours)
+
+  // Diagnostic logging (can be removed after verification)
+  console.log('[Dashboard] Complementary groups:', complementaryGroups)
+  console.log('[Dashboard] Instance stats:', Array.from(instanceStats.entries()))
+  console.log('[Dashboard] Processed instances:', Array.from(processedInstances))
+  console.log('[Dashboard] Final instanceData:', instanceData)
+  console.log('[Dashboard] TOTAL used:', instanceData.reduce((sum, item) => sum + item.hours, 0))
 
   // Prepare data for donut chart
   const donutData = instanceData.map((item, index) => ({
