@@ -22,7 +22,7 @@ export default function Login() {
     useEffect(() => {
         async function loadConfig() {
             try {
-                const response = await fetch('http://localhost:8000/api/auth/config')
+                const response = await fetch('/api/auth/config')
                 const data = await response.json()
                 setAuthConfig(data)
             } catch (err) {
@@ -63,7 +63,7 @@ export default function Login() {
         }
 
         try {
-            const response = await fetch('http://localhost:8000/api/auth/dev/login', {
+            const response = await fetch('/api/auth/dev/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -114,7 +114,7 @@ export default function Login() {
     function handleOAuthLogin() {
         setGoogleLoading(true)
         // Redirect to backend OAuth endpoint
-        window.location.href = 'http://localhost:8000/api/auth/login?platform=web'
+        window.location.href = '/api/auth/login?platform=web'
     }
 
     // Show loading while fetching config

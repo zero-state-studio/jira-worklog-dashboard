@@ -74,7 +74,13 @@ async function fetchApi(endpoint, params = {}) {
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({}))
-        throw new Error(error.detail || `API Error: ${response.status}`)
+        console.error('[API Error]', {
+            status: response.status,
+            url: url.toString(),
+            error: error,
+            detail: error.detail
+        })
+        throw new Error(error.detail || JSON.stringify(error) || `API Error: ${response.status}`)
     }
 
     return response.json()
@@ -92,9 +98,20 @@ export async function getWorklogs(params = {}) {
         pageSize = 50
     } = params
 
+    console.log('[getWorklogs] Input params:', { startDate, endDate, author, jiraInstance, page, pageSize })
+
+    if (!startDate || !endDate) {
+        throw new Error('startDate and endDate are required')
+    }
+
+    const formattedStartDate = formatDate(startDate)
+    const formattedEndDate = formatDate(endDate)
+
+    console.log('[getWorklogs] Formatted dates:', { formattedStartDate, formattedEndDate })
+
     return fetchApi('/worklogs', {
-        start_date: formatDate(startDate),
-        end_date: formatDate(endDate),
+        start_date: formattedStartDate,
+        end_date: formattedEndDate,
         author: author || undefined,
         jira_instance: jiraInstance || undefined,
         page,
@@ -213,7 +230,13 @@ export async function clearCache() {
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({}))
-        throw new Error(error.detail || `API Error: ${response.status}`)
+        console.error('[API Error]', {
+            status: response.status,
+            url: url.toString(),
+            error: error,
+            detail: error.detail
+        })
+        throw new Error(error.detail || JSON.stringify(error) || `API Error: ${response.status}`)
     }
 
     return response.json()
@@ -355,7 +378,13 @@ async function fetchApiPost(endpoint, data = {}) {
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({}))
-        throw new Error(error.detail || `API Error: ${response.status}`)
+        console.error('[API Error]', {
+            status: response.status,
+            url: url.toString(),
+            error: error,
+            detail: error.detail
+        })
+        throw new Error(error.detail || JSON.stringify(error) || `API Error: ${response.status}`)
     }
 
     return response.json()
@@ -381,7 +410,13 @@ async function fetchApiPut(endpoint, data = {}) {
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({}))
-        throw new Error(error.detail || `API Error: ${response.status}`)
+        console.error('[API Error]', {
+            status: response.status,
+            url: url.toString(),
+            error: error,
+            detail: error.detail
+        })
+        throw new Error(error.detail || JSON.stringify(error) || `API Error: ${response.status}`)
     }
 
     return response.json()
@@ -406,7 +441,13 @@ async function fetchApiDelete(endpoint) {
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({}))
-        throw new Error(error.detail || `API Error: ${response.status}`)
+        console.error('[API Error]', {
+            status: response.status,
+            url: url.toString(),
+            error: error,
+            detail: error.detail
+        })
+        throw new Error(error.detail || JSON.stringify(error) || `API Error: ${response.status}`)
     }
 
     return response.json()

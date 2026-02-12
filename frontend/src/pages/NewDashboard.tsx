@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getDashboard, getWorklogs } from '../api/client'
-import { KpiBar, DataTable, Column } from '../components/common'
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { getDashboard, getWorklogs, getJiraInstances } from '../api/client'
+import { KpiBar, DataTable, Column, Card, Badge } from '../components/common'
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
 import { format, differenceInBusinessDays } from 'date-fns'
 import { it } from 'date-fns/locale'
 import { formatHours } from '../hooks/useData'
@@ -31,12 +31,22 @@ interface WorklogData {
 
 type PeriodPreset = 'this-week' | 'this-month' | 'last-month' | 'this-quarter'
 
+const INSTANCE_COLORS: { [key: number]: string } = {
+  0: 'var(--color-accent)', // #2563EB
+  1: '#16A34A', // green
+  2: '#D97706', // orange
+  3: '#8B5CF6', // purple
+  4: '#EC4899', // pink
+}
+
 export default function NewDashboard({ dateRange, selectedInstance, onDateRangeChange }: DashboardProps) {
   const navigate = useNavigate()
   const [data, setData] = useState<WorklogData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [recentWorklogs, setRecentWorklogs] = useState<any[]>([])
+  const [allWorklogs, setAllWorklogs] = useState<any[]>([])
+  const [jiraInstances, setJiraInstances] = useState<any[]>([])
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodPreset>('this-month')
 
   const handlePeriodChange = (period: PeriodPreset) => {
@@ -80,6 +90,10 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
         selectedInstance
       )
       setData(result)
+
+      // Fetch JIRA instances
+      const instancesResult = await getJiraInstances()
+      setJiraInstances(instancesResult.instances || [])
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -91,25 +105,48 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
     fetchData()
   }, [fetchData])
 
-  // Fetch recent worklogs for activity table
+  // Fetch recent worklogs and all worklogs for instance aggregation
   useEffect(() => {
-    const fetchRecentWorklogs = async () => {
+    const fetchWorklogs = async () => {
       try {
-        const result = await getWorklogs({
+        // Fetch recent worklogs (for table)
+        console.log('[Dashboard] Fetching recent worklogs...', {
+          startDate: dateRange.startDate,
+          endDate: dateRange.endDate,
+          selectedInstance
+        })
+        const recentResult = await getWorklogs({
           startDate: dateRange.startDate,
           endDate: dateRange.endDate,
           jiraInstance: selectedInstance || undefined,
           page: 1,
           pageSize: 10
         })
-        setRecentWorklogs(result.worklogs || [])
+        console.log('[Dashboard] Recent worklogs fetched:', recentResult)
+        setRecentWorklogs(recentResult.worklogs || [])
+
+        // Fetch all worklogs (for instance aggregation) - only if no instance filter
+        if (!selectedInstance) {
+          console.log('[Dashboard] Fetching all worklogs for instance aggregation...')
+          const allResult = await getWorklogs({
+            startDate: dateRange.startDate,
+            endDate: dateRange.endDate,
+            page: 1,
+            pageSize: 500 // Max allowed by backend
+          })
+          console.log('[Dashboard] All worklogs fetched:', allResult?.worklogs?.length || 0)
+          setAllWorklogs(allResult.worklogs || [])
+        } else {
+          setAllWorklogs([])
+        }
       } catch (err) {
-        console.error('Failed to fetch recent worklogs:', err)
+        console.error('[Dashboard] Failed to fetch worklogs:', err)
         setRecentWorklogs([])
+        setAllWorklogs([])
       }
     }
 
-    fetchRecentWorklogs()
+    fetchWorklogs()
   }, [dateRange.startDate, dateRange.endDate, selectedInstance])
 
   if (loading) {
@@ -238,6 +275,211 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
     duration: formatHours(wl.duration / 3600),
     date: format(new Date(wl.date), 'd MMM', { locale: it }),
   }))
+
+  console.log('[Dashboard] Recent activity prepared:', {
+    recentWorklogsCount: recentWorklogs.length,
+    recentActivityCount: recentActivity.length,
+    sample: recentActivity[0]
+  })
+
+  // ============ BY INSTANCE SECTION ============
+
+  // Aggregate worklogs by instance
+  const instanceStats = new Map()
+  const instanceContributors = new Map()
+  const instanceWorklogs = new Map()
+
+  allWorklogs.forEach((wl) => {
+    const instance = wl.jira_instance || 'Unknown'
+    const hours = wl.duration / 3600
+
+    if (!instanceStats.has(instance)) {
+      instanceStats.set(instance, 0)
+      instanceContributors.set(instance, new Set())
+      instanceWorklogs.set(instance, 0)
+    }
+
+    instanceStats.set(instance, instanceStats.get(instance) + hours)
+    instanceContributors.get(instance).add(wl.author_email)
+    instanceWorklogs.set(instance, instanceWorklogs.get(instance) + 1)
+  })
+
+  // Calculate utilization per instance
+  const instanceData = Array.from(instanceStats.entries()).map(([instance, hours]) => {
+    const contributors = instanceContributors.get(instance).size
+    const worklogCount = instanceWorklogs.get(instance)
+
+    // Calculate available hours (working days × 8h × contributors)
+    const availableHours = workingDays * 8 * contributors
+    const utilization = availableHours > 0 ? (hours / availableHours) * 100 : 0
+
+    return {
+      instance,
+      hours,
+      worklogCount,
+      contributors,
+      availableHours,
+      utilization,
+    }
+  })
+
+  // Sort by hours descending
+  instanceData.sort((a, b) => b.hours - a.hours)
+
+  // Prepare data for donut chart
+  const donutData = instanceData.map((item, index) => ({
+    name: item.instance,
+    value: item.hours,
+    color: INSTANCE_COLORS[index] || '#94A3B8',
+  }))
+
+  // Add "Available" segment (remaining capacity)
+  const totalUsed = instanceData.reduce((sum, item) => sum + item.hours, 0)
+  const totalAvailable = instanceData.reduce((sum, item) => sum + item.availableHours, 0)
+  const totalRemaining = Math.max(0, totalAvailable - totalUsed)
+
+  if (totalRemaining > 0) {
+    donutData.push({
+      name: 'Available',
+      value: totalRemaining,
+      color: '#F1F5F9',
+    })
+  }
+
+  // Prepare data for team bar chart
+  const teamInstanceData: any[] = []
+  if (data.teams && data.teams.length > 0) {
+    data.teams.forEach((team) => {
+      if (team.hours_by_instance) {
+        Object.entries(team.hours_by_instance).forEach(([instance, hours]: [string, any]) => {
+          teamInstanceData.push({
+            team: team.team_name,
+            instance,
+            hours: hours as number,
+          })
+        })
+      }
+    })
+  }
+
+  // Group by team for horizontal grouped bar chart
+  const teamNames = Array.from(new Set(teamInstanceData.map(t => t.team)))
+  const groupedTeamData = teamNames.map(team => {
+    const teamData: any = { team }
+    teamInstanceData.filter(t => t.team === team).forEach(t => {
+      teamData[t.instance] = t.hours
+    })
+    return teamData
+  })
+
+  // Sort by total hours
+  groupedTeamData.sort((a, b) => {
+    const aTotal = Object.keys(a).filter(k => k !== 'team').reduce((sum, k) => sum + (a[k] || 0), 0)
+    const bTotal = Object.keys(b).filter(k => k !== 'team').reduce((sum, k) => sum + (b[k] || 0), 0)
+    return bTotal - aTotal
+  })
+
+  // Prepare data for comparison table
+  const comparisonTableColumns: Column[] = [
+    {
+      key: 'instance',
+      label: 'Instance',
+      type: 'text',
+      width: '150px',
+      render: (value) => <span className="text-sm font-medium">{value}</span>,
+    },
+    {
+      key: 'hours',
+      label: 'Hours',
+      type: 'text',
+      width: '120px',
+      render: (value) => <span className="font-mono text-xs">{value}</span>,
+    },
+    {
+      key: 'worklogs',
+      label: 'Worklogs',
+      type: 'number',
+      width: '100px',
+      render: (value) => <span className="font-mono text-xs">{value}</span>,
+    },
+    {
+      key: 'contributors',
+      label: 'Contributors',
+      type: 'number',
+      width: '120px',
+      render: (value) => <span className="font-mono text-xs">{value}</span>,
+    },
+    {
+      key: 'available',
+      label: 'Available',
+      type: 'text',
+      width: '120px',
+      render: (value) => <span className="font-mono text-xs text-secondary">{value}</span>,
+    },
+    {
+      key: 'utilization',
+      label: 'Utilization',
+      type: 'text',
+      width: '180px',
+      render: (value, row: any) => {
+        const percentage = row.utilizationValue
+        const color =
+          percentage < 50
+            ? 'text-warning'
+            : percentage >= 50 && percentage < 85
+            ? 'text-primary'
+            : percentage >= 85 && percentage <= 100
+            ? 'text-success'
+            : 'text-error'
+
+        return (
+          <div className="flex items-center gap-2">
+            <span className={`font-mono text-xs font-medium ${color}`}>{value}</span>
+            <div className="w-16 h-1 bg-surface-secondary rounded-full overflow-hidden">
+              <div
+                className="h-full bg-accent rounded-full transition-all"
+                style={{ width: `${Math.min(percentage, 100)}%` }}
+              />
+            </div>
+          </div>
+        )
+      },
+    },
+  ]
+
+  const comparisonTableData = instanceData.map((item) => ({
+    id: item.instance,
+    instance: item.instance,
+    hours: formatHours(item.hours),
+    worklogs: item.worklogCount,
+    contributors: item.contributors,
+    available: formatHours(item.availableHours),
+    utilization: `${Math.round(item.utilization)}%`,
+    utilizationValue: item.utilization,
+  }))
+
+  // Add TOTAL row
+  const totalRow = {
+    id: 'total',
+    instance: 'TOTAL',
+    hours: formatHours(totalUsed),
+    worklogs: instanceData.reduce((sum, item) => sum + item.worklogCount, 0),
+    contributors: new Set(allWorklogs.map((wl: any) => wl.author_email)).size,
+    available: formatHours(totalAvailable),
+    utilization: `${Math.round((totalUsed / totalAvailable) * 100)}%`,
+    utilizationValue: (totalUsed / totalAvailable) * 100,
+  }
+  comparisonTableData.push(totalRow)
+
+  // Show BY INSTANCE section only if no instance filter is active
+  const showInstanceSection = !selectedInstance && instanceData.length > 0
+
+  console.log('[Dashboard] Instance section:', {
+    selectedInstance,
+    instanceDataLength: instanceData.length,
+    showInstanceSection,
+    allWorklogsCount: allWorklogs.length
+  })
 
   return (
     <div className="space-y-6 max-w-[1920px]">
@@ -416,6 +658,175 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
           ),
         }}
       />
+
+      {/* ============ BY INSTANCE SECTION ============ */}
+      {showInstanceSection && (
+        <>
+          {/* Section Divider */}
+          <div className="flex items-center gap-4 mt-12">
+            <h2 className="text-base font-semibold text-primary whitespace-nowrap">By Instance</h2>
+            <div className="flex-1 border-b border-solid" />
+          </div>
+
+          {/* Row 1: KPI Cards per Instance */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {instanceData.map((item, index) => {
+              const utilizationColor =
+                item.utilization < 50
+                  ? 'text-warning'
+                  : item.utilization >= 50 && item.utilization < 85
+                  ? 'text-primary'
+                  : item.utilization >= 85 && item.utilization <= 100
+                  ? 'text-success'
+                  : 'text-error'
+
+              return (
+                <Card key={item.instance} padding="compact">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-semibold text-primary">{item.instance}</span>
+                    <Badge variant="default">{item.worklogCount} worklogs</Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs uppercase text-tertiary mb-1">Hours</p>
+                      <p className="font-mono text-base font-bold text-primary">{formatHours(item.hours)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase text-tertiary mb-1">Contributors</p>
+                      <p className="font-mono text-base font-bold text-primary">{item.contributors}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-xs uppercase text-tertiary mb-1">Utilization (est.)</p>
+                      <p className={`font-mono text-base font-bold ${utilizationColor}`}>
+                        {Math.round(item.utilization)}%
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
+
+          {/* Row 2: Charts */}
+          <div className="grid grid-cols-12 gap-6">
+            {/* Donut Chart - Utilization by Instance */}
+            <div className="col-span-12 md:col-span-5">
+              <Card padding="compact">
+                <div className="mb-4">
+                  <h3 className="text-base font-semibold text-primary">Utilization by Instance</h3>
+                  <p className="text-xs text-secondary">Hours worked vs available capacity</p>
+                </div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie
+                      data={donutData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {donutData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        background: 'var(--color-surface)',
+                        border: '1px solid var(--color-border-strong)',
+                        borderRadius: '6px',
+                        padding: '6px 10px',
+                      }}
+                      formatter={(value: any, name: any) => [formatHours(value), name]}
+                    />
+                    <Legend
+                      verticalAlign="bottom"
+                      height={36}
+                      iconType="circle"
+                      iconSize={8}
+                      wrapperStyle={{ fontSize: '11px', paddingTop: '12px' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Card>
+            </div>
+
+            {/* Grouped Bar Chart - Hours by Team */}
+            <div className="col-span-12 md:col-span-7">
+              <Card padding="compact">
+                <div className="mb-4">
+                  <h3 className="text-base font-semibold text-primary">Hours by Team</h3>
+                  <p className="text-xs text-secondary">Team distribution across instances</p>
+                </div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart
+                    data={groupedTeamData}
+                    layout="vertical"
+                    margin={{ top: 10, right: 30, left: 10, bottom: 10 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="var(--color-border)"
+                      horizontal
+                      vertical={false}
+                    />
+                    <XAxis
+                      type="number"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: 'var(--color-text-tertiary)', fontSize: 11 }}
+                      tickFormatter={(value) => `${Math.round(value)}h`}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="team"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: 'var(--color-text-primary)', fontSize: 11 }}
+                      width={80}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'var(--color-surface)',
+                        border: '1px solid var(--color-border-strong)',
+                        borderRadius: '6px',
+                        padding: '6px 10px',
+                      }}
+                      formatter={(value: any) => formatHours(value)}
+                    />
+                    <Legend
+                      verticalAlign="top"
+                      height={24}
+                      iconType="circle"
+                      iconSize={8}
+                      wrapperStyle={{ fontSize: '11px', paddingBottom: '8px' }}
+                    />
+                    {instanceData.map((item, index) => (
+                      <Bar
+                        key={item.instance}
+                        dataKey={item.instance}
+                        fill={INSTANCE_COLORS[index] || '#94A3B8'}
+                        radius={[0, 4, 4, 0]}
+                        maxBarSize={18}
+                      />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </Card>
+            </div>
+          </div>
+
+          {/* Row 3: Comparison Table */}
+          <DataTable
+            columns={comparisonTableColumns}
+            data={comparisonTableData}
+            toolbar={{
+              title: 'Instance Comparison',
+            }}
+          />
+        </>
+      )}
     </div>
   )
 }
