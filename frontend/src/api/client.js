@@ -80,6 +80,28 @@ async function fetchApi(endpoint, params = {}) {
     return response.json()
 }
 
+// ============ Worklogs API ============
+
+export async function getWorklogs(params = {}) {
+    const {
+        startDate,
+        endDate,
+        author,
+        jiraInstance,
+        page = 1,
+        pageSize = 50
+    } = params
+
+    return fetchApi('/worklogs', {
+        start_date: formatDate(startDate),
+        end_date: formatDate(endDate),
+        author: author || undefined,
+        jira_instance: jiraInstance || undefined,
+        page,
+        page_size: pageSize
+    })
+}
+
 // ============ Dashboard API ============
 
 export async function getDashboard(startDate, endDate, jiraInstance = null) {

@@ -29,7 +29,7 @@ export default function UseCasesSection() {
     ]
 
     return (
-        <section className="section-padding bg-dark-900">
+        <section className="section-padding bg-surface">
             <div className="container mx-auto max-w-7xl">
                 <div className="section-header">
                     <h2 className="section-title">Come i team usano Worklog Dashboard ogni giorno</h2>

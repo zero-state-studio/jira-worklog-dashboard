@@ -50,7 +50,7 @@ export default function UsersListView({ dateRange, selectedInstance }) {
 
     if (loading) {
         return (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-6 animate-slide-up">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <CardSkeleton count={4} />
                 </div>
@@ -64,7 +64,7 @@ export default function UsersListView({ dateRange, selectedInstance }) {
 
     if (!users || users.length === 0) {
         return (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-6 animate-slide-up">
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-bold text-dark-100">Utenti</h1>
@@ -125,7 +125,7 @@ export default function UsersListView({ dateRange, selectedInstance }) {
     }
 
     return (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-6 animate-slide-up">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -201,7 +201,7 @@ export default function UsersListView({ dateRange, selectedInstance }) {
                         <button
                             onClick={() => setFilterTeam('')}
                             className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${!filterTeam
-                                ? 'bg-gradient-primary text-white shadow-glow'
+                                ? 'bg-accent text-white '
                                 : 'text-dark-300 bg-dark-700 hover:bg-dark-600'
                                 }`}
                         >
@@ -212,7 +212,7 @@ export default function UsersListView({ dateRange, selectedInstance }) {
                                 key={team}
                                 onClick={() => setFilterTeam(team)}
                                 className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${filterTeam === team
-                                    ? 'bg-gradient-primary text-white shadow-glow'
+                                    ? 'bg-accent text-white '
                                     : 'text-dark-300 bg-dark-700 hover:bg-dark-600'
                                     }`}
                             >
@@ -295,7 +295,7 @@ export default function UsersListView({ dateRange, selectedInstance }) {
                                     >
                                         <td className="py-3 px-4">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-gradient-primary flex items-center justify-center flex-shrink-0">
+                                                <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
                                                     <span className="text-white font-medium text-xs">{initials}</span>
                                                 </div>
                                                 <div>

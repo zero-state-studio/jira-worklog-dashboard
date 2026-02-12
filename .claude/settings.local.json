@@ -55,7 +55,8 @@
       "Bash(do echo \"=== $table ===\")",
       "Bash(for table in complementary_groups users billing_rates invoice_line_items package_template_instances)",
       "Bash(tail:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(test:*)"
     ]
   }
 }

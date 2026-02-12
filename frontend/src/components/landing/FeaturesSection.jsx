@@ -75,7 +75,7 @@ export default function FeaturesSection() {
     ]
 
     return (
-        <section id="features" className="section-padding bg-dark-800/30">
+        <section id="features" className="section-padding bg-surface/30">
             <div className="container mx-auto max-w-7xl">
                 {/* Section Header */}
                 <div className="section-header">

@@ -71,7 +71,7 @@ export default function PricingSection() {
     ]
 
     return (
-        <section id="pricing" className="section-padding bg-dark-900">
+        <section id="pricing" className="section-padding bg-surface">
             <div className="container mx-auto max-w-5xl">
                 <div className="section-header">
                     <h2 className="section-title">Un prezzo. Tutto il team. Zero sorprese.</h2>
@@ -86,13 +86,13 @@ export default function PricingSection() {
                     ))}
                 </div>
 
-                <p className="text-center text-dark-400 text-sm">
-                    <strong className="text-dark-200">Nessun costo per utente. Mai.</strong>{' '}
+                <p className="text-center text-tertiary text-sm">
+                    <strong className="text-secondary">Nessun costo per utente. Mai.</strong>{' '}
                     A differenza di Tempo ($8/utente/mese) o Clockify ($12/utente/mese),
                     il nostro pricing è flat. Che tu abbia 5 o 500 utenti, il prezzo non cambia.
                 </p>
 
-                <p className="text-center text-dark-500 text-xs mt-4">
+                <p className="text-center text-tertiary text-xs mt-4">
                     Non soddisfatto? Cancella in qualsiasi momento, senza domande. I tuoi dati restano tuoi.
                 </p>
             </div>

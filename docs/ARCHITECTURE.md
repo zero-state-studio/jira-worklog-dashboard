@@ -141,32 +141,71 @@ ADMIN > MANAGER > USER
 
 ### Frontend Components
 
+**Architecture:** Enterprise-grade design system with reusable component library. All components use design tokens from `styles/design-tokens.css` for consistent styling.
+
 #### 1. Pages (`frontend/src/pages/`)
 
-**Structure:**
-- `Dashboard.jsx` - Global overview (total hours, trends, team cards)
-- `Teams.jsx` / `TeamDetail.jsx` - Team list and individual analytics
-- `Users.jsx` / `UserDetail.jsx` - User list and worklog details
-- `Epics.jsx` / `EpicDetail.jsx` - Epic-centric views
-- `IssueDetail.jsx` - Issue worklogs and metadata
-- `Billing.jsx` - Package management, invoicing (54KB complex UI)
-- `Settings.jsx` - Configuration panels
+**New Pages (Redesigned with Design System):**
+- `NewLayout.tsx` - Main layout wrapper (sidebar 220px→48px collapsible, header with breadcrumbs)
+- `NewDashboard.tsx` - Global overview with KpiBar, charts, max text 24px
+- `Worklogs.tsx` - Complete worklog list with inline filters, DataTable, export
+- `NewBilling.tsx` - Billing with tab navigation, slide-in panel, modals (replaces Billing.jsx)
+- `NewTeams.tsx` - Master-detail team management with DataTable (replaces Teams.jsx)
+
+**Legacy Pages (Being Migrated):**
+- `IssueView.jsx` - Issue worklogs and metadata
+- `EpicView.jsx` - Epic-centric views with charts
+- `TeamView.jsx` - Individual team analytics
+- `UserView.jsx` - User worklog details
+- `UsersListView.jsx` - User list overview
+- `Settings.jsx` - Configuration panels with sections
 
 **State Management:**
 - Global state in `App.jsx`: `dateRange`, `selectedInstance`
 - Passed down via props to all pages
-- Custom hook `useData.js` for API fetching
+- Custom hook `useData.js` for API fetching with error handling
 
-#### 2. Reusable Components (`frontend/src/components/`)
+#### 2. Component Library (`frontend/src/components/common/`)
 
-**Key Components:**
-- `Layout.jsx` - Header with date picker, instance selector
-- `WorklogCalendar/` - Calendar view with daily details
-- `settings/` - 8 configuration panels (teams, users, instances, holidays, etc.)
+**Core Components (8 total):**
+
+| Component | Purpose | Key Props | Design Notes |
+|-----------|---------|-----------|--------------|
+| `Button.tsx` | Primary actions | variant (4), size (3), loading | No gradients, flat design |
+| `Badge.tsx` | Status indicators | variant (semantic), dot | Dot + text, no pill background |
+| `Card.tsx` | Content containers | flat design | Border + shadow-sm, max radius 8px |
+| `Input.tsx` | Form inputs | label, error, height 36px | Built-in validation display |
+| `Select.tsx` | Dropdowns | searchable, keyboard nav | Consistent 36px height |
+| `Modal.tsx` | Dialogs | size (sm/md/lg) | slide-up 200ms, shadow-lg allowed |
+| `KpiBar.tsx` | Metrics display | compact, font-mono values | No gradients, high density |
+| `DataTable.tsx` | Data grids | sortable, pagination | Row 36px, text 13px, no stripes |
+
+**Import Pattern:**
+```tsx
+import { Button, Badge, Card, Input, Select, Modal, KpiBar, DataTable } from '@/components/common'
+```
+
+**Design System Rules:**
+- All components use CSS variables (`var(--color-*)`, `var(--space-*)`)
+- Zero hardcoded hex colors or spacing values
+- Typography: max 24px (text-2xl), body 14px, tables 13px
+- Colors: Single accent #2563EB, semantic status colors only
+- Shadows: No shadow-lg on cards, only modals/dropdowns
+- Animations: Micro-interactions under 200ms (slide-up, fade-in)
+
+#### 3. Legacy Components (`frontend/src/components/`)
+
+**Being Migrated to Component Library:**
+- `settings/` - 10 configuration panels (JiraInstancesSection, TeamsSection, UsersSection, etc.)
 - `charts/` - Recharts wrappers for data visualization
-- `common/` - Buttons, cards, modals, form inputs
+- `WorklogCalendar/` - Calendar view with daily details
 
-#### 3. Routing (`frontend/src/App.jsx`)
+**Migration Status:**
+- New pages: 100% component library usage ✅
+- Old pages: 0% component library usage (inline styles) 🔄
+- Settings: Partial migration (buttons need conversion) 🔄
+
+#### 4. Routing (`frontend/src/App.jsx`)
 
 **Routes:**
 ```javascript

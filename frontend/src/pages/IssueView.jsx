@@ -58,7 +58,7 @@ export default function IssueView({ dateRange }) {
 
     if (loading) {
         return (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-6 animate-slide-up">
                 <div className="glass-card p-6">
                     <div className="loading-shimmer h-8 w-1/3 rounded mb-2" />
                     <div className="loading-shimmer h-4 w-1/4 rounded" />
@@ -81,7 +81,7 @@ export default function IssueView({ dateRange }) {
 
     if (isDataEmpty) {
         return (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-6 animate-slide-up">
                 <div className="glass-card p-6">
                     <div className="flex items-start gap-4">
                         <button
@@ -180,7 +180,7 @@ export default function IssueView({ dateRange }) {
     })
 
     return (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-6 animate-slide-up">
             {/* Header */}
             <div className="glass-card p-6">
                 <div className="flex items-start gap-4">
@@ -236,7 +236,7 @@ export default function IssueView({ dateRange }) {
                     </div>
 
                     <div className="text-right">
-                        <p className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+                        <p className="text-3xl font-bold bg-accent bg-clip-text text-transparent">
                             {formatHours(data.total_hours)}
                         </p>
                         <p className="text-dark-400 text-sm">{data.contributors.length} contributori</p>

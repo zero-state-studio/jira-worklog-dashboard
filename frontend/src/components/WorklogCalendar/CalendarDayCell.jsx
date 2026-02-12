@@ -25,7 +25,7 @@ export default function CalendarDayCell({
             onClick={hasHours ? onClick : undefined}
             className={`
                 relative min-h-[80px] p-2 rounded-lg border transition-all duration-200 flex flex-col items-start justify-between
-                ${isCurrentMonth ? (holiday ? 'bg-red-900/10 border-red-900/30' : 'bg-dark-800 border-dark-700') : 'bg-dark-900/50 border-dark-800'}
+                ${isCurrentMonth ? (holiday ? 'bg-red-900/10 border-red-900/30' : 'bg-surface border-solid') : 'bg-surface/50 border-dark-800'}
                 ${isToday ? 'ring-2 ring-accent-blue' : ''}
                 ${hasHours ? 'hover:border-accent-purple/50 cursor-pointer' : 'cursor-default'}
                 ${!holiday ? getHoursColorIntensity(hours, maxHours) : ''}
@@ -36,7 +36,7 @@ export default function CalendarDayCell({
                 {/* Day Number */}
                 <span className={`
                     text-sm font-medium
-                    ${isCurrentMonth ? (holiday ? 'text-red-400' : 'text-dark-200') : 'text-dark-500'}
+                    ${isCurrentMonth ? (holiday ? 'text-error' : 'text-secondary') : 'text-tertiary'}
                     ${isToday ? 'text-accent-blue font-bold' : ''}
                 `}>
                     {format(date, 'd')}
@@ -44,7 +44,7 @@ export default function CalendarDayCell({
 
                 {/* Holiday Label (Desktop) */}
                 {holiday && (
-                    <span className="hidden sm:block text-[10px] font-medium text-red-400 uppercase tracking-wider truncate max-w-[80px]" title={holiday}>
+                    <span className="hidden sm:block text-[10px] font-medium text-error uppercase tracking-wider truncate max-w-[80px]" title={holiday}>
                         {holiday}
                     </span>
                 )}

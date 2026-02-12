@@ -32,14 +32,14 @@ function WorklogItem({ worklog, onIssueClick }) {
                 >
                     {worklog.issue_key}
                 </button>
-                <span className="text-dark-100 font-semibold">
+                <span className="text-primary font-semibold">
                     {formatHours(worklog.time_spent_seconds / 3600)}
                 </span>
             </div>
-            <p className="text-dark-200 text-sm line-clamp-2">
+            <p className="text-secondary text-sm line-clamp-2">
                 {worklog.issue_summary}
             </p>
-            <div className="flex items-center gap-4 text-dark-400 text-xs">
+            <div className="flex items-center gap-4 text-tertiary text-xs">
                 <div className="flex items-center gap-1">
                     <UserIcon />
                     <span>{worklog.author_display_name}</span>
@@ -91,25 +91,25 @@ export default function WorklogDrawer({
         <div className="fixed inset-0 z-50 flex justify-end">
             {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in"
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-slide-up"
                 onClick={onClose}
             />
 
             {/* Drawer Panel */}
-            <div className="relative w-full max-w-md bg-dark-800 border-l border-dark-700 shadow-2xl animate-slide-in-right overflow-hidden flex flex-col">
+            <div className="relative w-full max-w-md bg-surface border-l border-solid shadow-lg  overflow-hidden flex flex-col">
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-dark-700 flex-shrink-0">
+                <div className="flex items-center justify-between p-6 border-b border-solid flex-shrink-0">
                     <div>
-                        <h2 className="text-xl font-bold text-dark-100">
+                        <h2 className="text-xl font-bold text-primary">
                             {format(date, 'EEEE d MMMM yyyy', { locale: it })}
                         </h2>
-                        <p className="text-dark-400 mt-1">
+                        <p className="text-tertiary mt-1">
                             {worklogs.length} registrazioni - {formatHours(totalHours)} totali
                         </p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-2 rounded-lg hover:bg-dark-700 text-dark-400 hover:text-dark-100 transition-colors"
+                        className="p-2 rounded-lg hover:bg-surface text-tertiary hover:text-primary transition-colors"
                     >
                         <CloseIcon />
                     </button>
@@ -149,7 +149,7 @@ export default function WorklogDrawer({
                 {/* Worklog List */}
                 <div className="p-6 space-y-4 overflow-y-auto flex-1">
                     {worklogs.length === 0 ? (
-                        <div className="text-center text-dark-400 py-8">
+                        <div className="text-center text-tertiary py-8">
                             Nessun worklog in questa data
                         </div>
                     ) : hasMultipleInstances && groupedWorklogs ? (

@@ -56,7 +56,7 @@ export default function Dashboard({ dateRange, selectedInstance }) {
 
     if (loading) {
         return (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-6 animate-slide-up">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <CardSkeleton count={4} />
                 </div>
@@ -75,19 +75,19 @@ export default function Dashboard({ dateRange, selectedInstance }) {
 
     if (isDataEmpty) {
         return (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-6 animate-slide-up">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold text-dark-100">Dashboard</h1>
-                        <p className="text-dark-400">Panoramica delle ore registrate</p>
+                        <h1 className="text-2xl font-bold text-primary">Dashboard</h1>
+                        <p className="text-secondary">Panoramica delle ore registrate</p>
                     </div>
                 </div>
-                <div className="glass-card p-8">
+                <div className="flat-card p-8">
                     <EmptyState
                         title="Nessun dato disponibile"
                         message="Configura un'istanza JIRA nelle Impostazioni e sincronizza i worklog per visualizzare la dashboard."
                         icon={
-                            <svg className="w-8 h-8 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-8 h-8 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                         }
@@ -102,11 +102,11 @@ export default function Dashboard({ dateRange, selectedInstance }) {
     // If multi-JIRA "Tutti" view, show only the multi-JIRA overview
     if (overviewData) {
         return (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-6 animate-slide-up">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold text-dark-100">Dashboard</h1>
-                        <p className="text-dark-400">Panoramica globale delle istanze JIRA</p>
+                        <h1 className="text-2xl font-bold text-primary">Dashboard</h1>
+                        <p className="text-secondary">Panoramica globale delle istanze JIRA</p>
                     </div>
                 </div>
                 <MultiJiraSection overview={overviewData} navigate={navigate} />
@@ -129,12 +129,12 @@ export default function Dashboard({ dateRange, selectedInstance }) {
     }))
 
     return (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-6 animate-slide-up">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-dark-100">Dashboard</h1>
-                    <p className="text-dark-400">Panoramica delle ore registrate</p>
+                    <h1 className="text-2xl font-bold text-primary">Dashboard</h1>
+                    <p className="text-secondary">Panoramica delle ore registrate</p>
                 </div>
             </div>
 
@@ -198,8 +198,8 @@ export default function Dashboard({ dateRange, selectedInstance }) {
                 </ChartCard>
 
                 {/* Completion Ring */}
-                <div className="glass-card p-6 flex flex-col items-center justify-center">
-                    <h3 className="font-semibold text-dark-100 mb-4">Progresso Periodo</h3>
+                <div className="flat-card p-6 flex flex-col items-center justify-center">
+                    <h3 className="font-semibold text-primary mb-4">Progresso Periodo</h3>
                     <CircularProgress
                         value={data.total_hours}
                         max={data.expected_hours}
@@ -213,7 +213,7 @@ export default function Dashboard({ dateRange, selectedInstance }) {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Team Cards */}
                 <div>
-                    <h2 className="text-lg font-semibold text-dark-100 mb-4">Ore per Team</h2>
+                    <h2 className="text-lg font-semibold text-primary mb-4">Ore per Team</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {data.teams.map((team, index) => (
                             <TeamCard
@@ -242,10 +242,10 @@ export default function Dashboard({ dateRange, selectedInstance }) {
             {/* Iniziative Section */}
             <div>
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-dark-100">Top Iniziative</h2>
+                    <h2 className="text-lg font-semibold text-primary">Top Iniziative</h2>
                     <button
                         onClick={() => navigate('/epics')}
-                        className="text-accent-blue hover:text-accent-blue/80 text-sm font-medium transition-colors"
+                        className="text-accent hover:text-accent-hover text-sm font-medium transition-colors"
                     >
                         Vedi tutte →
                     </button>

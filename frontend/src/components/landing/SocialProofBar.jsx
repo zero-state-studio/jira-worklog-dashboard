@@ -2,9 +2,9 @@ import StatCounter from './StatCounter'
 
 export default function SocialProofBar() {
     return (
-        <section className="py-12 px-4 border-y border-dark-700/50 bg-dark-800/30">
+        <section className="py-12 px-4 border-y border-solid/50 bg-surface/30">
             <div className="container mx-auto max-w-5xl">
-                <p className="text-center text-dark-400 text-sm font-medium mb-8 uppercase tracking-wider">
+                <p className="text-center text-tertiary text-sm font-medium mb-8 uppercase tracking-wider">
                     Scelto da team che gestiscono migliaia di ore ogni mese
                 </p>
 

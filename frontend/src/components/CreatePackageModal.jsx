@@ -14,18 +14,18 @@ const CheckIcon = () => (
 )
 
 const StepIndicator = ({ steps, currentStep }) => (
-    <div className="flex items-center gap-2 px-6 py-4 border-b border-dark-700">
+    <div className="flex items-center gap-2 px-6 py-4 border-b border-solid">
         {steps.map((label, idx) => (
             <div key={idx} className="flex items-center gap-2">
-                {idx > 0 && <div className={`w-8 h-0.5 ${idx <= currentStep ? 'bg-accent-blue' : 'bg-dark-600'}`} />}
+                {idx > 0 && <div className={`w-8 h-0.5 ${idx <= currentStep ? 'bg-accent-blue' : 'bg-surface-hover'}`} />}
                 <div className={`flex items-center gap-1.5 text-xs font-medium ${
                     idx === currentStep ? 'text-accent-blue' :
-                    idx < currentStep ? 'text-accent-green' : 'text-dark-400'
+                    idx < currentStep ? 'text-accent-green' : 'text-tertiary'
                 }`}>
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${
                         idx === currentStep ? 'bg-accent-blue/20 border border-accent-blue' :
                         idx < currentStep ? 'bg-accent-green/20 border border-accent-green' :
-                        'bg-dark-700 border border-dark-600'
+                        'bg-surface border border-solid'
                     }`}>
                         {idx < currentStep ? <CheckIcon /> : idx + 1}
                     </div>
@@ -305,24 +305,24 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                 onClick={step === 3 ? onClose : undefined}
             />
 
-            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 border border-dark-700 animate-fade-in max-h-[90vh] flex flex-col">
+            <div className="relative bg-surface rounded-lg shadow-lg w-full max-w-2xl mx-4 border border-solid animate-slide-up max-h-[90vh] flex flex-col">
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-dark-700">
+                <div className="flex items-center justify-between p-6 border-b border-solid">
                     <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-accent-purple/10 text-accent-purple">
                             <PackageIcon />
                         </div>
-                        <h2 className="text-xl font-bold text-dark-100">Crea Pacchetto Issue</h2>
+                        <h2 className="text-xl font-bold text-primary">Crea Pacchetto Issue</h2>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-2 rounded-lg hover:bg-dark-700 transition-colors"
+                        className="p-2 rounded-lg hover:bg-surface transition-colors"
                     >
-                        <svg className="w-5 h-5 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
@@ -344,11 +344,11 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                         <div className="space-y-6">
                             {/* Template selection */}
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-3">
+                                <label className="block text-sm font-medium text-secondary mb-3">
                                     Seleziona Template
                                 </label>
                                 {templates.length === 0 ? (
-                                    <div className="text-center py-8 text-dark-400 text-sm">
+                                    <div className="text-center py-8 text-tertiary text-sm">
                                         Nessun template disponibile. Creane uno in Impostazioni &gt; Pacchetti.
                                     </div>
                                 ) : (
@@ -360,16 +360,16 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                                 className={`w-full text-left p-4 rounded-lg border transition-all ${
                                                     selectedTemplate?.id === template.id
                                                         ? 'bg-accent-blue/10 border-accent-blue'
-                                                        : 'bg-dark-700 border-dark-600 hover:border-dark-500'
+                                                        : 'bg-surface border-solid hover:border-strong'
                                                 }`}
                                             >
-                                                <div className="font-medium text-dark-100">{template.name}</div>
+                                                <div className="font-medium text-primary">{template.name}</div>
                                                 {template.description && (
-                                                    <div className="text-xs text-dark-400 mt-1">{template.description}</div>
+                                                    <div className="text-xs text-tertiary mt-1">{template.description}</div>
                                                 )}
                                                 <div className="flex flex-wrap gap-1 mt-2">
                                                     {template.elements.map((el, idx) => (
-                                                        <span key={idx} className="px-2 py-0.5 text-xs bg-dark-600 text-dark-300 rounded">
+                                                        <span key={idx} className="px-2 py-0.5 text-xs bg-surface-hover text-secondary rounded">
                                                             {typeof el === 'string' ? el : el.name}
                                                         </span>
                                                     ))}
@@ -382,7 +382,7 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
 
                             {/* Instance selection */}
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-3">
+                                <label className="block text-sm font-medium text-secondary mb-3">
                                     Istanze JIRA
                                 </label>
                                 <div className="space-y-2">
@@ -397,7 +397,7 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                                         ? 'bg-accent-purple/10 border-accent-purple/40 cursor-default'
                                                         : isSelected
                                                             ? 'bg-accent-blue/10 border-accent-blue cursor-pointer'
-                                                            : 'bg-dark-700 border-dark-600 hover:border-dark-500 cursor-pointer'
+                                                            : 'bg-surface border-solid hover:border-strong cursor-pointer'
                                                 }`}
                                             >
                                                 <input
@@ -405,18 +405,18 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                                     checked={isSelected || isAuto}
                                                     onChange={() => !isAuto && handleInstanceToggle(inst.name)}
                                                     disabled={isAuto}
-                                                    className="w-4 h-4 rounded border-dark-500 bg-dark-700 text-accent-blue focus:ring-accent-blue/50 disabled:opacity-60"
+                                                    className="w-4 h-4 rounded border-strong bg-surface text-accent-blue focus:ring-accent/20 disabled:opacity-60"
                                                 />
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="font-medium text-dark-100">{inst.name}</span>
+                                                        <span className="font-medium text-primary">{inst.name}</span>
                                                         {isAuto && (
                                                             <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase bg-accent-purple/20 text-accent-purple rounded">
                                                                 Auto
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <div className="text-xs text-dark-400">{inst.url}</div>
+                                                    <div className="text-xs text-tertiary">{inst.url}</div>
                                                 </div>
                                             </label>
                                         )
@@ -438,7 +438,7 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                         <div className="space-y-4">
                             {/* Per-instance project selectors */}
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-3">
+                                <label className="block text-sm font-medium text-secondary mb-3">
                                     Progetto per ogni istanza *
                                 </label>
                                 <div className="space-y-3">
@@ -449,7 +449,7 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                         return (
                                             <div key={name} className="flex items-center gap-3">
                                                 <div className="flex items-center gap-2 min-w-[120px]">
-                                                    <span className="text-sm font-medium text-dark-200">{name}</span>
+                                                    <span className="text-sm font-medium text-secondary">{name}</span>
                                                     {isAuto && (
                                                         <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase bg-accent-purple/20 text-accent-purple rounded">
                                                             Auto
@@ -459,7 +459,7 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                                 <select
                                                     value={selectedKey}
                                                     onChange={(e) => handleProjectChange(name, e.target.value)}
-                                                    className="flex-1 px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 text-sm focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
+                                                    className="flex-1 px-3 py-2 bg-surface border border-solid rounded-lg text-primary text-sm focus:outline-none focus:border-focus focus:ring-1 focus:ring-accent/20"
                                                 >
                                                     <option value="">Seleziona progetto...</option>
                                                     {projects.map(p => (
@@ -474,14 +474,14 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
 
                             {/* Parent Issue Type */}
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-2">
+                                <label className="block text-sm font-medium text-secondary mb-2">
                                     Tipo Issue Parent *
                                 </label>
                                 {issueTypes.length > 0 ? (
                                     <select
                                         value={parentIssueType}
                                         onChange={(e) => setParentIssueType(e.target.value)}
-                                        className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
+                                        className="w-full px-4 py-3 bg-surface border border-solid rounded-lg text-primary focus:outline-none focus:border-focus focus:ring-1 focus:ring-accent/20"
                                     >
                                         {issueTypes.filter(t => !t.subtask).map(t => (
                                             <option key={t.id} value={t.name}>{t.name}</option>
@@ -493,14 +493,14 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                         value={parentIssueType}
                                         onChange={(e) => setParentIssueType(e.target.value)}
                                         placeholder="Es: Task, Story, Epic..."
-                                        className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 placeholder-dark-400 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
+                                        className="w-full px-4 py-3 bg-surface border border-solid rounded-lg text-primary placeholder-tertiary focus:outline-none focus:border-focus focus:ring-1 focus:ring-accent/20"
                                     />
                                 )}
                             </div>
 
                             {/* Summary */}
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-2">
+                                <label className="block text-sm font-medium text-secondary mb-2">
                                     Titolo Issue Parent *
                                 </label>
                                 <input
@@ -508,14 +508,14 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                     value={parentSummary}
                                     onChange={(e) => setParentSummary(e.target.value)}
                                     placeholder="Es: Sprint 42 - Feature Login"
-                                    className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 placeholder-dark-400 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
+                                    className="w-full px-4 py-3 bg-surface border border-solid rounded-lg text-primary placeholder-tertiary focus:outline-none focus:border-focus focus:ring-1 focus:ring-accent/20"
                                     autoFocus
                                 />
                             </div>
 
                             {/* Description */}
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-2">
+                                <label className="block text-sm font-medium text-secondary mb-2">
                                     Descrizione (opzionale)
                                 </label>
                                 <textarea
@@ -523,7 +523,7 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                     onChange={(e) => setParentDescription(e.target.value)}
                                     placeholder="Descrizione della issue parent..."
                                     rows={3}
-                                    className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 placeholder-dark-400 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50 resize-none"
+                                    className="w-full px-4 py-3 bg-surface border border-solid rounded-lg text-primary placeholder-tertiary focus:outline-none focus:border-focus focus:ring-1 focus:ring-accent/20 resize-none"
                                 />
                             </div>
                         </div>
@@ -534,14 +534,14 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                         <div className="space-y-4">
                             {/* Child Issue Type */}
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-2">
+                                <label className="block text-sm font-medium text-secondary mb-2">
                                     Tipo Issue Figli
                                 </label>
                                 {issueTypes.length > 0 ? (
                                     <select
                                         value={childIssueType}
                                         onChange={(e) => setChildIssueType(e.target.value)}
-                                        className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
+                                        className="w-full px-4 py-3 bg-surface border border-solid rounded-lg text-primary focus:outline-none focus:border-focus focus:ring-1 focus:ring-accent/20"
                                     >
                                         {issueTypes.map(t => (
                                             <option key={t.id} value={t.name}>{t.name}{t.subtask ? ' (Sub-task)' : ''}</option>
@@ -552,7 +552,7 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                         type="text"
                                         value={childIssueType}
                                         onChange={(e) => setChildIssueType(e.target.value)}
-                                        className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 placeholder-dark-400 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
+                                        className="w-full px-4 py-3 bg-surface border border-solid rounded-lg text-primary placeholder-tertiary focus:outline-none focus:border-focus focus:ring-1 focus:ring-accent/20"
                                     />
                                 )}
                             </div>
@@ -560,7 +560,7 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                             {/* Elements */}
                             <div>
                                 <div className="flex items-center justify-between mb-3">
-                                    <label className="block text-sm font-medium text-dark-300">
+                                    <label className="block text-sm font-medium text-secondary">
                                         Seleziona Elementi ({selectedElements.length}/{selectedTemplate?.elements.length || 0})
                                     </label>
                                     <button
@@ -586,17 +586,17 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                                 className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                                                     isSelected
                                                         ? 'bg-accent-blue/10 border-accent-blue'
-                                                        : 'bg-dark-700 border-dark-600 hover:border-dark-500'
+                                                        : 'bg-surface border-solid hover:border-strong'
                                                 }`}
                                             >
                                                 <input
                                                     type="checkbox"
                                                     checked={isSelected}
                                                     onChange={() => handleElementToggle(elName)}
-                                                    className="w-4 h-4 rounded border-dark-500 bg-dark-700 text-accent-blue focus:ring-accent-blue/50"
+                                                    className="w-4 h-4 rounded border-strong bg-surface text-accent-blue focus:ring-accent/20"
                                                 />
-                                                <span className="text-dark-400 text-xs font-mono w-5">{idx + 1}</span>
-                                                <span className="text-dark-100">{elName}</span>
+                                                <span className="text-tertiary text-xs font-mono w-5">{idx + 1}</span>
+                                                <span className="text-primary">{elName}</span>
                                             </label>
                                         )
                                     })}
@@ -604,19 +604,19 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                             </div>
 
                             {/* Summary preview */}
-                            <div className="mt-4 p-4 bg-dark-900 rounded-lg border border-dark-700">
-                                <h4 className="text-sm font-medium text-dark-300 mb-2">Riepilogo</h4>
-                                <div className="text-sm text-dark-200 space-y-1">
+                            <div className="mt-4 p-4 bg-surface rounded-lg border border-solid">
+                                <h4 className="text-sm font-medium text-secondary mb-2">Riepilogo</h4>
+                                <div className="text-sm text-secondary space-y-1">
                                     <div>Istanze: {getAllInstanceNames().map(name => (
                                         <span key={name} className="inline-flex items-center gap-1 mr-2">
                                             <span className="text-accent-blue">{name}</span>
                                             {autoInstances.has(name) && (
                                                 <span className="text-[10px] text-accent-purple font-bold">(Auto)</span>
                                             )}
-                                            <span className="text-dark-500">({instanceProjectKeys[name] || '?'})</span>
+                                            <span className="text-tertiary">({instanceProjectKeys[name] || '?'})</span>
                                         </span>
                                     ))}</div>
-                                    <div>Parent: <span className="text-dark-100">{parentSummary}</span> ({parentIssueType})</div>
+                                    <div>Parent: <span className="text-primary">{parentSummary}</span> ({parentIssueType})</div>
                                     <div>Figli: <span className="text-accent-green">{selectedElements.length}</span> issue ({childIssueType})</div>
                                 </div>
                             </div>
@@ -633,9 +633,9 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                         </svg>
                                     </div>
-                                    <h3 className="text-lg font-bold text-dark-100">Pacchetto Creato!</h3>
+                                    <h3 className="text-lg font-bold text-primary">Pacchetto Creato!</h3>
                                     {result.linked_issues && result.linked_issues.length > 0 && (
-                                        <p className="text-sm text-dark-400 mt-1">
+                                        <p className="text-sm text-tertiary mt-1">
                                             Le issue sono state collegate nel database
                                         </p>
                                     )}
@@ -647,13 +647,13 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                         </svg>
                                     </div>
-                                    <h3 className="text-lg font-bold text-dark-100">Creazione Fallita</h3>
+                                    <h3 className="text-lg font-bold text-primary">Creazione Fallita</h3>
                                 </div>
                             )}
 
                             {/* Results per instance */}
                             {result.results.map((r, idx) => (
-                                <div key={idx} className="p-4 bg-dark-700 rounded-lg border border-dark-600">
+                                <div key={idx} className="p-4 bg-surface rounded-lg border border-solid">
                                     <div className="flex items-center gap-2 mb-3">
                                         <span className="text-sm font-medium text-accent-blue">{r.jira_instance}</span>
                                         {r.auto_created && (
@@ -664,16 +664,16 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                     </div>
                                     <div className="space-y-2">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-xs text-dark-400">Parent:</span>
+                                            <span className="text-xs text-tertiary">Parent:</span>
                                             <span className="font-mono text-sm text-accent-green font-medium">{r.parent_key}</span>
                                         </div>
                                         <div>
-                                            <span className="text-xs text-dark-400">Figli:</span>
+                                            <span className="text-xs text-tertiary">Figli:</span>
                                             <div className="mt-1 space-y-1">
                                                 {r.children.map((child, cidx) => (
                                                     <div key={cidx} className="flex items-center gap-2 text-sm">
                                                         <span className="font-mono text-accent-green">{child.key}</span>
-                                                        <span className="text-dark-300">{child.summary}</span>
+                                                        <span className="text-secondary">{child.summary}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -698,13 +698,13 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-between p-6 border-t border-dark-700">
+                <div className="flex items-center justify-between p-6 border-t border-solid">
                     <div>
                         {step > 0 && step < 3 && (
                             <button
                                 type="button"
                                 onClick={() => setStep(step - 1)}
-                                className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors"
+                                className="px-4 py-2 text-secondary hover:text-primary transition-colors"
                             >
                                 Indietro
                             </button>
@@ -714,7 +714,7 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                         {step === 3 ? (
                             <button
                                 onClick={onClose}
-                                className="px-5 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity"
+                                className="px-5 py-2 bg-accent text-inverse font-medium rounded-md hover:bg-accent-hover transition-opacity"
                             >
                                 Chiudi
                             </button>
@@ -723,14 +723,14 @@ export default function CreatePackageModal({ isOpen, onClose, jiraInstances: pro
                                 <button
                                     type="button"
                                     onClick={onClose}
-                                    className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors"
+                                    className="px-4 py-2 text-secondary hover:text-primary transition-colors"
                                 >
                                     Annulla
                                 </button>
                                 <button
                                     onClick={handleNextStep}
                                     disabled={!canGoNext() || loading}
-                                    className="px-5 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                    className="px-5 py-2 bg-accent text-inverse font-medium rounded-md hover:bg-accent-hover transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                                 >
                                     {loading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>}
                                     {step === 2 ? 'Crea Pacchetto' : 'Avanti'}

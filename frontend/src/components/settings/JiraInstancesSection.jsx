@@ -123,17 +123,17 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-start justify-center py-8">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-dark-700 max-h-[calc(100vh-4rem)] overflow-y-auto">
-                <div className="p-6 border-b border-dark-700">
-                    <h3 className="text-lg font-semibold text-dark-100">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative bg-surface rounded-lg shadow-lg w-full max-w-lg mx-4 border border-solid max-h-[calc(100vh-4rem)] overflow-y-auto">
+                <div className="p-6 border-b border-solid">
+                    <h3 className="text-lg font-semibold text-primary">
                         {instance ? 'Modifica Istanza JIRA' : 'Nuova Istanza JIRA'}
                     </h3>
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-dark-300 mb-1">
+                        <label className="block text-sm font-medium text-secondary mb-1">
                             Nome *
                         </label>
                         <input
@@ -147,7 +147,7 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-dark-300 mb-1">
+                        <label className="block text-sm font-medium text-secondary mb-1">
                             URL JIRA *
                         </label>
                         <input
@@ -161,7 +161,7 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-dark-300 mb-1">
+                        <label className="block text-sm font-medium text-secondary mb-1">
                             Email *
                         </label>
                         <input
@@ -175,7 +175,7 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-dark-300 mb-1">
+                        <label className="block text-sm font-medium text-secondary mb-1">
                             API Token *
                         </label>
                         <div className="relative">
@@ -190,18 +190,18 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
                             <button
                                 type="button"
                                 onClick={() => setShowToken(!showToken)}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-dark-400 hover:text-dark-200"
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-tertiary hover:text-secondary"
                             >
                                 {showToken ? <EyeOffIcon /> : <EyeIcon />}
                             </button>
                         </div>
-                        <p className="text-xs text-dark-500 mt-1">
+                        <p className="text-xs text-tertiary mt-1">
                             Genera su: id.atlassian.com/manage-profile/security/api-tokens
                         </p>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-dark-300 mb-1">
+                        <label className="block text-sm font-medium text-secondary mb-1">
                             Tempo API Token (opzionale)
                         </label>
                         <div className="relative">
@@ -215,7 +215,7 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
                             <button
                                 type="button"
                                 onClick={() => setShowTempoToken(!showTempoToken)}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-dark-400 hover:text-dark-200"
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-tertiary hover:text-secondary"
                             >
                                 {showTempoToken ? <EyeOffIcon /> : <EyeIcon />}
                             </button>
@@ -223,7 +223,7 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-dark-300 mb-1">
+                        <label className="block text-sm font-medium text-secondary mb-1">
                             Progetto Default (opzionale)
                         </label>
                         <input
@@ -233,13 +233,13 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
                             className="input-field w-full"
                             placeholder="Es: PROJ"
                         />
-                        <p className="text-xs text-dark-500 mt-1">
+                        <p className="text-xs text-tertiary mt-1">
                             Project key usato come default nella creazione pacchetti
                         </p>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-dark-300 mb-1">
+                        <label className="block text-sm font-medium text-secondary mb-1">
                             Cliente di Fatturazione (opzionale)
                         </label>
                         <select
@@ -252,7 +252,7 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
                                 <option key={client.id} value={client.id}>{client.name}</option>
                             ))}
                         </select>
-                        <p className="text-xs text-dark-500 mt-1">
+                        <p className="text-xs text-tertiary mt-1">
                             Associa questa istanza a un cliente per la fatturazione
                         </p>
                     </div>
@@ -261,14 +261,14 @@ function InstanceModal({ isOpen, onClose, onSave, instance, loading }) {
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors"
+                            className="px-4 py-2 text-secondary hover:text-primary transition-colors"
                         >
                             Annulla
                         </button>
                         <button
                             type="submit"
                             disabled={loading}
-                            className="px-4 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity disabled:opacity-50"
+                            className="px-4 py-2 bg-accent text-white font-medium rounded-lg  hover:opacity-90 transition-opacity disabled:opacity-50"
                         >
                             {loading ? 'Salvataggio...' : 'Salva'}
                         </button>
@@ -322,20 +322,20 @@ function ComplementaryGroupModal({ isOpen, onClose, onSave, group, instances, lo
 
     return (
         <div className="fixed inset-0 z-50 flex items-start justify-center py-8">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-dark-700 max-h-[calc(100vh-4rem)] overflow-y-auto">
-                <div className="p-6 border-b border-dark-700">
-                    <h3 className="text-lg font-semibold text-dark-100">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative bg-surface rounded-lg shadow-lg w-full max-w-lg mx-4 border border-solid max-h-[calc(100vh-4rem)] overflow-y-auto">
+                <div className="p-6 border-b border-solid">
+                    <h3 className="text-lg font-semibold text-primary">
                         {group ? 'Modifica Gruppo Complementare' : 'Nuovo Gruppo Complementare'}
                     </h3>
-                    <p className="text-sm text-dark-400 mt-1">
+                    <p className="text-sm text-tertiary mt-1">
                         Le istanze complementari tracciano lo stesso lavoro (es. JIRA cliente + JIRA interno)
                     </p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-dark-300 mb-1">
+                        <label className="block text-sm font-medium text-secondary mb-1">
                             Nome Gruppo *
                         </label>
                         <input
@@ -349,23 +349,23 @@ function ComplementaryGroupModal({ isOpen, onClose, onSave, group, instances, lo
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-dark-300 mb-2">
+                        <label className="block text-sm font-medium text-secondary mb-2">
                             Istanze nel Gruppo
                         </label>
                         <div className="space-y-2 max-h-48 overflow-y-auto">
                             {instances.map(inst => (
                                 <label
                                     key={inst.id}
-                                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-dark-700/50 cursor-pointer"
+                                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface/50 cursor-pointer"
                                 >
                                     <input
                                         type="checkbox"
                                         checked={formData.member_ids.includes(inst.id)}
                                         onChange={() => handleToggleMember(inst.id)}
-                                        className="w-4 h-4 rounded border-dark-500 bg-dark-700 text-accent-blue focus:ring-accent-blue/50"
+                                        className="w-4 h-4 rounded border-strong bg-surface text-accent-blue focus:ring-accent/20"
                                     />
-                                    <span className="text-dark-200">{inst.name}</span>
-                                    <span className="text-dark-500 text-sm">{inst.url}</span>
+                                    <span className="text-secondary">{inst.name}</span>
+                                    <span className="text-tertiary text-sm">{inst.url}</span>
                                 </label>
                             ))}
                         </div>
@@ -373,7 +373,7 @@ function ComplementaryGroupModal({ isOpen, onClose, onSave, group, instances, lo
 
                     {formData.member_ids.length > 0 && (
                         <div>
-                            <label className="block text-sm font-medium text-dark-300 mb-1">
+                            <label className="block text-sm font-medium text-secondary mb-1">
                                 Istanza Primaria
                             </label>
                             <select
@@ -392,7 +392,7 @@ function ComplementaryGroupModal({ isOpen, onClose, onSave, group, instances, lo
                                     ))
                                 }
                             </select>
-                            <p className="text-xs text-dark-500 mt-1">
+                            <p className="text-xs text-tertiary mt-1">
                                 L'istanza primaria viene usata per contare le ore nella vista "Tutti"
                             </p>
                         </div>
@@ -402,14 +402,14 @@ function ComplementaryGroupModal({ isOpen, onClose, onSave, group, instances, lo
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors"
+                            className="px-4 py-2 text-secondary hover:text-primary transition-colors"
                         >
                             Annulla
                         </button>
                         <button
                             type="submit"
                             disabled={loading || formData.member_ids.length < 2}
-                            className="px-4 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity disabled:opacity-50"
+                            className="px-4 py-2 bg-accent text-white font-medium rounded-lg  hover:opacity-90 transition-opacity disabled:opacity-50"
                         >
                             {loading ? 'Salvataggio...' : 'Salva'}
                         </button>
@@ -566,12 +566,12 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
             <div className="glass-card p-6">
                 <div className="flex items-center justify-between mb-6">
                     <div>
-                        <h2 className="text-lg font-semibold text-dark-100">Istanze JIRA</h2>
-                        <p className="text-sm text-dark-400 mt-1">Configura le connessioni ai tuoi JIRA Cloud</p>
+                        <h2 className="text-lg font-semibold text-primary">Istanze JIRA</h2>
+                        <p className="text-sm text-tertiary mt-1">Configura le connessioni ai tuoi JIRA Cloud</p>
                     </div>
                     <button
                         onClick={handleCreateInstance}
-                        className="flex items-center gap-2 px-4 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity"
+                        className="flex items-center gap-2 px-4 py-2 bg-accent text-white font-medium rounded-lg  hover:opacity-90 transition-opacity"
                     >
                         <PlusIcon />
                         Aggiungi JIRA
@@ -579,16 +579,16 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
                 </div>
 
                 {error && (
-                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
+                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-error text-sm">
                         {error}
                     </div>
                 )}
 
                 {instances.length === 0 ? (
                     <div className="text-center py-12">
-                        <ServerIcon className="w-12 h-12 text-dark-500 mx-auto mb-4" />
-                        <p className="text-dark-400">Nessuna istanza JIRA configurata</p>
-                        <p className="text-dark-500 text-sm mt-1">
+                        <ServerIcon className="w-12 h-12 text-tertiary mx-auto mb-4" />
+                        <p className="text-tertiary">Nessuna istanza JIRA configurata</p>
+                        <p className="text-tertiary text-sm mt-1">
                             Aggiungi la tua prima istanza JIRA per iniziare
                         </p>
                     </div>
@@ -607,17 +607,17 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
                                 {instances.map((instance) => {
                                     const isFromConfig = instance.source === 'config.yaml'
                                     return (
-                                    <tr key={instance.id} className="hover:bg-dark-700/30 transition-colors">
+                                    <tr key={instance.id} className="hover:bg-surface/30 transition-colors">
                                         <td className="table-cell">
-                                            <span className="font-medium text-dark-100">{instance.name}</span>
+                                            <span className="font-medium text-primary">{instance.name}</span>
                                             {instance.has_tempo && (
                                                 <span className="ml-2 text-xs text-accent-purple">+ Tempo</span>
                                             )}
                                             {instance.default_project_key && (
-                                                <span className="ml-2 text-xs bg-dark-600 text-dark-300 px-2 py-0.5 rounded">{instance.default_project_key}</span>
+                                                <span className="ml-2 text-xs bg-surface-hover text-secondary px-2 py-0.5 rounded">{instance.default_project_key}</span>
                                             )}
                                             {isFromConfig && (
-                                                <span className="ml-2 text-xs bg-dark-600 text-dark-300 px-2 py-0.5 rounded">config.yaml</span>
+                                                <span className="ml-2 text-xs bg-surface-hover text-secondary px-2 py-0.5 rounded">config.yaml</span>
                                             )}
                                         </td>
                                         <td className="table-cell">
@@ -637,7 +637,7 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
                                                         <CheckIcon /> Connesso
                                                     </span>
                                                 ) : (
-                                                    <span className="inline-flex items-center gap-1 text-red-400">
+                                                    <span className="inline-flex items-center gap-1 text-error">
                                                         <XIcon /> Errore
                                                     </span>
                                                 )
@@ -654,7 +654,7 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
                                                         <button
                                                             onClick={() => handleTestInstance(instance.id)}
                                                             disabled={loading}
-                                                            className="px-2 py-1 text-xs text-dark-300 hover:text-accent-blue hover:bg-dark-700 rounded transition-colors"
+                                                            className="px-2 py-1 text-xs text-secondary hover:text-accent-blue hover:bg-surface rounded transition-colors"
                                                             title="Test connessione"
                                                         >
                                                             Test
@@ -666,8 +666,8 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
                                                                 issueTypeFetch?.instanceId === instance.id && issueTypeFetch?.status === 'success'
                                                                     ? 'text-green-400 bg-green-400/10'
                                                                     : issueTypeFetch?.instanceId === instance.id && issueTypeFetch?.status === 'error'
-                                                                    ? 'text-red-400 bg-red-400/10'
-                                                                    : 'text-dark-300 hover:text-accent-purple hover:bg-dark-700'
+                                                                    ? 'text-error bg-red-400/10'
+                                                                    : 'text-secondary hover:text-accent-purple hover:bg-surface'
                                                             }`}
                                                             title="Fetch tipi issue da JIRA"
                                                         >
@@ -679,14 +679,14 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
                                                         </button>
                                                         <button
                                                             onClick={() => handleEditInstance(instance)}
-                                                            className="p-2 text-dark-400 hover:text-accent-blue hover:bg-dark-700 rounded-lg transition-colors"
+                                                            className="p-2 text-tertiary hover:text-accent-blue hover:bg-surface rounded-lg transition-colors"
                                                             title="Modifica"
                                                         >
                                                             <EditIcon />
                                                         </button>
                                                         <button
                                                             onClick={() => setDeleteConfirm({ type: 'instance', data: instance })}
-                                                            className="p-2 text-dark-400 hover:text-red-400 hover:bg-dark-700 rounded-lg transition-colors"
+                                                            className="p-2 text-tertiary hover:text-error hover:bg-surface rounded-lg transition-colors"
                                                             title="Elimina"
                                                         >
                                                             <TrashIcon />
@@ -694,7 +694,7 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
                                                     </>
                                                 )}
                                                 {isFromConfig && (
-                                                    <span className="text-xs text-dark-500 italic">Sola lettura</span>
+                                                    <span className="text-xs text-tertiary italic">Sola lettura</span>
                                                 )}
                                             </div>
                                         </td>
@@ -711,15 +711,15 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
             <div className="glass-card p-6">
                 <div className="flex items-center justify-between mb-6">
                     <div>
-                        <h2 className="text-lg font-semibold text-dark-100">Gruppi Complementari</h2>
-                        <p className="text-sm text-dark-400 mt-1">
+                        <h2 className="text-lg font-semibold text-primary">Gruppi Complementari</h2>
+                        <p className="text-sm text-tertiary mt-1">
                             Raggruppa istanze che tracciano lo stesso lavoro per evitare conteggi doppi
                         </p>
                     </div>
                     <button
                         onClick={handleCreateGroup}
                         disabled={instances.length < 2}
-                        className="flex items-center gap-2 px-4 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity disabled:opacity-50"
+                        className="flex items-center gap-2 px-4 py-2 bg-accent text-white font-medium rounded-lg  hover:opacity-90 transition-opacity disabled:opacity-50"
                         title={instances.length < 2 ? 'Servono almeno 2 istanze' : ''}
                     >
                         <PlusIcon />
@@ -729,9 +729,9 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
 
                 {complementaryGroups.length === 0 ? (
                     <div className="text-center py-12">
-                        <LinkIcon className="w-12 h-12 text-dark-500 mx-auto mb-4" />
-                        <p className="text-dark-400">Nessun gruppo complementare configurato</p>
-                        <p className="text-dark-500 text-sm mt-1">
+                        <LinkIcon className="w-12 h-12 text-tertiary mx-auto mb-4" />
+                        <p className="text-tertiary">Nessun gruppo complementare configurato</p>
+                        <p className="text-tertiary text-sm mt-1">
                             Crea un gruppo se hai istanze JIRA che tracciano lo stesso lavoro
                         </p>
                     </div>
@@ -740,21 +740,21 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
                         {complementaryGroups.map((group) => (
                             <div
                                 key={group.id}
-                                className="border border-dark-700 rounded-lg p-4 hover:bg-dark-700/20 transition-colors"
+                                className="border border-solid rounded-lg p-4 hover:bg-surface/20 transition-colors"
                             >
                                 <div className="flex items-center justify-between mb-2">
-                                    <h3 className="font-medium text-dark-100">{group.name}</h3>
+                                    <h3 className="font-medium text-primary">{group.name}</h3>
                                     <div className="flex items-center gap-2">
                                         <button
                                             onClick={() => handleEditGroup(group)}
-                                            className="p-2 text-dark-400 hover:text-accent-blue hover:bg-dark-700 rounded-lg transition-colors"
+                                            className="p-2 text-tertiary hover:text-accent-blue hover:bg-surface rounded-lg transition-colors"
                                             title="Modifica"
                                         >
                                             <EditIcon />
                                         </button>
                                         <button
                                             onClick={() => setDeleteConfirm({ type: 'group', data: group })}
-                                            className="p-2 text-dark-400 hover:text-red-400 hover:bg-dark-700 rounded-lg transition-colors"
+                                            className="p-2 text-tertiary hover:text-error hover:bg-surface rounded-lg transition-colors"
                                             title="Elimina"
                                         >
                                             <TrashIcon />
@@ -768,7 +768,7 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
                                             className={`px-2 py-1 rounded text-sm ${
                                                 member.id === group.primary_instance_id
                                                     ? 'bg-accent-blue/20 text-accent-blue border border-accent-blue/30'
-                                                    : 'bg-dark-700 text-dark-300'
+                                                    : 'bg-surface text-secondary'
                                             }`}
                                         >
                                             {member.name}
@@ -813,21 +813,21 @@ export default function JiraInstancesSection({ instances, complementaryGroups, o
             {deleteConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center">
                     <div
-                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                         onClick={() => setDeleteConfirm(null)}
                     />
-                    <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 border border-dark-700 p-6">
-                        <h3 className="text-lg font-semibold text-dark-100 mb-2">
+                    <div className="relative bg-surface rounded-lg shadow-lg w-full max-w-md mx-4 border border-solid p-6">
+                        <h3 className="text-lg font-semibold text-primary mb-2">
                             Conferma eliminazione
                         </h3>
-                        <p className="text-dark-300 mb-6">
+                        <p className="text-secondary mb-6">
                             Sei sicuro di voler eliminare {deleteConfirm.type === 'instance' ? "l'istanza" : 'il gruppo'}{' '}
                             <strong>"{deleteConfirm.data.name}"</strong>?
                         </p>
                         <div className="flex justify-end gap-3">
                             <button
                                 onClick={() => setDeleteConfirm(null)}
-                                className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors"
+                                className="px-4 py-2 text-secondary hover:text-primary transition-colors"
                             >
                                 Annulla
                             </button>

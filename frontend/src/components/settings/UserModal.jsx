@@ -113,17 +113,17 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
 
     return (
         <div className="fixed inset-0 z-50 flex items-start justify-center py-8">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-dark-700 max-h-[calc(100vh-4rem)] overflow-y-auto">
-                <div className="p-6 border-b border-dark-700 flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-dark-100">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative bg-surface rounded-lg shadow-lg w-full max-w-lg mx-4 border border-solid max-h-[calc(100vh-4rem)] overflow-y-auto">
+                <div className="p-6 border-b border-solid flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-primary">
                         {user ? 'Modifica Utente' : 'Nuovo Utente'}
                     </h3>
                     <button
                         onClick={onClose}
-                        className="p-2 rounded-lg hover:bg-dark-700 transition-colors"
+                        className="p-2 rounded-lg hover:bg-surface-hover transition-colors"
                     >
-                        <svg className="w-5 h-5 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
@@ -132,7 +132,7 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                         {/* Email */}
                         <div>
-                            <label className="block text-sm font-medium text-dark-300 mb-2">
+                            <label className="block text-sm font-medium text-secondary mb-2">
                                 Email
                             </label>
                             <input
@@ -140,7 +140,7 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 placeholder="mario.rossi@company.com"
-                                className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 placeholder-dark-400 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
+                                className="w-full px-4 py-3 bg-surface border border-solid rounded-lg text-primary placeholder-tertiary focus:outline-none focus:border-focus focus:ring-1 focus:ring-accent/20"
                                 autoFocus
                             />
                         </div>
@@ -148,7 +148,7 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                         {/* Name */}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-2">
+                                <label className="block text-sm font-medium text-secondary mb-2">
                                     Nome
                                 </label>
                                 <input
@@ -156,11 +156,11 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                                     value={firstName}
                                     onChange={(e) => setFirstName(e.target.value)}
                                     placeholder="Mario"
-                                    className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 placeholder-dark-400 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
+                                    className="w-full px-4 py-3 bg-surface border border-solid rounded-lg text-primary placeholder-tertiary focus:outline-none focus:border-focus focus:ring-1 focus:ring-accent/20"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-2">
+                                <label className="block text-sm font-medium text-secondary mb-2">
                                     Cognome
                                 </label>
                                 <input
@@ -168,20 +168,20 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                                     value={lastName}
                                     onChange={(e) => setLastName(e.target.value)}
                                     placeholder="Rossi"
-                                    className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 placeholder-dark-400 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
+                                    className="w-full px-4 py-3 bg-surface border border-solid rounded-lg text-primary placeholder-tertiary focus:outline-none focus:border-focus focus:ring-1 focus:ring-accent/20"
                                 />
                             </div>
                         </div>
 
                         {/* Team */}
                         <div>
-                            <label className="block text-sm font-medium text-dark-300 mb-2">
+                            <label className="block text-sm font-medium text-secondary mb-2">
                                 Team
                             </label>
                             <select
                                 value={teamId}
                                 onChange={(e) => setTeamId(e.target.value)}
-                                className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
+                                className="w-full px-4 py-3 bg-surface border border-solid rounded-lg text-primary focus:outline-none focus:border-focus focus:ring-1 focus:ring-accent/20"
                             >
                                 <option value="">Nessun team</option>
                                 {teams.map((team) => (
@@ -195,12 +195,12 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                         {/* JIRA Accounts - Only show for existing users */}
                         {user && jiraInstances.length > 0 && (
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-3">
+                                <label className="block text-sm font-medium text-secondary mb-3">
                                     Account JIRA
                                 </label>
 
                                 {fetchError && (
-                                    <div className="mb-3 bg-red-500/10 border border-red-500/30 rounded-lg p-2 text-red-400 text-sm">
+                                    <div className="mb-3 bg-red-500/10 border border-red-500/30 rounded-lg p-2 text-error text-sm">
                                         {fetchError}
                                     </div>
                                 )}
@@ -213,21 +213,21 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                                         return (
                                             <div
                                                 key={instance.name}
-                                                className="flex items-center justify-between p-3 bg-dark-700/50 border border-dark-600 rounded-lg"
+                                                className="flex items-center justify-between p-3 bg-surface/50 border border-solid rounded-lg"
                                             >
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="font-medium text-dark-100 text-sm">
+                                                    <div className="font-medium text-primary text-sm">
                                                         {instance.name}
                                                     </div>
                                                     {accountId ? (
-                                                        <div className="flex items-center gap-1 text-xs text-accent-green mt-1">
+                                                        <div className="flex items-center gap-1 text-xs text-success mt-1">
                                                             <CheckIcon />
                                                             <span className="truncate" title={accountId}>
                                                                 {accountId.substring(0, 20)}...
                                                             </span>
                                                         </div>
                                                     ) : (
-                                                        <div className="text-xs text-dark-400 mt-1">
+                                                        <div className="text-xs text-tertiary mt-1">
                                                             Non configurato
                                                         </div>
                                                     )}
@@ -239,7 +239,7 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                                                             type="button"
                                                             onClick={() => handleDeleteAccount(instance.name)}
                                                             disabled={isFetching}
-                                                            className="p-2 text-dark-400 hover:text-red-400 hover:bg-dark-600 rounded-lg transition-colors disabled:opacity-50"
+                                                            className="p-2 text-tertiary hover:text-error hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-50"
                                                             title="Rimuovi"
                                                         >
                                                             <TrashIcon />
@@ -249,10 +249,10 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                                                         type="button"
                                                         onClick={() => handleFetchAccountId(instance.name)}
                                                         disabled={isFetching}
-                                                        className="flex items-center gap-1 px-3 py-1.5 bg-dark-600 text-dark-200 text-sm rounded-lg hover:bg-dark-500 transition-colors disabled:opacity-50"
+                                                        className="flex items-center gap-1 px-3 py-1.5 bg-surface-hover text-secondary text-sm rounded-lg hover:bg-surface-secondary transition-colors disabled:opacity-50"
                                                     >
                                                         {isFetching ? (
-                                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-dark-200"></div>
+                                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-secondary"></div>
                                                         ) : (
                                                             <RefreshIcon />
                                                         )}
@@ -264,25 +264,25 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                                     })}
                                 </div>
 
-                                <p className="text-xs text-dark-500 mt-2">
+                                <p className="text-xs text-tertiary mt-2">
                                     Clicca "Fetch" per recuperare l'Account ID da JIRA usando l'email dell'utente
                                 </p>
                             </div>
                         )}
 
                         {/* Footer buttons inside form */}
-                        <div className="flex items-center justify-end gap-3 pt-6 mt-6 border-t border-dark-700">
+                        <div className="flex items-center justify-end gap-3 pt-6 mt-6 border-t border-solid">
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors"
+                                className="px-4 py-2 text-secondary hover:text-primary transition-colors"
                             >
                                 Annulla
                             </button>
                             <button
                                 type="submit"
                                 disabled={!email.trim() || !firstName.trim() || !lastName.trim() || loading}
-                                className="px-5 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-5 py-2 bg-accent text-inverse font-medium rounded-md hover:bg-accent-hover transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {loading ? 'Salvataggio...' : 'Salva'}
                             </button>

@@ -37,7 +37,7 @@ export default function MultiJiraOverview({ dateRange }) {
 
     if (loading) {
         return (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-6 animate-slide-up">
                 <div className="glass-card p-6">
                     <div className="loading-shimmer h-8 w-1/3 rounded mb-2" />
                     <div className="loading-shimmer h-4 w-1/4 rounded" />
@@ -69,7 +69,7 @@ export default function MultiJiraOverview({ dateRange }) {
     }))
 
     return (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-6 animate-slide-up">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>

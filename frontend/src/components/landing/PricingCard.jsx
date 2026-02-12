@@ -4,46 +4,46 @@ export default function PricingCard({
 }) {
     return (
         <div className={`
-            rounded-2xl p-8 relative flex flex-col h-full
+            rounded-lg p-8 relative flex flex-col h-full
             ${highlighted
-                ? 'bg-dark-800 border-2 border-primary-from/50 shadow-glow'
+                ? 'bg-surface border-2 border-primary-from/50 '
                 : 'glass-card'
             }
         `}>
             {badge && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="px-4 py-1 text-xs font-semibold rounded-full bg-gradient-primary text-white shadow-glow">
+                    <span className="px-4 py-1 text-xs font-semibold rounded-full bg-accent text-white ">
                         {badge}
                     </span>
                 </div>
             )}
 
-            <h3 className="text-lg font-semibold text-dark-200 mb-4">{name}</h3>
+            <h3 className="text-lg font-semibold text-secondary mb-4">{name}</h3>
 
             <div className="mb-4">
                 {price === 'Gratis' || price === 'Custom' ? (
-                    <div className="text-4xl font-bold text-dark-100">{price}</div>
+                    <div className="text-4xl font-bold text-primary">{price}</div>
                 ) : (
                     <div className="flex items-baseline gap-1">
-                        {currency && <span className="text-dark-400 text-lg">{currency}</span>}
-                        <span className="text-5xl font-bold bg-gradient-primary bg-clip-text text-transparent">{price}</span>
-                        {period && <span className="text-dark-400 text-base">{period}</span>}
+                        {currency && <span className="text-tertiary text-lg">{currency}</span>}
+                        <span className="text-5xl font-bold bg-accent bg-clip-text text-transparent">{price}</span>
+                        {period && <span className="text-tertiary text-base">{period}</span>}
                     </div>
                 )}
                 {priceSubtitle && (
-                    <p className="text-dark-500 text-sm mt-1">{priceSubtitle}</p>
+                    <p className="text-tertiary text-sm mt-1">{priceSubtitle}</p>
                 )}
             </div>
 
-            <p className="text-dark-400 text-sm mb-6">{description}</p>
+            <p className="text-tertiary text-sm mb-6">{description}</p>
 
             <ul className="space-y-3 mb-8 flex-1">
                 {features.map((feature, i) => (
                     <li key={i} className="flex items-start gap-2">
-                        <svg className="w-5 h-5 text-accent-green flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <svg className="w-5 h-5 text-success flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                         </svg>
-                        <span className={`text-sm ${feature.startsWith('**') ? 'text-dark-100 font-medium' : 'text-dark-300'}`}>
+                        <span className={`text-sm ${feature.startsWith('**') ? 'text-primary font-medium' : 'text-secondary'}`}>
                             {feature.replace(/\*\*/g, '')}
                         </span>
                     </li>
@@ -61,7 +61,7 @@ export default function PricingCard({
                 {ctaText}
             </button>
             {ctaNote && (
-                <p className="text-dark-500 text-xs text-center mt-2">{ctaNote}</p>
+                <p className="text-tertiary text-xs text-center mt-2">{ctaNote}</p>
             )}
         </div>
     )
