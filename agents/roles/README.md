@@ -6,7 +6,7 @@ This directory contains detailed role definitions for specialized agents working
 
 ## Overview
 
-The project uses **9 specialized agent roles**, each with clear responsibilities, file ownership, and dependencies. This structure enables efficient parallel work while maintaining code quality and consistency.
+The project uses **10 specialized agent roles**, each with clear responsibilities, file ownership, and dependencies. This structure enables efficient parallel work while maintaining code quality and consistency.
 
 ---
 
@@ -220,41 +220,70 @@ The project uses **9 specialized agent roles**, each with clear responsibilities
 
 ---
 
+### 10. Documentation Engineer (Docs)
+**Focus:** Documentation maintenance, accuracy, and completeness
+
+**Key Responsibilities:**
+- Maintain all 6 core documentation files (CLAUDE.md, architecture, database schema, API reference, conventions, security)
+- Update documentation after every feature/bugfix (mandatory final step)
+- Keep statistics consistent across all docs (111 endpoints, 24 tables, 40+ indexes, 74 storage methods, 10 agent roles)
+- Validate code examples and cross-references
+- Can block PR merge if documentation incomplete
+
+**Files:**
+- `CLAUDE.md`, `README.md`, `CHANGELOG.md`
+- `docs/` (all 6+ documentation files)
+- `docs/desktop/` (10 context files)
+- `agents/roles/` (agent documentation)
+
+**Dependencies:**
+- ⬇️ All Agents (receives completion notifications)
+- ⬆️ All Agents (provides accurate documentation)
+- ↔️ Tech-Lead (can block merge, coordinates structure)
+
+[📄 Full Documentation](./docs.md)
+
+---
+
 ## Dependency Matrix
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Tech-Lead                            │
-│          (Coordinamento, Architecture, Roadmap)             │
-└────────────────────────┬────────────────────────────────────┘
-                         │ Coordina tutti
-         ┌───────────────┼───────────────┐
-         │               │               │
-    ┌────▼────┐    ┌────▼────┐    ┌────▼────┐
-    │Security │    │Database │    │DevOps   │
-    │Engineer │    │Engineer │    │Engineer │
-    └────┬────┘    └────┬────┘    └─────────┘
-         │              │
-         │              │
-    ┌────▼──────────────▼────┐
-    │  Backend-Core-Engineer │◄─────┐
-    └────┬───────────────────┘      │
-         │                           │
-         │                      ┌────┴────────────┐
-    ┌────▼────┐                │Integration      │
-    │Frontend │                │Engineer         │
-    │Engineer │                └────┬────────────┘
-    └────┬────┘                     │
-         │                      ┌───▼──────────┐
-         │                      │Billing       │
-         │                      │Engineer      │
-         │                      └──────────────┘
-         │
-    ┌────▼────┐
-    │QA       │
-    │Engineer │
-    └─────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                        Tech-Lead                             │
+│          (Coordination, Architecture, Roadmap)               │
+└────────────────┬──────────────────────────┬──────────────────┘
+                 │ Coordinates all          │ Approves docs
+         ┌───────┼───────┐                  │
+         │       │       │                  │
+    ┌────▼────┐ │  ┌────▼────┐        ┌────▼────────┐
+    │Security │ │  │Database │        │    Docs     │
+    │Engineer │ │  │Engineer │        │  Engineer   │
+    └────┬────┘ │  └────┬────┘        └─────▲───────┘
+         │      │       │                    │ Receives notifications
+         │      │       │                    │ from ALL agents
+    ┌────▼──────┼───────▼────┐              │
+    │  Backend-Core-Engineer │◄─────┐       │
+    └────┬───────────────────┘      │       │
+         │                           │       │
+         │                      ┌────┴────┐  │
+    ┌────▼────┐                │Integrat.│  │
+    │Frontend │                │Engineer │  │
+    │Engineer │                └────┬────┘  │
+    └────┬────┘                     │       │
+         │                      ┌───▼────┐  │
+         │                      │Billing │  │
+         │                      │Eng.    │  │
+         │                      └────────┘  │
+         │                                  │
+    ┌────▼────┐    ┌─────────┐             │
+    │   QA    │───►│ DevOps  │─────────────┘
+    │Engineer │    │Engineer │  Notify Docs after completion
+    └─────────┘    └─────────┘
 ```
+
+**Note:** Documentation Engineer receives notifications from ALL agents after
+any development completion. No PR can be merged until Docs confirms
+documentation is complete and accurate.
 
 ---
 
@@ -305,10 +334,22 @@ The project uses **9 specialized agent roles**, each with clear responsibilities
 
 9. **Tech-Lead** (Day 6)
    - Final code review
-   - Merges to master
-   - Updates documentation
+   - Approves pending documentation update
 
-**Total Time:** 6 days with 8 agents working in parallel (vs. ~3 weeks sequential)
+10. **Documentation-Engineer** (Day 6)
+   - Updates `docs/api-reference.md` (4 new endpoints)
+   - Updates `docs/database-schema.md` (budget_alerts table)
+   - Updates `CLAUDE.md` (endpoint count)
+   - Updates `CHANGELOG.md` (user-facing feature)
+   - Updates `docs/desktop/api-quick-reference.md`
+   - Validates all cross-references and statistics
+   - Notifies Tech-Lead: documentation complete
+
+11. **Tech-Lead** (Day 6)
+   - Verifies documentation complete
+   - Merges to master
+
+**Total Time:** 6 days with 10 agents working in parallel (vs. ~3 weeks sequential)
 
 ---
 

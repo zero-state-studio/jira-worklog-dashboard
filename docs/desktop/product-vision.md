@@ -372,9 +372,9 @@ Team Analytics dashboard shows:
 - **Database Schema:** `docs/database-schema.md`
 
 ### User-Facing
-- **User Guide:** (TODO - needs creation)
+- **User Guide:** `docs-public/user-guide/` (16 files, comprehensive coverage)
 - **Video Tutorials:** (TODO - needs creation)
-- **FAQ:** (TODO - needs creation)
+- **FAQ:** `docs-public/faq.md` (50+ questions answered)
 
 ### Business
 - **Market Research:** (TODO - competitive analysis)

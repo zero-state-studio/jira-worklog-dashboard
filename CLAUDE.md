@@ -77,7 +77,7 @@ async def get_resource(self, company_id: int):
 
 **Agent roles in `/agents/roles/`:**
 
-9 specialized roles: Backend-Core, Database, Frontend, Security, Integration, Billing, QA, DevOps, Tech-Lead. See [agents/roles/README.md](./agents/roles/README.md)
+10 specialized roles: Backend-Core, Database, Frontend, Security, Integration, Billing, QA, DevOps, Tech-Lead, Docs. See [agents/roles/README.md](./agents/roles/README.md)
 
 ---
 

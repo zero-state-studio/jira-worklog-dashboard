@@ -2,7 +2,7 @@
 
 ## Overview
 
-The JIRA Worklog Dashboard uses **9 specialized agent roles** for autonomous development. Each role has specific responsibilities, expertise areas, and decision-making authority.
+The JIRA Worklog Dashboard uses **10 specialized agent roles** for autonomous development. Each role has specific responsibilities, expertise areas, and decision-making authority.
 
 **Location:** `agents/roles/*.md`
 
@@ -23,6 +23,7 @@ The JIRA Worklog Dashboard uses **9 specialized agent roles** for autonomous dev
 | **Billing** | Invoice generation, rate cascades, client management | Complex business logic, PDF generation |
 | **QA** | Testing, bug verification, test coverage | pytest, test design, debugging |
 | **DevOps** | Build, deploy, environment setup, CI/CD | Docker, PyInstaller, Tauri |
+| **Docs** | Post-development documentation updates, maintaining accuracy | Technical writing, Markdown, validation |
 
 ---
 
@@ -489,6 +490,47 @@ Always test builds in clean environment before deploying.
 
 ---
 
+### 10. Documentation (Docs)
+
+**Primary Responsibility:** Documentation maintenance and post-development updates
+
+**Expertise:**
+- Maintaining all 6+ core documentation files
+- Updating statistics across documents (endpoints, tables, indexes, etc.)
+- Writing clear technical documentation
+- Validating code examples and cross-references
+- Ensuring documentation-code consistency
+
+**Decision Authority:**
+- Can block PR merge if documentation incomplete
+- Documentation structure and organization
+- Code example standards
+- Cross-reference validation requirements
+
+**Typical Tasks:**
+- Update docs after new API endpoint
+- Update database schema documentation after table changes
+- Add troubleshooting entries for common issues
+- Maintain statistics consistency (endpoint counts, table counts)
+- Validate all internal documentation links
+
+**Example:**
+"Document the new recurring invoices feature (4 endpoints, 2 tables, UI changes)."
+
+→ Docs implements:
+1. Updates `docs/api-reference.md` with 4 new endpoint docs
+2. Updates `docs/database-schema.md` with 2 new tables
+3. Updates `docs/desktop/api-quick-reference.md` with concise examples
+4. Updates `CLAUDE.md` statistics (111 → 115 endpoints, 24 → 26 tables)
+5. Updates `CHANGELOG.md` with user-facing description
+6. Validates all cross-references and statistics
+7. Notifies Tech-Lead: documentation complete, PR ready to merge
+
+**Critical Pattern:**
+No development is "complete" until Docs confirms documentation is accurate and up-to-date. Docs is the final checkpoint before merge.
+
+---
+
 ## Multi-Role Collaboration Examples
 
 ### Example 1: Add New Feature
@@ -502,6 +544,7 @@ Always test builds in clean environment before deploying.
 4. **Frontend** → Build template management UI
 5. **QA** → Write integration tests
 6. **DevOps** → Add cron job for auto-generation
+7. **Docs** → Update all documentation (API, database, architecture, CHANGELOG)
 
 ### Example 2: Fix Security Issue
 
@@ -515,6 +558,7 @@ Always test builds in clean environment before deploying.
 1. Update router to pass `current_user.company_id`
 2. Update storage method to filter by `company_id`
 3. **QA** → Add regression test
+4. **Docs** → Update `multi-tenant-security.md` with anti-pattern example
 
 ### Example 3: Performance Optimization
 
@@ -533,6 +577,10 @@ Always test builds in clean environment before deploying.
 
 **DevOps** deploys:
 - Run migration to add index in production
+
+**Docs** updates:
+- Document new index in `database-schema.md`
+- Add performance improvement note to `OPTIMIZATION_PLAN.md`
 
 ---
 
@@ -559,6 +607,12 @@ Always test builds in clean environment before deploying.
 - **Backend-Core** - To audit endpoint implementations
 - **Database** - To verify SQL injection prevention
 - **QA** - To expand security test coverage
+
+**Docs** consults:
+- **All roles** - After feature completion for accurate documentation
+- **Tech-Lead** - For architectural decisions to document
+- **Backend-Core** - For new endpoint details
+- **Database** - For schema change details
 
 ---
 
