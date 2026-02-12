@@ -309,8 +309,11 @@ class DashboardResponse(BaseModel):
     teams: list[TeamHours]
     daily_trend: list[DailyHours]
     top_epics: list[EpicHours]
+    top_projects: list[EpicHours] = []
     period_start: date
     period_end: date
+    worklog_count: int = 0
+    active_users: int = 0
 
 
 class TeamDetailResponse(BaseModel):

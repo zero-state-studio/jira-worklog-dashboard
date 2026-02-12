@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getDashboard, getWorklogs } from '../api/client'
 import { KpiBar, DataTable, Column } from '../components/common'
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { format } from 'date-fns'
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { format, differenceInBusinessDays } from 'date-fns'
 import { it } from 'date-fns/locale'
+import { formatHours } from '../hooks/useData'
 
 interface DashboardProps {
   dateRange: {
@@ -12,6 +13,7 @@ interface DashboardProps {
     endDate: Date
   }
   selectedInstance: string | null
+  onDateRangeChange?: (range: { startDate: Date; endDate: Date }) => void
 }
 
 interface WorklogData {
@@ -20,18 +22,53 @@ interface WorklogData {
   completion_percentage: number
   teams: any[]
   top_epics: any[]
+  top_projects?: any[]
   daily_trend: any[]
   worklog_count?: number
   active_users?: number
   billable_ratio?: number
 }
 
-export default function NewDashboard({ dateRange, selectedInstance }: DashboardProps) {
+type PeriodPreset = 'this-week' | 'this-month' | 'last-month' | 'this-quarter'
+
+export default function NewDashboard({ dateRange, selectedInstance, onDateRangeChange }: DashboardProps) {
   const navigate = useNavigate()
   const [data, setData] = useState<WorklogData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [recentWorklogs, setRecentWorklogs] = useState<any[]>([])
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodPreset>('this-month')
+
+  const handlePeriodChange = (period: PeriodPreset) => {
+    setSelectedPeriod(period)
+    const now = new Date()
+    let startDate: Date
+    let endDate: Date = now
+
+    switch (period) {
+      case 'this-week':
+        startDate = new Date(now)
+        startDate.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1)) // Monday
+        break
+      case 'this-month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+        break
+      case 'last-month':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0) // Last day of previous month
+        break
+      case 'this-quarter':
+        const quarter = Math.floor(now.getMonth() / 3)
+        startDate = new Date(now.getFullYear(), quarter * 3, 1)
+        break
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+    }
+
+    if (onDateRangeChange) {
+      onDateRangeChange({ startDate, endDate })
+    }
+  }
 
   const fetchData = useCallback(async () => {
     try {
@@ -104,33 +141,27 @@ export default function NewDashboard({ dateRange, selectedInstance }: DashboardP
 
   if (!data) return null
 
+  // Calculate working days in period (for Avg/Day KPI)
+  const workingDays = differenceInBusinessDays(dateRange.endDate, dateRange.startDate) + 1
+  const avgHoursPerDay = workingDays > 0 ? data.total_hours / workingDays : 0
+
   // Calculate KPIs
   const kpiItems = [
     {
-      label: 'Total Worklogs',
+      label: 'Worklogs',
       value: data.worklog_count || 0,
     },
     {
-      label: 'Hours Tracked',
-      value: `${data.total_hours.toFixed(1)}h`,
-      trend: data.completion_percentage >= 100 ? 5 : undefined,
-      trendDirection: data.completion_percentage >= 100 ? ('up' as const) : undefined,
+      label: 'Hours',
+      value: formatHours(data.total_hours),
     },
     {
       label: 'Active Users',
-      value: data.active_users || data.teams.reduce((sum, t) => sum + t.member_count, 0),
+      value: data.active_users || 0,
     },
     {
-      label: 'Completion',
-      value: `${Math.round(data.completion_percentage)}%`,
-      trend:
-        data.completion_percentage >= 90
-          ? 10
-          : data.completion_percentage >= 70
-          ? 5
-          : undefined,
-      trendDirection:
-        data.completion_percentage >= 70 ? ('up' as const) : ('down' as const),
+      label: 'Avg/Day',
+      value: formatHours(avgHoursPerDay),
     },
   ]
 
@@ -140,15 +171,29 @@ export default function NewDashboard({ dateRange, selectedInstance }: DashboardP
     hours: item.hours || 0,
   }))
 
-  // Prepare projects data (top 5)
-  const projectsData = data.top_epics
-    .slice(0, 5)
-    .map((epic) => ({
-      name: epic.epic_name.length > 20 ? epic.epic_name.substring(0, 20) + '...' : epic.epic_name,
-      hours: epic.total_hours,
-      full_name: epic.epic_name,
-    }))
-    .sort((a, b) => b.hours - a.hours)
+  // Prepare projects data (top 5 + "Other")
+  const allProjects = data.top_projects || data.top_epics || []
+  const top5Projects = allProjects.slice(0, 5)
+  const otherProjects = allProjects.slice(5)
+
+  const projectsData = top5Projects.map((project) => ({
+    name: project.epic_name.length > 25 ? project.epic_name.substring(0, 25) + '...' : project.epic_name,
+    hours: project.total_hours,
+    full_name: project.epic_name,
+  }))
+
+  // Add "Other" if there are more than 5 projects
+  if (otherProjects.length > 0) {
+    const otherHours = otherProjects.reduce((sum, p) => sum + p.total_hours, 0)
+    projectsData.push({
+      name: 'Other',
+      hours: otherHours,
+      full_name: `${otherProjects.length} other projects`,
+    })
+  }
+
+  // Sort by hours descending
+  projectsData.sort((a, b) => b.hours - a.hours)
 
   // Recent activity columns
   const recentActivityColumns: Column[] = [
@@ -162,12 +207,13 @@ export default function NewDashboard({ dateRange, selectedInstance }: DashboardP
       key: 'summary',
       label: 'Summary',
       type: 'text',
+      width: '40ch',
     },
     {
       key: 'author',
       label: 'Author',
       type: 'text',
-      width: '150px',
+      width: '200px',
     },
     {
       key: 'duration',
@@ -189,12 +235,38 @@ export default function NewDashboard({ dateRange, selectedInstance }: DashboardP
     issue_key: wl.issue_key,
     summary: wl.summary || '',
     author: wl.author || wl.author_email || '',
-    duration: `${(wl.duration / 3600).toFixed(1)}h`,
-    date: format(new Date(wl.date), 'MMM d', { locale: it }),
+    duration: formatHours(wl.duration / 3600),
+    date: format(new Date(wl.date), 'd MMM', { locale: it }),
   }))
 
   return (
     <div className="space-y-6 max-w-[1920px]">
+      {/* Period Selector */}
+      <div className="flex items-center gap-2">
+        {(['this-week', 'this-month', 'last-month', 'this-quarter'] as const).map((period) => {
+          const labels = {
+            'this-week': 'This Week',
+            'this-month': 'This Month',
+            'last-month': 'Last Month',
+            'this-quarter': 'This Quarter',
+          }
+          const isActive = selectedPeriod === period
+          return (
+            <button
+              key={period}
+              onClick={() => handlePeriodChange(period)}
+              className={`h-[28px] px-3 text-xs font-medium rounded-md transition-colors ${
+                isActive
+                  ? 'bg-accent-subtle text-accent-text'
+                  : 'bg-transparent text-secondary hover:bg-surface-hover'
+              }`}
+            >
+              {labels[period]}
+            </button>
+          )
+        })}
+      </div>
+
       {/* Row 1: KPI Bar */}
       <KpiBar items={kpiItems} />
 
@@ -243,7 +315,7 @@ export default function NewDashboard({ dateRange, selectedInstance }: DashboardP
                   }}
                   labelStyle={{ color: 'var(--color-text-secondary)', fontSize: 12 }}
                   itemStyle={{ color: 'var(--color-text-primary)', fontSize: 13 }}
-                  formatter={(value: any) => [`${value}h`, 'Hours']}
+                  formatter={(value: any) => [formatHours(value), 'Hours']}
                 />
                 <Area
                   type="monotone"
@@ -270,7 +342,7 @@ export default function NewDashboard({ dateRange, selectedInstance }: DashboardP
               <BarChart
                 data={projectsData}
                 layout="vertical"
-                margin={{ top: 10, right: 10, left: 80, bottom: 10 }}
+                margin={{ top: 10, right: 40, left: 10, bottom: 10 }}
               >
                 <CartesianGrid
                   strokeDasharray="3 3"
@@ -283,7 +355,7 @@ export default function NewDashboard({ dateRange, selectedInstance }: DashboardP
                   axisLine={false}
                   tickLine={false}
                   tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
-                  tickFormatter={(value) => `${value}h`}
+                  tickFormatter={(value) => `${Math.round(value)}h`}
                 />
                 <YAxis
                   type="category"
@@ -291,7 +363,7 @@ export default function NewDashboard({ dateRange, selectedInstance }: DashboardP
                   axisLine={false}
                   tickLine={false}
                   tick={{ fill: 'var(--color-text-primary)', fontSize: 11 }}
-                  width={70}
+                  width={80}
                 />
                 <Tooltip
                   contentStyle={{
@@ -301,16 +373,27 @@ export default function NewDashboard({ dateRange, selectedInstance }: DashboardP
                     padding: '8px 12px',
                   }}
                   formatter={(value: any, name: any, props: any) => [
-                    `${value}h`,
+                    formatHours(value),
                     props.payload.full_name,
                   ]}
                 />
                 <Bar
                   dataKey="hours"
-                  fill="var(--color-accent)"
                   radius={[0, 4, 4, 0]}
-                  maxBarSize={20}
-                />
+                  maxBarSize={24}
+                >
+                  {projectsData.map((entry, index) => {
+                    const colors = [
+                      'var(--color-accent)',      // #2563EB - first bar
+                      '#64748B',                   // slate-500
+                      '#94A3B8',                   // slate-400
+                      '#CBD5E1',                   // slate-300
+                      '#E2E8F0',                   // slate-200
+                      '#F1F5F9',                   // slate-100 - for "Other"
+                    ]
+                    return <Cell key={`cell-${index}`} fill={colors[index] || colors[colors.length - 1]} />
+                  })}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
