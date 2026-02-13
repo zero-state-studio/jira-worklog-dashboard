@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Target,
+  Calendar,
 } from 'lucide-react'
 import { getConfig } from '../api/client'
 
@@ -64,6 +65,12 @@ export default function NewLayout({
   // Navigation structure
   const navSections: NavSection[] = [
     {
+      title: 'USER',
+      items: [
+        { path: '/app/timesheet', label: 'Timesheet', icon: <Calendar size={16} /> },
+      ],
+    },
+    {
       title: 'WORKSPACE',
       items: [
         { path: '/app/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
@@ -71,7 +78,6 @@ export default function NewLayout({
         { path: '/app/users', label: 'Users', icon: <UserCircle size={16} /> },
         { path: '/app/epics', label: 'Epics', icon: <Target size={16} /> },
         { path: '/app/worklogs', label: 'Worklogs', icon: <Clock size={16} /> },
-        { path: '/app/sync', label: 'Sync', icon: <RefreshCw size={16} /> },
       ],
     },
     {
@@ -85,7 +91,10 @@ export default function NewLayout({
     },
     {
       title: 'SYSTEM',
-      items: [{ path: '/app/settings', label: 'Settings', icon: <Settings size={16} /> }],
+      items: [
+        { path: '/app/settings', label: 'Settings', icon: <Settings size={16} /> },
+        { path: '/app/sync', label: 'Sync', icon: <RefreshCw size={16} /> },
+      ],
     },
   ]
 
