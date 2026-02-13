@@ -196,6 +196,7 @@ class UserInDB(UserBase):
     id: int
     team_id: Optional[int] = None
     team_name: Optional[str] = None
+    is_active: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     jira_accounts: list[UserJiraAccount] = Field(default_factory=list)
@@ -346,6 +347,7 @@ class DashboardResponse(BaseModel):
     total_hours: float
     expected_hours: float
     completion_percentage: float
+    daily_working_hours: int
     teams: list[TeamHours]
     top_epics: list[EpicHours]
     top_projects: list[EpicHours] = []

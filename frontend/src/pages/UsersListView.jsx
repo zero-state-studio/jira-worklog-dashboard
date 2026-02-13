@@ -1,16 +1,49 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getUsers } from '../api/client'
-import { KpiBar, DataTable, Badge, Input } from '../components/common'
+import { KpiBar, DataTable, Badge, Input, DateRangePicker } from '../components/common'
 import { formatHours } from '../hooks/useData'
 import { Users as UsersIcon, Search } from 'lucide-react'
 
-export default function UsersListView({ dateRange, selectedInstance }) {
+export default function UsersListView({ dateRange, selectedInstance, onDateRangeChange }) {
     const navigate = useNavigate()
     const [users, setUsers] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
     const [searchQuery, setSearchQuery] = useState('')
+    const [selectedPeriod, setSelectedPeriod] = useState('this-month')
+
+    // Period change handler
+    const handlePeriodChange = (period) => {
+        setSelectedPeriod(period)
+        const now = new Date()
+        let startDate
+        let endDate = now
+
+        switch (period) {
+            case 'this-week':
+                startDate = new Date(now)
+                startDate.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1)) // Monday
+                break
+            case 'this-month':
+                startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+                break
+            case 'last-month':
+                startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+                endDate = new Date(now.getFullYear(), now.getMonth(), 0) // Last day of previous month
+                break
+            case 'this-quarter':
+                const quarter = Math.floor(now.getMonth() / 3)
+                startDate = new Date(now.getFullYear(), quarter * 3, 1)
+                break
+            default:
+                startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+        }
+
+        if (onDateRangeChange) {
+            onDateRangeChange({ startDate, endDate })
+        }
+    }
 
     const fetchData = useCallback(async () => {
         try {
@@ -149,6 +182,19 @@ export default function UsersListView({ dateRange, selectedInstance }) {
                 ),
         },
         {
+            key: 'is_active',
+            label: 'Status',
+            type: 'text',
+            sortable: true,
+            width: '100px',
+            render: (value) =>
+                value === false ? (
+                    <Badge variant="default" className="bg-surface-secondary text-tertiary">Inactive</Badge>
+                ) : (
+                    <Badge variant="success">Active</Badge>
+                ),
+        },
+        {
             key: 'total_hours',
             label: 'Hours',
             type: 'text',
@@ -224,6 +270,7 @@ export default function UsersListView({ dateRange, selectedInstance }) {
         full_name: user.full_name,
         email: user.email,
         team_name: user.team_name,
+        is_active: user.is_active !== false, // Default to true if undefined
         total_hours: user.total_hours,
         expected_hours: user.expected_hours,
         worklog_count: user.worklog_count || 0,
@@ -242,6 +289,45 @@ export default function UsersListView({ dateRange, selectedInstance }) {
                 <div>
                     <h1 className="text-xl font-semibold text-primary mb-1">Users</h1>
                 </div>
+            </div>
+
+            {/* Period Selector */}
+            <div className="flex items-center gap-2">
+                {['this-week', 'this-month', 'last-month', 'this-quarter'].map((period) => {
+                    const labels = {
+                        'this-week': 'This Week',
+                        'this-month': 'This Month',
+                        'last-month': 'Last Month',
+                        'this-quarter': 'This Quarter',
+                    }
+                    const isActive = selectedPeriod === period
+                    return (
+                        <button
+                            key={period}
+                            onClick={() => handlePeriodChange(period)}
+                            className={`h-[28px] px-3 text-xs font-medium rounded-md transition-colors ${
+                                isActive
+                                    ? 'bg-accent-subtle text-accent-text'
+                                    : 'bg-transparent text-secondary hover:bg-surface-hover'
+                            }`}
+                        >
+                            {labels[period]}
+                        </button>
+                    )
+                })}
+
+                {/* Custom Date Picker */}
+                <DateRangePicker
+                    startDate={dateRange.startDate}
+                    endDate={dateRange.endDate}
+                    isActive={selectedPeriod === null}
+                    onChange={(range) => {
+                        setSelectedPeriod(null) // Deselect presets
+                        if (onDateRangeChange) {
+                            onDateRangeChange(range)
+                        }
+                    }}
+                />
             </div>
 
             {/* KPI Bar */}

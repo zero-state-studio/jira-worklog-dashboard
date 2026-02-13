@@ -161,6 +161,7 @@ async def create_user(user: UserCreate, current_user: CurrentUser = Depends(requ
         last_name=created["last_name"],
         team_id=created["team_id"],
         team_name=created["team_name"],
+        is_active=created.get("is_active", True),
         created_at=created["created_at"],
         updated_at=created["updated_at"],
         jira_accounts=created["jira_accounts"]
@@ -183,6 +184,7 @@ async def get_user(user_id: int, current_user: CurrentUser = Depends(get_current
         last_name=user["last_name"],
         team_id=user["team_id"],
         team_name=user["team_name"],
+        is_active=user.get("is_active", True),
         created_at=user["created_at"],
         updated_at=user["updated_at"],
         jira_accounts=user["jira_accounts"]
@@ -231,6 +233,7 @@ async def update_user(user_id: int, user: UserUpdate, current_user: CurrentUser 
         last_name=updated["last_name"],
         team_id=updated["team_id"],
         team_name=updated["team_name"],
+        is_active=updated.get("is_active", True),
         created_at=updated["created_at"],
         updated_at=updated["updated_at"],
         jira_accounts=updated["jira_accounts"]
@@ -239,7 +242,11 @@ async def update_user(user_id: int, user: UserUpdate, current_user: CurrentUser 
 
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: int, current_user: CurrentUser = Depends(require_admin)):
-    """Delete a user (ADMIN only)."""
+    """Soft delete a user (marks as inactive) - ADMIN only.
+
+    This preserves all historical worklog data while hiding the user from active lists.
+    The user's worklogs, billing data, and reports remain intact.
+    """
     storage = get_storage()
 
     existing = await storage.get_user(user_id, current_user.company_id)
@@ -247,7 +254,25 @@ async def delete_user(user_id: int, current_user: CurrentUser = Depends(require_
         raise HTTPException(status_code=404, detail="User not found")
 
     await storage.delete_user(user_id, current_user.company_id)
-    return {"success": True, "message": "User deleted"}
+    return {"success": True, "message": "User deactivated (soft delete)"}
+
+
+@router.post("/users/{user_id}/reactivate")
+async def reactivate_user(user_id: int, current_user: CurrentUser = Depends(require_admin)):
+    """Reactivate a soft-deleted user - ADMIN only.
+
+    Restores a previously deactivated user, allowing them to appear in active lists again.
+    """
+    storage = get_storage()
+
+    # Note: We need to query the user without is_active filter to find deactivated users
+    # For now, just try to reactivate and check if it succeeded
+    success = await storage.reactivate_user(user_id, current_user.company_id)
+
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found or already active")
+
+    return {"success": True, "message": "User reactivated"}
 
 
 def extract_name_from_email(email: str) -> tuple[str, str]:

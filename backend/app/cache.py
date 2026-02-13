@@ -1706,7 +1706,7 @@ class WorklogStorage:
                        o.email as owner_email, o.first_name as owner_first_name,
                        o.last_name as owner_last_name
                 FROM teams t
-                LEFT JOIN users u ON u.team_id = t.id AND u.company_id = ?
+                LEFT JOIN users u ON u.team_id = t.id AND u.company_id = ? AND u.is_active = 1
                 LEFT JOIN oauth_users o ON o.id = t.owner_id AND o.company_id = ?
                 WHERE t.company_id = ?
                 GROUP BY t.id
@@ -1888,10 +1888,10 @@ class WorklogStorage:
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT u.id, u.email, u.first_name, u.last_name, u.team_id,
-                       u.created_at, u.updated_at, t.name as team_name
+                       u.created_at, u.updated_at, t.name as team_name, u.is_active
                 FROM users u
                 LEFT JOIN teams t ON t.id = u.team_id AND t.company_id = ?
-                WHERE u.id = ? AND u.company_id = ?
+                WHERE u.id = ? AND u.company_id = ? AND u.is_active = 1
             """, (company_id, user_id, company_id)) as cursor:
                 row = await cursor.fetchone()
                 if not row:
@@ -1906,6 +1906,7 @@ class WorklogStorage:
                     "created_at": row[5],
                     "updated_at": row[6],
                     "team_name": row[7],
+                    "is_active": bool(row[8]),
                     "jira_accounts": []
                 }
 
@@ -1939,7 +1940,7 @@ class WorklogStorage:
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND company_id = ?",
+                "SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND company_id = ? AND is_active = 1",
                 (email, company_id)
             ) as cursor:
                 row = await cursor.fetchone()
@@ -1967,10 +1968,10 @@ class WorklogStorage:
             async with db.execute("""
                 SELECT u.id, u.email, u.first_name, u.last_name, u.team_id,
                        u.created_at, u.updated_at, t.name as team_name,
-                       u.role, u.role_level
+                       u.role, u.role_level, u.is_active
                 FROM users u
                 LEFT JOIN teams t ON t.id = u.team_id AND t.company_id = ?
-                WHERE u.company_id = ?
+                WHERE u.company_id = ? AND u.is_active = 1
                 ORDER BY u.last_name, u.first_name
             """, (company_id, company_id)) as cursor:
                 async for row in cursor:
@@ -1985,6 +1986,7 @@ class WorklogStorage:
                         "team_name": row[7],
                         "role": row[8],
                         "role_level": row[9],
+                        "is_active": bool(row[10]),
                         "jira_accounts": []
                     })
 
@@ -2030,7 +2032,7 @@ class WorklogStorage:
                 SELECT u.id, u.email, u.first_name, u.last_name, u.team_id,
                        u.created_at, u.updated_at
                 FROM users u
-                WHERE u.team_id = ? AND u.company_id = ?
+                WHERE u.team_id = ? AND u.company_id = ? AND u.is_active = 1
                 ORDER BY u.last_name, u.first_name
             """, (team_id, company_id)) as cursor:
                 async for row in cursor:
@@ -2081,7 +2083,10 @@ class WorklogStorage:
             return cursor.rowcount > 0
 
     async def delete_user(self, user_id: int, company_id: int) -> bool:
-        """Delete a user and their JIRA accounts for a specific company.
+        """Soft delete a user (marks as inactive) for a specific company.
+
+        This preserves all historical worklog data while preventing the user
+        from appearing in active user lists and from logging in.
 
         Args:
             user_id: User ID to delete
@@ -2096,9 +2101,33 @@ class WorklogStorage:
             raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
-            # JIRA accounts will be deleted by CASCADE
+            # Soft delete: mark user as inactive instead of hard delete
+            # This preserves worklog history, billing data, and reports
             cursor = await db.execute(
-                "DELETE FROM users WHERE id = ? AND company_id = ?",
+                "UPDATE users SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?",
+                (user_id, company_id)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def reactivate_user(self, user_id: int, company_id: int) -> bool:
+        """Reactivate a soft-deleted user for a specific company.
+
+        Args:
+            user_id: User ID to reactivate
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            True if reactivated, False if user not found or doesn't belong to company
+        """
+        await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "UPDATE users SET is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?",
                 (user_id, company_id)
             )
             await db.commit()
