@@ -307,7 +307,6 @@ class DashboardResponse(BaseModel):
     expected_hours: float
     completion_percentage: float
     teams: list[TeamHours]
-    daily_trend: list[DailyHours]
     top_epics: list[EpicHours]
     top_projects: list[EpicHours] = []
     period_start: date

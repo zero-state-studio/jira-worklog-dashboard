@@ -2565,14 +2565,15 @@ class WorklogStorage:
                     "members": []
                 }
 
-            # Get members (only from same company)
+            # Get members (only from same company), primary instance first
             async with db.execute("""
                 SELECT ji.id, ji.name, ji.url
                 FROM complementary_group_members cgm
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
-                WHERE cgm.group_id = ? AND cgm.company_id = ? AND ji.company_id = ?
-                ORDER BY ji.name
-            """, (group_id, company_id, company_id)) as cursor:
+                JOIN complementary_groups cg ON cg.id = cgm.group_id
+                WHERE cgm.group_id = ? AND cgm.company_id = ? AND ji.company_id = ? AND cg.company_id = ?
+                ORDER BY CASE WHEN ji.id = cg.primary_instance_id THEN 0 ELSE 1 END, ji.name
+            """, (group_id, company_id, company_id, company_id)) as cursor:
                 async for row in cursor:
                     group["members"].append({
                         "id": row[0],
@@ -2617,17 +2618,18 @@ class WorklogStorage:
                         "members": []
                     })
 
-            # Get members for all groups (only from same company)
+            # Get members for all groups (only from same company), primary instance first
             group_ids = [g["id"] for g in groups]
             if group_ids:
                 placeholders = ",".join("?" * len(group_ids))
-                params = group_ids + [company_id, company_id]
+                params = group_ids + [company_id, company_id, company_id]
                 async with db.execute(f"""
                     SELECT cgm.group_id, ji.id, ji.name, ji.url
                     FROM complementary_group_members cgm
                     JOIN jira_instances ji ON ji.id = cgm.instance_id
-                    WHERE cgm.group_id IN ({placeholders}) AND cgm.company_id = ? AND ji.company_id = ?
-                    ORDER BY ji.name
+                    JOIN complementary_groups cg ON cg.id = cgm.group_id
+                    WHERE cgm.group_id IN ({placeholders}) AND cgm.company_id = ? AND ji.company_id = ? AND cg.company_id = ?
+                    ORDER BY CASE WHEN ji.id = cg.primary_instance_id THEN 0 ELSE 1 END, ji.name
                 """, params) as cursor:
                     async for row in cursor:
                         group_id, inst_id, inst_name, inst_url = row
@@ -2920,7 +2922,7 @@ class WorklogStorage:
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
                 JOIN complementary_groups cg ON cg.id = cgm.group_id
                 WHERE cgm.group_id = ? AND cgm.company_id = ? AND cg.company_id = ? AND ji.company_id = ?
-                ORDER BY ji.name
+                ORDER BY CASE WHEN ji.id = cg.primary_instance_id THEN 0 ELSE 1 END, ji.name
             """, (group_id, company_id, company_id, company_id)) as cursor:
                 async for row in cursor:
                     names.append(row[0])
