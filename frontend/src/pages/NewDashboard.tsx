@@ -52,6 +52,7 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [selectedProjectInstance, setSelectedProjectInstance] = useState<string | null>(null)
   const [multiJiraOverview, setMultiJiraOverview] = useState<any>(null)
+  const [instanceProjects, setInstanceProjects] = useState<{ [key: string]: any[] }>({})
 
   const handlePeriodChange = (period: PeriodPreset) => {
     setSelectedPeriod(period)
@@ -183,6 +184,32 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
     fetchMetadata()
   }, [dateRange.startDate, dateRange.endDate])
 
+  // Fetch projects for selected instance when tab changes
+  useEffect(() => {
+    const fetchInstanceProjects = async () => {
+      if (!selectedProjectInstance) return
+
+      // Skip if already loaded
+      if (instanceProjects[selectedProjectInstance]) return
+
+      try {
+        const result = await getDashboard(
+          dateRange.startDate,
+          dateRange.endDate,
+          selectedProjectInstance
+        )
+        setInstanceProjects(prev => ({
+          ...prev,
+          [selectedProjectInstance]: result.top_projects || []
+        }))
+      } catch (err) {
+        console.error(`[Dashboard] Failed to fetch projects for ${selectedProjectInstance}:`, err)
+      }
+    }
+
+    fetchInstanceProjects()
+  }, [selectedProjectInstance, dateRange.startDate, dateRange.endDate])
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -253,9 +280,9 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
     ? selectedProjectInstance
     : projectInstances[0] || null
 
-  // Filter projects by selected instance
+  // Get projects for selected instance (from cache or fallback to filter)
   const filteredProjects = activeProjectInstance
-    ? allProjects.filter((p: any) => p.jira_instance === activeProjectInstance)
+    ? (instanceProjects[activeProjectInstance] || allProjects.filter((p: any) => p.jira_instance === activeProjectInstance))
     : allProjects
 
   const top5Projects = filteredProjects.slice(0, 5)
