@@ -9,7 +9,7 @@ import { getInstanceColor } from '../components/WorklogCalendar/calendarUtils'
 import WorklogCalendar from '../components/WorklogCalendar'
 
 export default function UserView({ dateRange, selectedInstance }) {
-    const { email } = useParams()
+    const { userId } = useParams()
     const navigate = useNavigate()
     const [data, setData] = useState(null)
     const [loading, setLoading] = useState(true)
@@ -22,7 +22,7 @@ export default function UserView({ dateRange, selectedInstance }) {
         try {
             setLoading(true)
             setError(null)
-            const result = await getUserDetail(email, dateRange.startDate, dateRange.endDate, selectedInstance)
+            const result = await getUserDetail(parseInt(userId), dateRange.startDate, dateRange.endDate, selectedInstance)
             setData(result)
 
             if (!selectedInstance) {
@@ -52,7 +52,7 @@ export default function UserView({ dateRange, selectedInstance }) {
         } finally {
             setLoading(false)
         }
-    }, [email, dateRange.startDate, dateRange.endDate, selectedInstance])
+    }, [userId, dateRange.startDate, dateRange.endDate, selectedInstance])
 
     useEffect(() => {
         fetchData()
@@ -60,7 +60,7 @@ export default function UserView({ dateRange, selectedInstance }) {
 
     if (loading) {
         return (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-6 animate-slide-up">
                 <div className="glass-card p-6">
                     <div className="loading-shimmer h-16 w-16 rounded-full mb-4" />
                     <div className="loading-shimmer h-8 w-1/3 rounded mb-2" />
@@ -89,7 +89,7 @@ export default function UserView({ dateRange, selectedInstance }) {
 
     if (isDataEmpty) {
         return (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-6 animate-slide-up">
                 <div className="glass-card p-6">
                     <div className="flex items-start gap-4">
                         <button
@@ -100,7 +100,7 @@ export default function UserView({ dateRange, selectedInstance }) {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                             </svg>
                         </button>
-                        <div className="w-16 h-16 rounded-full bg-gradient-primary flex items-center justify-center flex-shrink-0 shadow-glow">
+                        <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center flex-shrink-0 ">
                             <span className="text-white font-bold text-xl">{initials}</span>
                         </div>
                         <div className="flex-1">
@@ -236,7 +236,7 @@ export default function UserView({ dateRange, selectedInstance }) {
     }
 
     return (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-6 animate-slide-up">
             {/* Header */}
             <div className="glass-card p-6">
                 <div className="flex items-start gap-4">
@@ -249,7 +249,7 @@ export default function UserView({ dateRange, selectedInstance }) {
                         </svg>
                     </button>
 
-                    <div className="w-16 h-16 rounded-full bg-gradient-primary flex items-center justify-center flex-shrink-0 shadow-glow">
+                    <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center flex-shrink-0 ">
                         <span className="text-white font-bold text-xl">{initials}</span>
                     </div>
 
@@ -260,7 +260,7 @@ export default function UserView({ dateRange, selectedInstance }) {
                     </div>
 
                     <div className="text-right">
-                        <p className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+                        <p className="text-3xl font-bold bg-accent bg-clip-text text-transparent">
                             {formatHours(data.total_hours)}
                         </p>
                         <p className="text-dark-400 text-sm">su {formatHours(data.expected_hours)} previste</p>
@@ -399,7 +399,6 @@ export default function UserView({ dateRange, selectedInstance }) {
                 <WorklogCalendar
                     worklogs={data.worklogs}
                     leaves={leaves}
-                    onUserClick={(email) => navigate(`/app/users/${encodeURIComponent(email)}`)}
                 />
             </div>
         </div>

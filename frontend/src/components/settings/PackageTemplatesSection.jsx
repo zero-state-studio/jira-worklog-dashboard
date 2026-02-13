@@ -97,14 +97,14 @@ export default function PackageTemplatesSection() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-lg font-semibold text-dark-100">Template Pacchetti</h3>
-                    <p className="text-sm text-dark-400 mt-1">
+                    <h3 className="text-lg font-semibold text-primary">Template Pacchetti</h3>
+                    <p className="text-sm text-tertiary mt-1">
                         Configura i template per la creazione di pacchetti di issue JIRA
                     </p>
                 </div>
                 <button
                     onClick={handleCreate}
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity"
+                    className="flex items-center gap-2 px-4 py-2 bg-accent text-white font-medium rounded-lg  hover:opacity-90 transition-opacity"
                 >
                     <PlusIcon />
                     Nuovo Template
@@ -120,11 +120,11 @@ export default function PackageTemplatesSection() {
             {/* Templates list */}
             {templates.length === 0 ? (
                 <div className="glass-card p-12 text-center">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-dark-700 flex items-center justify-center">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-lg bg-surface flex items-center justify-center">
                         <PackageIcon />
                     </div>
-                    <h4 className="text-lg font-medium text-dark-200 mb-2">Nessun template</h4>
-                    <p className="text-dark-400 text-sm mb-4">
+                    <h4 className="text-lg font-medium text-secondary mb-2">Nessun template</h4>
+                    <p className="text-tertiary text-sm mb-4">
                         Crea il primo template per iniziare a creare pacchetti di issue
                     </p>
                     <button
@@ -139,7 +139,7 @@ export default function PackageTemplatesSection() {
                     {templates.map((template) => (
                         <div
                             key={template.id}
-                            className="glass-card p-5 hover:border-dark-600 transition-colors"
+                            className="glass-card p-5 hover:border-solid transition-colors"
                         >
                             <div className="flex items-start justify-between">
                                 <div className="flex-1">
@@ -148,9 +148,9 @@ export default function PackageTemplatesSection() {
                                             <PackageIcon />
                                         </div>
                                         <div>
-                                            <h4 className="font-semibold text-dark-100">{template.name}</h4>
+                                            <h4 className="font-semibold text-primary">{template.name}</h4>
                                             {template.description && (
-                                                <p className="text-sm text-dark-400">{template.description}</p>
+                                                <p className="text-sm text-tertiary">{template.description}</p>
                                             )}
                                         </div>
                                     </div>
@@ -174,7 +174,7 @@ export default function PackageTemplatesSection() {
                                         {template.elements.map((element, idx) => (
                                             <span
                                                 key={idx}
-                                                className="px-2.5 py-1 text-xs font-medium bg-dark-700 text-dark-200 rounded-full border border-dark-600"
+                                                className="px-2.5 py-1 text-xs font-medium bg-surface text-secondary rounded-full border border-solid"
                                             >
                                                 {typeof element === 'string' ? element : element.name}
                                             </span>
@@ -182,9 +182,9 @@ export default function PackageTemplatesSection() {
                                     </div>
 
                                     {/* Issue type info */}
-                                    <div className="flex items-center gap-4 mt-2 ml-12 text-xs text-dark-400">
-                                        <span>Parent: <span className="text-dark-300">{template.parent_issue_type}</span></span>
-                                        <span>Figli: <span className="text-dark-300">{template.child_issue_type}</span></span>
+                                    <div className="flex items-center gap-4 mt-2 ml-12 text-xs text-tertiary">
+                                        <span>Parent: <span className="text-secondary">{template.parent_issue_type}</span></span>
+                                        <span>Figli: <span className="text-secondary">{template.child_issue_type}</span></span>
                                         <span>{template.elements.length} elementi</span>
                                     </div>
                                 </div>
@@ -193,14 +193,14 @@ export default function PackageTemplatesSection() {
                                 <div className="flex items-center gap-1">
                                     <button
                                         onClick={() => handleEdit(template)}
-                                        className="p-2 rounded-lg text-dark-400 hover:text-dark-100 hover:bg-dark-700 transition-colors"
+                                        className="p-2 rounded-lg text-tertiary hover:text-primary hover:bg-surface transition-colors"
                                         title="Modifica"
                                     >
                                         <EditIcon />
                                     </button>
                                     <button
                                         onClick={() => setDeleteConfirm(template)}
-                                        className="p-2 rounded-lg text-dark-400 hover:text-accent-red hover:bg-dark-700 transition-colors"
+                                        className="p-2 rounded-lg text-tertiary hover:text-accent-red hover:bg-surface transition-colors"
                                         title="Elimina"
                                     >
                                         <TrashIcon />
@@ -225,19 +225,19 @@ export default function PackageTemplatesSection() {
             {deleteConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center">
                     <div
-                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                         onClick={() => setDeleteConfirm(null)}
                     />
-                    <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 border border-dark-700 p-6 animate-fade-in">
-                        <h3 className="text-lg font-bold text-dark-100 mb-2">Conferma Eliminazione</h3>
-                        <p className="text-dark-300 text-sm mb-6">
-                            Eliminare il template "<span className="text-dark-100">{deleteConfirm.name}</span>"?
+                    <div className="relative bg-surface rounded-lg shadow-lg w-full max-w-sm mx-4 border border-solid p-6 animate-slide-up">
+                        <h3 className="text-lg font-bold text-primary mb-2">Conferma Eliminazione</h3>
+                        <p className="text-secondary text-sm mb-6">
+                            Eliminare il template "<span className="text-primary">{deleteConfirm.name}</span>"?
                             Questa azione non puo essere annullata.
                         </p>
                         <div className="flex justify-end gap-3">
                             <button
                                 onClick={() => setDeleteConfirm(null)}
-                                className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors"
+                                className="px-4 py-2 text-secondary hover:text-primary transition-colors"
                             >
                                 Annulla
                             </button>

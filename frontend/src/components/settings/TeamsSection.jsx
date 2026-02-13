@@ -82,10 +82,10 @@ export default function TeamsSection({ teams, onTeamsChange }) {
         <div className="glass-card p-6">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-semibold text-dark-100">Team</h2>
+                <h2 className="text-lg font-semibold text-primary">Team</h2>
                 <button
                     onClick={handleCreate}
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity"
+                    className="flex items-center gap-2 px-4 py-2 bg-accent text-white font-medium rounded-lg  hover:opacity-90 transition-opacity"
                 >
                     <PlusIcon />
                     Aggiungi Team
@@ -94,7 +94,7 @@ export default function TeamsSection({ teams, onTeamsChange }) {
 
             {/* Error */}
             {error && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-error text-sm">
                     {error}
                 </div>
             )}
@@ -102,9 +102,9 @@ export default function TeamsSection({ teams, onTeamsChange }) {
             {/* Table */}
             {teams.length === 0 ? (
                 <div className="text-center py-12">
-                    <UsersIcon className="w-12 h-12 text-dark-500 mx-auto mb-4" />
-                    <p className="text-dark-400">Nessun team configurato</p>
-                    <p className="text-dark-500 text-sm mt-1">
+                    <UsersIcon className="w-12 h-12 text-tertiary mx-auto mb-4" />
+                    <p className="text-tertiary">Nessun team configurato</p>
+                    <p className="text-tertiary text-sm mt-1">
                         Crea un nuovo team o importa dalla configurazione
                     </p>
                 </div>
@@ -120,9 +120,9 @@ export default function TeamsSection({ teams, onTeamsChange }) {
                         </thead>
                         <tbody>
                             {teams.map((team) => (
-                                <tr key={team.id} className="hover:bg-dark-700/30 transition-colors">
+                                <tr key={team.id} className="hover:bg-surface/30 transition-colors">
                                     <td className="table-cell">
-                                        <span className="font-medium text-dark-100">{team.name}</span>
+                                        <span className="font-medium text-primary">{team.name}</span>
                                     </td>
                                     <td className="table-cell text-center">
                                         <span className="badge-blue">{team.member_count}</span>
@@ -131,14 +131,14 @@ export default function TeamsSection({ teams, onTeamsChange }) {
                                         <div className="flex items-center justify-end gap-2">
                                             <button
                                                 onClick={() => handleEdit(team)}
-                                                className="p-2 text-dark-400 hover:text-accent-blue hover:bg-dark-700 rounded-lg transition-colors"
+                                                className="p-2 text-tertiary hover:text-accent-blue hover:bg-surface rounded-lg transition-colors"
                                                 title="Modifica"
                                             >
                                                 <EditIcon />
                                             </button>
                                             <button
                                                 onClick={() => setDeleteConfirm(team)}
-                                                className="p-2 text-dark-400 hover:text-red-400 hover:bg-dark-700 rounded-lg transition-colors"
+                                                className="p-2 text-tertiary hover:text-error hover:bg-surface rounded-lg transition-colors"
                                                 title="Elimina"
                                             >
                                                 <TrashIcon />
@@ -169,14 +169,14 @@ export default function TeamsSection({ teams, onTeamsChange }) {
             {deleteConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center">
                     <div
-                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                         onClick={() => setDeleteConfirm(null)}
                     />
-                    <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 border border-dark-700 p-6">
-                        <h3 className="text-lg font-semibold text-dark-100 mb-2">
+                    <div className="relative bg-surface rounded-lg shadow-lg w-full max-w-md mx-4 border border-solid p-6">
+                        <h3 className="text-lg font-semibold text-primary mb-2">
                             Conferma eliminazione
                         </h3>
-                        <p className="text-dark-300 mb-6">
+                        <p className="text-secondary mb-6">
                             Sei sicuro di voler eliminare il team <strong>"{deleteConfirm.name}"</strong>?
                             {deleteConfirm.member_count > 0 && (
                                 <span className="block mt-2 text-yellow-400 text-sm">
@@ -187,7 +187,7 @@ export default function TeamsSection({ teams, onTeamsChange }) {
                         <div className="flex justify-end gap-3">
                             <button
                                 onClick={() => setDeleteConfirm(null)}
-                                className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors"
+                                className="px-4 py-2 text-secondary hover:text-primary transition-colors"
                             >
                                 Annulla
                             </button>

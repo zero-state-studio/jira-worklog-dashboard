@@ -49,6 +49,61 @@ AND date(started) >= '2025-01-01';
    - Before: Company A and B can't both have "Engineering" team
    - After: Each company has its own namespace
 
+---
+
+### Phase 3: Complementary Group Members Security (Critical - 10 min Downtime)
+**File**: `003_add_company_id_to_complementary_members.sql`
+**Duration**: 10 minutes
+**Impact**: Critical for multi-tenant security
+**Downtime**: 10 minutes (requires application stop)
+**Added**: 2026-02-12
+
+**What it fixes**:
+
+1. **complementary_group_members Table**: Missing `company_id` column
+   - Before: No direct company scoping on junction table (security risk)
+   - After: Explicit `company_id NOT NULL` with proper indexes
+   - Security: Prevents cross-company data leakage in complementary groups
+
+**What it does**:
+- Adds `company_id` column to `complementary_group_members`
+- Populates from parent `complementary_groups.company_id`
+- Recreates table with NOT NULL constraint
+- Adds index `idx_complementary_members_company`
+- Updates all queries to filter by `company_id`
+
+**Deployment**:
+```bash
+# STOP APPLICATION FIRST
+systemctl stop worklog-dashboard
+
+# Backup database
+cp worklog.db worklog.db.backup-$(date +%Y%m%d-%H%M%S)
+
+# Run migration
+sqlite3 worklog.db < migrations/003_add_company_id_to_complementary_members.sql
+
+# Verify (should return 0)
+sqlite3 worklog.db "SELECT COUNT(*) FROM complementary_group_members WHERE company_id IS NULL;"
+
+# Verify data integrity (should return 0)
+sqlite3 worklog.db "
+SELECT COUNT(*) FROM complementary_group_members cgm
+JOIN complementary_groups cg ON cg.id = cgm.group_id
+WHERE cgm.company_id != cg.company_id;
+"
+
+# START APPLICATION
+systemctl start worklog-dashboard
+```
+
+**Rollback** (if needed):
+```bash
+# Restore backup
+cp worklog.db.backup-YYYYMMDD-HHMMSS worklog.db
+systemctl restart worklog-dashboard
+```
+
 2. **Users Table**: `UNIQUE(email)` → `UNIQUE(company_id, email)`
    - Before: user@example.com unique across all companies
    - After: Each company can have user@example.com

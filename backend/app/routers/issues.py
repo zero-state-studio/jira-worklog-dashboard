@@ -15,9 +15,40 @@ from ..auth.dependencies import get_current_user, require_admin, CurrentUser
 router = APIRouter(prefix="/api/issues", tags=["issues"])
 
 
+def enrich_worklogs_with_user_data(worklogs: list[Worklog], users: list[dict]) -> list[Worklog]:
+    """Enrich worklogs with user IDs from database."""
+    # Build email -> user_id lookup
+    email_to_user_id = {u["email"].lower(): u["id"] for u in users}
+
+    enriched = []
+    for wl in worklogs:
+        email_lower = wl.author_email.lower()
+        user_id = email_to_user_id.get(email_lower)
+
+        enriched.append(Worklog(
+            id=wl.id,
+            issue_key=wl.issue_key,
+            issue_summary=wl.issue_summary,
+            author_email=wl.author_email,
+            author_user_id=user_id,
+            author_display_name=wl.author_display_name,
+            time_spent_seconds=wl.time_spent_seconds,
+            started=wl.started,
+            jira_instance=wl.jira_instance,
+            parent_key=wl.parent_key,
+            parent_name=wl.parent_name,
+            parent_type=wl.parent_type,
+            epic_key=wl.epic_key,
+            epic_name=wl.epic_name
+        ))
+
+    return enriched
+
+
 class UserHours(BaseModel):
     """Hours worked by a user on this issue."""
     email: str
+    user_id: Optional[int] = None
     display_name: str
     total_hours: float
 
@@ -64,6 +95,10 @@ async def get_issue_detail(
     if not start_date:
         start_date = end_date - timedelta(days=90)
 
+    # Get users from database for user_id mapping (scoped to company)
+    users = await get_users_from_db(current_user.company_id)
+    email_to_user_id = {u["email"].lower(): u["id"] for u in users}
+
     # Get all worklogs for this issue (scoped to company)
     all_worklogs = await storage.get_worklogs_in_range(start_date, end_date, company_id=current_user.company_id)
     issue_worklogs = [w for w in all_worklogs if w.issue_key == issue_key]
@@ -108,6 +143,7 @@ async def get_issue_detail(
     contributors = [
         UserHours(
             email=email,
+            user_id=email_to_user_id.get(email.lower()),
             display_name=data["display_name"],
             total_hours=data["seconds"] / 3600
         )
@@ -129,8 +165,11 @@ async def get_issue_detail(
         for d, s in sorted(daily_seconds.items())
     ]
 
+    # Enrich worklogs with user IDs
+    enriched_worklogs = enrich_worklogs_with_user_data(issue_worklogs, users)
+
     # Sort worklogs by date (most recent first)
-    sorted_worklogs = sorted(issue_worklogs, key=lambda w: w.started, reverse=True)
+    sorted_worklogs = sorted(enriched_worklogs, key=lambda w: w.started, reverse=True)
 
     return IssueDetailResponse(
         issue_key=issue_key,

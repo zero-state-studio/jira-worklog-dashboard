@@ -25,15 +25,15 @@ function CustomTooltip({ active, payload, label, formatter }) {
     if (!active || !payload?.length) return null
 
     return (
-        <div className="bg-dark-800 border border-dark-600 rounded-lg p-3 shadow-xl">
-            <p className="text-dark-300 text-sm mb-2">{label}</p>
+        <div className="bg-surface border border-strong rounded-lg p-3 shadow-md">
+            <p className="text-secondary text-sm mb-2">{label}</p>
             {payload.map((entry, index) => (
                 <div key={index} className="flex items-center gap-2">
                     <div
                         className="w-3 h-3 rounded-full"
                         style={{ backgroundColor: entry.color }}
                     />
-                    <span className="text-dark-200 font-medium">
+                    <span className="text-primary font-medium">
                         {formatter ? formatter(entry.value) : entry.value}
                     </span>
                 </div>
@@ -57,22 +57,22 @@ export function TrendChart({ data, dataKey = 'hours', height = 300 }) {
             <AreaChart data={formattedData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                     <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#667eea" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#667eea" stopOpacity={0} />
+                        <stop offset="5%" stopColor="var(--color-accent)" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="var(--color-accent)" stopOpacity={0} />
                     </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#30363d" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
                 <XAxis
                     dataKey="dateLabel"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: '#8b949e', fontSize: 12 }}
+                    tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
                     dy={10}
                 />
                 <YAxis
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: '#8b949e', fontSize: 12 }}
+                    tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
                     tickFormatter={(value) => `${value}h`}
                     dx={-10}
                 />
@@ -82,11 +82,11 @@ export function TrendChart({ data, dataKey = 'hours', height = 300 }) {
                 <Area
                     type="monotone"
                     dataKey={dataKey}
-                    stroke="#667eea"
+                    stroke="var(--color-accent)"
                     strokeWidth={2}
                     fill="url(#colorHours)"
                     dot={false}
-                    activeDot={{ r: 6, fill: '#667eea', stroke: '#fff', strokeWidth: 2 }}
+                    activeDot={{ r: 6, fill: 'var(--color-accent)', stroke: '#fff', strokeWidth: 2 }}
                     animationDuration={800}
                     animationEasing="ease-out"
                 />
@@ -107,12 +107,12 @@ export function ComparisonBarChart({ data, dataKey = 'total_hours', nameKey = 'n
                     layout="vertical"
                     margin={{ top: 10, right: 30, left: 100, bottom: 10 }}
                 >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#30363d" horizontal={true} vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={true} vertical={false} />
                     <XAxis
                         type="number"
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fill: '#8b949e', fontSize: 12 }}
+                        tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
                         tickFormatter={(value) => `${value}h`}
                     />
                     <YAxis
@@ -120,7 +120,7 @@ export function ComparisonBarChart({ data, dataKey = 'total_hours', nameKey = 'n
                         dataKey={nameKey}
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fill: '#c9d1d9', fontSize: 12 }}
+                        tick={{ fill: 'var(--color-text-primary)', fontSize: 12 }}
                         width={90}
                     />
                     <Tooltip
@@ -146,18 +146,18 @@ export function ComparisonBarChart({ data, dataKey = 'total_hours', nameKey = 'n
     return (
         <ResponsiveContainer width="100%" height={height}>
             <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#30363d" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
                 <XAxis
                     dataKey={nameKey}
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: '#8b949e', fontSize: 12 }}
+                    tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
                     dy={10}
                 />
                 <YAxis
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: '#8b949e', fontSize: 12 }}
+                    tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
                     tickFormatter={(value) => `${value}h`}
                     dx={-10}
                 />
@@ -191,12 +191,12 @@ export function GroupedBarChart({ data, keys, height = 300, colors = chartColors
                 layout="vertical"
                 margin={{ top: 10, right: 30, left: 100, bottom: 10 }}
             >
-                <CartesianGrid strokeDasharray="3 3" stroke="#30363d" horizontal vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal vertical={false} />
                 <XAxis
                     type="number"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: '#8b949e', fontSize: 12 }}
+                    tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
                     tickFormatter={(value) => `${value}h`}
                 />
                 <YAxis
@@ -204,20 +204,20 @@ export function GroupedBarChart({ data, keys, height = 300, colors = chartColors
                     dataKey="name"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: '#c9d1d9', fontSize: 12 }}
+                    tick={{ fill: 'var(--color-text-primary)', fontSize: 12 }}
                     width={90}
                 />
                 <Tooltip
                     content={({ active, payload, label }) => {
                         if (!active || !payload?.length) return null
                         return (
-                            <div className="bg-dark-800 border border-dark-600 rounded-lg p-3 shadow-xl">
-                                <p className="text-dark-300 text-sm mb-2">{payload[0]?.payload?.full_name || label}</p>
+                            <div className="bg-surface border border-strong rounded-lg p-3 shadow-md">
+                                <p className="text-secondary text-sm mb-2">{payload[0]?.payload?.full_name || label}</p>
                                 {payload.map((entry, index) => (
                                     <div key={index} className="flex items-center gap-2">
                                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
-                                        <span className="text-dark-400 text-sm">{entry.name}:</span>
-                                        <span className="text-dark-200 font-medium">{formatHours(entry.value)}</span>
+                                        <span className="text-secondary text-sm">{entry.name}:</span>
+                                        <span className="text-primary font-medium">{formatHours(entry.value)}</span>
                                     </div>
                                 ))}
                             </div>
@@ -227,7 +227,7 @@ export function GroupedBarChart({ data, keys, height = 300, colors = chartColors
                 <Legend
                     verticalAlign="top"
                     height={36}
-                    wrapperStyle={{ color: '#c9d1d9', fontSize: 12 }}
+                    wrapperStyle={{ color: 'var(--color-text-primary)', fontSize: 12 }}
                 />
                 {keys.map((key, i) => (
                     <Bar
@@ -308,10 +308,10 @@ export function DistributionChart({ data, dataKey = 'value', nameKey = 'name', h
                             if (!active || !payload?.length) return null
                             const item = payload[0]
                             return (
-                                <div className="bg-dark-800 border border-dark-600 rounded-lg p-3 shadow-xl">
-                                    <p className="text-dark-200 font-medium">{item.payload.full_name || item.name}</p>
-                                    <p className="text-dark-300">{formatHours(item.value)}</p>
-                                    <p className="text-dark-400 text-sm">
+                                <div className="bg-surface border border-strong rounded-lg p-3 shadow-md">
+                                    <p className="text-primary font-medium">{item.payload.full_name || item.name}</p>
+                                    <p className="text-secondary">{formatHours(item.value)}</p>
+                                    <p className="text-tertiary text-sm">
                                         {((item.value / total) * 100).toFixed(1)}% del totale
                                     </p>
                                 </div>
@@ -335,7 +335,7 @@ export function DistributionChart({ data, dataKey = 'value', nameKey = 'name', h
                                 className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                                 style={{ backgroundColor: color }}
                             />
-                            <span className="text-dark-300">{item.full_name || item[nameKey]}</span>
+                            <span className="text-secondary">{item.full_name || item[nameKey]}</span>
                         </button>
                     )
                 })}
@@ -376,18 +376,18 @@ export function MultiTrendChart({ series, height = 300 }) {
                         </linearGradient>
                     ))}
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#30363d" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
                 <XAxis
                     dataKey="dateLabel"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: '#8b949e', fontSize: 12 }}
+                    tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
                     dy={10}
                 />
                 <YAxis
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: '#8b949e', fontSize: 12 }}
+                    tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
                     tickFormatter={(value) => `${value}h`}
                     dx={-10}
                 />
@@ -397,7 +397,7 @@ export function MultiTrendChart({ series, height = 300 }) {
                 <Legend
                     verticalAlign="top"
                     height={36}
-                    wrapperStyle={{ color: '#c9d1d9', fontSize: 12 }}
+                    wrapperStyle={{ color: 'var(--color-text-primary)', fontSize: 12 }}
                 />
                 {series.map((s, i) => (
                     <Area
@@ -424,10 +424,10 @@ export function MultiTrendChart({ series, height = 300 }) {
  */
 export function ChartCard({ title, subtitle, children, className = '' }) {
     return (
-        <div className={`glass-card p-6 ${className}`}>
+        <div className={`flat-card p-6 ${className}`}>
             <div className="mb-4">
-                <h3 className="font-semibold text-dark-100">{title}</h3>
-                {subtitle && <p className="text-sm text-dark-400">{subtitle}</p>}
+                <h3 className="font-semibold text-primary">{title}</h3>
+                {subtitle && <p className="text-sm text-secondary">{subtitle}</p>}
             </div>
             {children}
         </div>
@@ -443,14 +443,14 @@ export function Sparkline({ data, dataKey = 'hours', width = 100, height = 30 })
             <AreaChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                 <defs>
                     <linearGradient id="sparklineGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#667eea" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#667eea" stopOpacity={0} />
+                        <stop offset="5%" stopColor="var(--color-accent)" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="var(--color-accent)" stopOpacity={0} />
                     </linearGradient>
                 </defs>
                 <Area
                     type="monotone"
                     dataKey={dataKey}
-                    stroke="#667eea"
+                    stroke="var(--color-accent)"
                     strokeWidth={1.5}
                     fill="url(#sparklineGradient)"
                     dot={false}

@@ -126,7 +126,7 @@ export default function Profile() {
     if (error) {
         return (
             <div className="max-w-3xl mx-auto">
-                <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-6 py-4 rounded-xl">
+                <div className="bg-red-500/10 border border-red-500/30 text-error px-6 py-4 rounded-xl">
                     <strong>Errore:</strong> {error}
                 </div>
             </div>
@@ -144,14 +144,14 @@ export default function Profile() {
     return (
         <div className="max-w-3xl mx-auto space-y-6">
             {/* Page title */}
-            <h1 className="text-2xl font-bold text-dark-100">Il Mio Profilo</h1>
+            <h1 className="text-2xl font-bold text-primary">Il Mio Profilo</h1>
 
             {/* Save message toast */}
             {saveMessage && (
                 <div className={`px-4 py-3 rounded-lg text-sm ${
                     saveMessage.type === 'success'
-                        ? 'bg-accent-green/10 border border-accent-green/30 text-accent-green'
-                        : 'bg-red-500/10 border border-red-500/30 text-red-400'
+                        ? 'bg-accent-green/10 border border-accent-green/30 text-success'
+                        : 'bg-red-500/10 border border-red-500/30 text-error'
                 }`}>
                     {saveMessage.text}
                 </div>
@@ -159,13 +159,13 @@ export default function Profile() {
 
             {/* Personal Info Card */}
             <div className="glass-card p-6">
-                <h2 className="text-lg font-semibold text-dark-100 mb-6">Informazioni Personali</h2>
+                <h2 className="text-lg font-semibold text-primary mb-6">Informazioni Personali</h2>
                 <div className="flex items-start gap-6">
                     <UserAvatar user={profile} size="lg" />
                     <form onSubmit={handleSaveProfile} className="flex-1 space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-1.5">Nome</label>
+                                <label className="block text-sm font-medium text-secondary mb-1.5">Nome</label>
                                 <input
                                     type="text"
                                     value={firstName}
@@ -175,7 +175,7 @@ export default function Profile() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-1.5">Cognome</label>
+                                <label className="block text-sm font-medium text-secondary mb-1.5">Cognome</label>
                                 <input
                                     type="text"
                                     value={lastName}
@@ -186,7 +186,7 @@ export default function Profile() {
                             </div>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-dark-300 mb-1.5">Email</label>
+                            <label className="block text-sm font-medium text-secondary mb-1.5">Email</label>
                             <input
                                 type="email"
                                 value={profile?.email || ''}
@@ -195,7 +195,7 @@ export default function Profile() {
                             />
                         </div>
                         <div className="flex items-center gap-3">
-                            <span className="text-sm text-dark-300">Ruolo:</span>
+                            <span className="text-sm text-secondary">Ruolo:</span>
                             <span className={roleBadgeClass}>{profile?.role}</span>
                         </div>
                         <div className="pt-2">
@@ -209,10 +209,10 @@ export default function Profile() {
 
             {/* Organization Card */}
             <div className="glass-card p-6">
-                <h2 className="text-lg font-semibold text-dark-100 mb-4">Organizzazione</h2>
+                <h2 className="text-lg font-semibold text-primary mb-4">Organizzazione</h2>
                 <form onSubmit={handleSaveCompany} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-dark-300 mb-1.5">Nome Azienda</label>
+                        <label className="block text-sm font-medium text-secondary mb-1.5">Nome Azienda</label>
                         <input
                             type="text"
                             value={companyName}
@@ -222,7 +222,7 @@ export default function Profile() {
                             placeholder="Nome dell'azienda"
                         />
                         {!isAdmin && (
-                            <p className="text-xs text-dark-400 mt-1.5">Solo gli amministratori possono modificare il nome dell'azienda.</p>
+                            <p className="text-xs text-tertiary mt-1.5">Solo gli amministratori possono modificare il nome dell'azienda.</p>
                         )}
                     </div>
                     {isAdmin && (
@@ -237,12 +237,12 @@ export default function Profile() {
 
             {/* Session Card */}
             <div className="glass-card p-6">
-                <h2 className="text-lg font-semibold text-dark-100 mb-4">Sessione</h2>
+                <h2 className="text-lg font-semibold text-primary mb-4">Sessione</h2>
                 <div className="space-y-3">
                     {profile?.last_login && (
                         <div className="flex items-center gap-2 text-sm">
-                            <span className="text-dark-400">Ultimo accesso:</span>
-                            <span className="text-dark-200">
+                            <span className="text-tertiary">Ultimo accesso:</span>
+                            <span className="text-secondary">
                                 {new Date(profile.last_login).toLocaleString('it-IT', {
                                     day: '2-digit', month: 'long', year: 'numeric',
                                     hour: '2-digit', minute: '2-digit'
@@ -264,7 +264,7 @@ export default function Profile() {
             {/* Danger Zone Card */}
             <div className="glass-card p-6 border-2 border-accent-red/30">
                 <h2 className="text-lg font-semibold text-accent-red mb-2">Zona Pericolosa</h2>
-                <p className="text-dark-400 text-sm mb-4">
+                <p className="text-tertiary text-sm mb-4">
                     Elimina permanentemente il tuo account e tutti i dati associati.
                 </p>
                 <div className="bg-accent-red/10 border border-accent-red/30 rounded-lg p-4 mb-4">
@@ -276,11 +276,11 @@ export default function Profile() {
                             <p className="text-accent-red font-semibold">
                                 Questa azione è irreversibile!
                             </p>
-                            <ul className="text-dark-300 space-y-1 list-disc list-inside">
+                            <ul className="text-secondary space-y-1 list-disc list-inside">
                                 <li>Il tuo account verrà eliminato permanentemente</li>
                                 <li>Perderai l'accesso a tutti i dati</li>
                                 {profile?.role === 'ADMIN' && (
-                                    <li className="text-accent-orange">
+                                    <li className="text-warning">
                                         <strong>Se sei l'ultimo utente, tutti i dati aziendali verranno eliminati</strong> (team, istanze JIRA, worklog, fatturazione, ecc.)
                                     </li>
                                 )}
@@ -311,8 +311,8 @@ export default function Profile() {
                 isDanger={true}
                 disabled={deleteConfirmText !== 'DELETE' || deleting}
             >
-                <div className="bg-dark-800 border border-dark-700 rounded-lg p-4 space-y-3">
-                    <p className="text-dark-300 text-sm">
+                <div className="bg-surface border border-solid rounded-lg p-4 space-y-3">
+                    <p className="text-secondary text-sm">
                         Per confermare, digita <strong className="text-accent-red">DELETE</strong> nel campo sottostante:
                     </p>
                     <input

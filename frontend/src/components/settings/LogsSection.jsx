@@ -21,10 +21,10 @@ const TrashIcon = () => (
 )
 
 const levelColors = {
-    DEBUG: 'text-dark-400 bg-dark-700',
+    DEBUG: 'text-tertiary bg-surface',
     INFO: 'text-accent-blue bg-accent-blue/10',
     WARNING: 'text-accent-orange bg-accent-orange/10',
-    ERROR: 'text-red-400 bg-red-400/10',
+    ERROR: 'text-error bg-red-400/10',
     CRITICAL: 'text-red-500 bg-red-500/20'
 }
 
@@ -162,23 +162,23 @@ export default function LogsSection() {
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                     <div
                         onClick={() => { setLevel(''); handleFilterChange(); }}
-                        className={`glass-card p-4 cursor-pointer transition-all hover:bg-dark-700/50 ${
+                        className={`glass-card p-4 cursor-pointer transition-all hover:bg-surface/50 ${
                             level === '' ? 'ring-2 ring-accent-blue' : ''
                         }`}
                     >
-                        <div className="text-2xl font-bold text-dark-100">{stats.total}</div>
-                        <div className="text-sm text-dark-400">Totale Log</div>
+                        <div className="text-2xl font-bold text-primary">{stats.total}</div>
+                        <div className="text-sm text-tertiary">Totale Log</div>
                     </div>
                     {Object.entries(stats.by_level || {}).map(([lvl, count]) => (
                         <div
                             key={lvl}
                             onClick={() => { setLevel(lvl); handleFilterChange(); }}
-                            className={`glass-card p-4 cursor-pointer transition-all hover:bg-dark-700/50 ${
+                            className={`glass-card p-4 cursor-pointer transition-all hover:bg-surface/50 ${
                                 level === lvl ? 'ring-2 ring-accent-blue' : ''
                             }`}
                         >
-                            <div className="text-2xl font-bold text-dark-100">{count}</div>
-                            <div className={`text-sm ${levelColors[lvl]?.split(' ')[0] || 'text-dark-400'}`}>{lvl}</div>
+                            <div className="text-2xl font-bold text-primary">{count}</div>
+                            <div className={`text-sm ${levelColors[lvl]?.split(' ')[0] || 'text-tertiary'}`}>{lvl}</div>
                         </div>
                     ))}
                 </div>
@@ -188,11 +188,11 @@ export default function LogsSection() {
             <div className="glass-card p-4">
                 <div className="flex flex-wrap items-end gap-4">
                     <div>
-                        <label className="block text-xs text-dark-400 mb-1">Livello</label>
+                        <label className="block text-xs text-tertiary mb-1">Livello</label>
                         <select
                             value={level}
                             onChange={(e) => { setLevel(e.target.value); handleFilterChange(); }}
-                            className="px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 focus:outline-none focus:border-accent-blue"
+                            className="px-3 py-2 bg-surface border border-solid rounded-lg text-primary focus:outline-none focus:border-focus"
                         >
                             <option value="">Tutti</option>
                             <option value="DEBUG">DEBUG</option>
@@ -203,33 +203,33 @@ export default function LogsSection() {
                     </div>
 
                     <div>
-                        <label className="block text-xs text-dark-400 mb-1">Da</label>
+                        <label className="block text-xs text-tertiary mb-1">Da</label>
                         <input
                             type="date"
                             value={startDate}
                             onChange={(e) => { setStartDate(e.target.value); handleFilterChange(); }}
-                            className="px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 focus:outline-none focus:border-accent-blue"
+                            className="px-3 py-2 bg-surface border border-solid rounded-lg text-primary focus:outline-none focus:border-focus"
                         />
                     </div>
 
                     <div>
-                        <label className="block text-xs text-dark-400 mb-1">A</label>
+                        <label className="block text-xs text-tertiary mb-1">A</label>
                         <input
                             type="date"
                             value={endDate}
                             onChange={(e) => { setEndDate(e.target.value); handleFilterChange(); }}
-                            className="px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 focus:outline-none focus:border-accent-blue"
+                            className="px-3 py-2 bg-surface border border-solid rounded-lg text-primary focus:outline-none focus:border-focus"
                         />
                     </div>
 
                     <div className="flex-1 min-w-[200px]">
-                        <label className="block text-xs text-dark-400 mb-1">Endpoint</label>
+                        <label className="block text-xs text-tertiary mb-1">Endpoint</label>
                         <input
                             type="text"
                             value={endpoint}
                             onChange={(e) => { setEndpoint(e.target.value); handleFilterChange(); }}
                             placeholder="/api/..."
-                            className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 placeholder-dark-500 focus:outline-none focus:border-accent-blue"
+                            className="w-full px-3 py-2 bg-surface border border-solid rounded-lg text-primary placeholder-dark-500 focus:outline-none focus:border-focus"
                         />
                     </div>
 
@@ -239,16 +239,16 @@ export default function LogsSection() {
                                 type="checkbox"
                                 checked={autoRefresh}
                                 onChange={(e) => setAutoRefresh(e.target.checked)}
-                                className="w-4 h-4 rounded border-dark-500 bg-dark-700 text-accent-blue focus:ring-accent-blue/50"
+                                className="w-4 h-4 rounded border-strong bg-surface text-accent-blue focus:ring-accent/20"
                             />
-                            <span className="text-sm text-dark-300">Auto-refresh</span>
+                            <span className="text-sm text-secondary">Auto-refresh</span>
                         </label>
                     </div>
 
                     <button
                         onClick={loadLogs}
                         disabled={loading}
-                        className="flex items-center gap-2 px-4 py-2 bg-dark-600 text-dark-200 rounded-lg hover:bg-dark-500 transition-colors disabled:opacity-50"
+                        className="flex items-center gap-2 px-4 py-2 bg-surface-hover text-secondary rounded-lg hover:bg-surface-secondary transition-colors disabled:opacity-50"
                     >
                         <RefreshIcon />
                         Aggiorna
@@ -258,7 +258,7 @@ export default function LogsSection() {
 
             {/* Actions */}
             <div className="flex items-center justify-between">
-                <div className="text-sm text-dark-400">
+                <div className="text-sm text-tertiary">
                     {total} log trovati
                 </div>
                 <div className="flex items-center gap-2">
@@ -266,7 +266,7 @@ export default function LogsSection() {
                     <div className="relative" ref={exportMenuRef}>
                         <button
                             onClick={() => setShowExportMenu(!showExportMenu)}
-                            className="flex items-center gap-2 px-3 py-2 bg-dark-700 text-dark-200 rounded-lg hover:bg-dark-600 transition-colors text-sm"
+                            className="flex items-center gap-2 px-3 py-2 bg-surface text-secondary rounded-lg hover:bg-surface-hover transition-colors text-sm"
                         >
                             <DownloadIcon />
                             Esporta
@@ -275,22 +275,22 @@ export default function LogsSection() {
                             </svg>
                         </button>
                         {showExportMenu && (
-                            <div className="absolute right-0 mt-1 w-32 bg-dark-700 border border-dark-600 rounded-lg shadow-xl z-10 overflow-hidden">
+                            <div className="absolute right-0 mt-1 w-32 bg-surface border border-solid rounded-lg shadow-xl z-10 overflow-hidden">
                                 <button
                                     onClick={() => { handleDownload('json'); setShowExportMenu(false); }}
-                                    className="w-full px-4 py-2 text-left text-sm text-dark-200 hover:bg-dark-600 transition-colors"
+                                    className="w-full px-4 py-2 text-left text-sm text-secondary hover:bg-surface-hover transition-colors"
                                 >
                                     JSON
                                 </button>
                                 <button
                                     onClick={() => { handleDownload('csv'); setShowExportMenu(false); }}
-                                    className="w-full px-4 py-2 text-left text-sm text-dark-200 hover:bg-dark-600 transition-colors"
+                                    className="w-full px-4 py-2 text-left text-sm text-secondary hover:bg-surface-hover transition-colors"
                                 >
                                     CSV
                                 </button>
                                 <button
                                     onClick={() => { handleDownload('txt'); setShowExportMenu(false); }}
-                                    className="w-full px-4 py-2 text-left text-sm text-dark-200 hover:bg-dark-600 transition-colors"
+                                    className="w-full px-4 py-2 text-left text-sm text-secondary hover:bg-surface-hover transition-colors"
                                 >
                                     TXT
                                 </button>
@@ -299,7 +299,7 @@ export default function LogsSection() {
                     </div>
                     <button
                         onClick={() => setDeleteConfirm(true)}
-                        className="flex items-center gap-2 px-3 py-2 bg-red-500/10 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/20 transition-colors text-sm"
+                        className="flex items-center gap-2 px-3 py-2 bg-red-500/10 text-error border border-red-500/30 rounded-lg hover:bg-red-500/20 transition-colors text-sm"
                     >
                         <TrashIcon />
                         Pulisci vecchi
@@ -309,7 +309,7 @@ export default function LogsSection() {
 
             {/* Error */}
             {error && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-red-400">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-error">
                     {error}
                 </div>
             )}
@@ -321,14 +321,14 @@ export default function LogsSection() {
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent-blue"></div>
                     </div>
                 ) : logs.length === 0 ? (
-                    <div className="text-center py-16 text-dark-400">
+                    <div className="text-center py-16 text-tertiary">
                         Nessun log trovato
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="bg-dark-700/50">
+                                <tr className="bg-surface/50">
                                     <th className="table-header">Timestamp</th>
                                     <th className="table-header">Livello</th>
                                     <th className="table-header">Endpoint</th>
@@ -342,9 +342,9 @@ export default function LogsSection() {
                                     <tr
                                         key={log.id}
                                         onClick={() => setSelectedLog(log)}
-                                        className="hover:bg-dark-700/30 transition-colors cursor-pointer"
+                                        className="hover:bg-surface/30 transition-colors cursor-pointer"
                                     >
-                                        <td className="table-cell whitespace-nowrap text-dark-400 font-mono text-xs">
+                                        <td className="table-cell whitespace-nowrap text-tertiary font-mono text-xs">
                                             {formatTimestamp(log.timestamp)}
                                         </td>
                                         <td className="table-cell">
@@ -352,22 +352,22 @@ export default function LogsSection() {
                                                 {log.level}
                                             </span>
                                         </td>
-                                        <td className="table-cell text-dark-300 font-mono text-xs">
+                                        <td className="table-cell text-secondary font-mono text-xs">
                                             {log.method && <span className="text-accent-blue mr-1">{log.method}</span>}
                                             {log.endpoint || '-'}
                                         </td>
-                                        <td className="table-cell text-dark-200 max-w-md truncate" title={log.message}>
+                                        <td className="table-cell text-secondary max-w-md truncate" title={log.message}>
                                             {log.message}
                                         </td>
-                                        <td className="table-cell text-right text-dark-400 font-mono text-xs">
+                                        <td className="table-cell text-right text-tertiary font-mono text-xs">
                                             {log.duration_ms ? `${log.duration_ms.toFixed(1)}ms` : '-'}
                                         </td>
                                         <td className="table-cell text-center">
                                             {log.status_code && (
                                                 <span className={`text-xs font-mono ${
-                                                    log.status_code >= 400 ? 'text-red-400' :
+                                                    log.status_code >= 400 ? 'text-error' :
                                                     log.status_code >= 300 ? 'text-accent-orange' :
-                                                    'text-accent-green'
+                                                    'text-success'
                                                 }`}>
                                                     {log.status_code}
                                                 </span>
@@ -387,17 +387,17 @@ export default function LogsSection() {
                     <button
                         onClick={() => setPage(p => Math.max(1, p - 1))}
                         disabled={page === 1}
-                        className="px-3 py-2 bg-dark-700 text-dark-300 rounded-lg hover:bg-dark-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-3 py-2 bg-surface text-secondary rounded-lg hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Precedente
                     </button>
-                    <span className="text-dark-400 px-4">
+                    <span className="text-tertiary px-4">
                         Pagina {page} di {totalPages}
                     </span>
                     <button
                         onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                         disabled={page === totalPages}
-                        className="px-3 py-2 bg-dark-700 text-dark-300 rounded-lg hover:bg-dark-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-3 py-2 bg-surface text-secondary rounded-lg hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Successiva
                     </button>
@@ -408,22 +408,22 @@ export default function LogsSection() {
             {deleteConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center">
                     <div
-                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                         onClick={() => setDeleteConfirm(false)}
                     />
-                    <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 border border-dark-700 p-6">
-                        <h3 className="text-lg font-semibold text-dark-100 mb-4">
+                    <div className="relative bg-surface rounded-lg shadow-lg w-full max-w-md mx-4 border border-solid p-6">
+                        <h3 className="text-lg font-semibold text-primary mb-4">
                             Elimina log
                         </h3>
 
                         <div className="mb-4">
-                            <label className="block text-sm text-dark-300 mb-2">
+                            <label className="block text-sm text-secondary mb-2">
                                 Elimina log più vecchi di:
                             </label>
                             <select
                                 value={deleteDays}
                                 onChange={(e) => setDeleteDays(Number(e.target.value))}
-                                className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 focus:outline-none focus:border-accent-blue"
+                                className="w-full px-3 py-2 bg-surface border border-solid rounded-lg text-primary focus:outline-none focus:border-focus"
                             >
                                 <option value={30}>30 giorni</option>
                                 <option value={21}>21 giorni</option>
@@ -433,7 +433,7 @@ export default function LogsSection() {
                             </select>
                         </div>
 
-                        <p className="text-dark-400 text-sm mb-6">
+                        <p className="text-tertiary text-sm mb-6">
                             {deleteDays === 0
                                 ? 'Verranno eliminati TUTTI i log. Questa operazione non può essere annullata.'
                                 : `Verranno eliminati tutti i log più vecchi di ${deleteDays} giorni. Questa operazione non può essere annullata.`
@@ -443,7 +443,7 @@ export default function LogsSection() {
                         <div className="flex justify-end gap-3">
                             <button
                                 onClick={() => setDeleteConfirm(false)}
-                                className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors"
+                                className="px-4 py-2 text-secondary hover:text-primary transition-colors"
                             >
                                 Annulla
                             </button>

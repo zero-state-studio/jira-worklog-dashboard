@@ -64,7 +64,7 @@ export default function IntegrationsSection() {
                     ))}
                 </div>
 
-                <p className="text-center text-dark-500 text-sm mt-8">
+                <p className="text-center text-tertiary text-sm mt-8">
                     Non trovi la tua integrazione?{' '}
                     <button className="text-accent-blue hover:underline">Contattaci</button>
                     {' '}- ne aggiungiamo di nuove ogni mese.

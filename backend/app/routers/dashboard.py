@@ -100,8 +100,14 @@ async def get_dashboard(
     # Top epics
     top_epics = calculate_epic_hours(worklogs)[:10]
 
+    # Top projects (for "By Project" chart)
+    top_projects = calculate_project_hours(worklogs)[:10]
+
     # Completion percentage
     completion = (total_hours / expected_hours * 100) if expected_hours > 0 else 0
+
+    # Calculate active users (unique authors with worklogs in period)
+    active_users = len(set(w.author_email.lower() for w in worklogs))
 
     return DashboardResponse(
         total_hours=round(total_hours, 2),
@@ -110,8 +116,11 @@ async def get_dashboard(
         teams=team_hours,
         daily_trend=daily_trend,
         top_epics=top_epics,
+        top_projects=top_projects,
         period_start=start_date,
-        period_end=end_date
+        period_end=end_date,
+        worklog_count=len(worklogs),
+        active_users=active_users
     )
 
 
@@ -286,6 +295,37 @@ def calculate_epic_hours(worklogs: list[Worklog]) -> list[EpicHours]:
             contributor_count=len(data["contributors"]),
             jira_instance=data["instance"],
             parent_type=data["type"]
+        ))
+
+    # Sort by hours descending
+    result.sort(key=lambda x: x.total_hours, reverse=True)
+    return result
+
+
+def calculate_project_hours(worklogs: list[Worklog]) -> list[EpicHours]:
+    """Calculate hours per JIRA project (extracted from issue_key)."""
+    project_data = defaultdict(lambda: {
+        "hours": 0,
+        "contributors": set(),
+        "instance": ""
+    })
+
+    for wl in worklogs:
+        # Extract project key from issue_key (e.g., "DLREQ-1464" -> "DLREQ")
+        project_key = wl.issue_key.split('-')[0] if '-' in wl.issue_key else wl.issue_key
+        project_data[project_key]["hours"] += wl.time_spent_seconds / 3600
+        project_data[project_key]["contributors"].add(wl.author_email)
+        project_data[project_key]["instance"] = wl.jira_instance
+
+    result = []
+    for project_key, data in project_data.items():
+        result.append(EpicHours(
+            epic_key=project_key,
+            epic_name=project_key,  # Use project key as name (clean, readable)
+            total_hours=round(data["hours"], 2),
+            contributor_count=len(data["contributors"]),
+            jira_instance=data["instance"],
+            parent_type="Project"
         ))
 
     # Sort by hours descending

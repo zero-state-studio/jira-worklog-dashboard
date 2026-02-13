@@ -130,7 +130,7 @@ export default function UsersSection({ users, teams, jiraInstances, onUsersChang
         <div className="glass-card p-6">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-semibold text-dark-100">Utenti</h2>
+                <h2 className="text-lg font-semibold text-primary">Utenti</h2>
                 <div className="flex items-center gap-3">
                     {users.length > 0 && jiraInstances.length > 0 && (
                         <button
@@ -138,10 +138,10 @@ export default function UsersSection({ users, teams, jiraInstances, onUsersChang
                             disabled={bulkFetchStatus === 'loading'}
                             className={`flex items-center gap-2 px-4 py-2 font-medium rounded-lg transition-colors ${
                                 bulkFetchStatus === 'loading'
-                                    ? 'bg-dark-700 text-dark-400 cursor-wait'
+                                    ? 'bg-surface text-tertiary cursor-wait'
                                     : bulkFetchStatus && bulkFetchStatus !== 'loading'
                                     ? 'bg-green-500/10 text-green-400 border border-green-500/30'
-                                    : 'bg-dark-700 text-dark-200 hover:bg-dark-600'
+                                    : 'bg-surface text-secondary hover:bg-surface-hover'
                             }`}
                             title="Fetch Account ID JIRA per tutti gli utenti"
                         >
@@ -155,14 +155,14 @@ export default function UsersSection({ users, teams, jiraInstances, onUsersChang
                     )}
                     <button
                         onClick={() => setBulkModalOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-dark-700 text-dark-200 font-medium rounded-lg hover:bg-dark-600 transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 bg-surface text-secondary font-medium rounded-lg hover:bg-surface-hover transition-colors"
                     >
                         <UsersIcon />
                         Importa in Bulk
                     </button>
                     <button
                         onClick={handleCreate}
-                        className="flex items-center gap-2 px-4 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity"
+                        className="flex items-center gap-2 px-4 py-2 bg-accent text-white font-medium rounded-lg  hover:opacity-90 transition-opacity"
                     >
                         <PlusIcon />
                         Aggiungi Utente
@@ -172,7 +172,7 @@ export default function UsersSection({ users, teams, jiraInstances, onUsersChang
 
             {/* Error */}
             {error && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-error text-sm">
                     {error}
                 </div>
             )}
@@ -194,9 +194,9 @@ export default function UsersSection({ users, teams, jiraInstances, onUsersChang
             {/* Table */}
             {users.length === 0 ? (
                 <div className="text-center py-12">
-                    <UserIcon className="w-12 h-12 text-dark-500 mx-auto mb-4" />
-                    <p className="text-dark-400">Nessun utente configurato</p>
-                    <p className="text-dark-500 text-sm mt-1">
+                    <UserIcon className="w-12 h-12 text-tertiary mx-auto mb-4" />
+                    <p className="text-tertiary">Nessun utente configurato</p>
+                    <p className="text-tertiary text-sm mt-1">
                         Crea un nuovo utente o importa dalla configurazione
                     </p>
                 </div>
@@ -218,26 +218,26 @@ export default function UsersSection({ users, teams, jiraInstances, onUsersChang
                                 const allConfigured = jiraStatus.configured === jiraStatus.total && jiraStatus.total > 0
 
                                 return (
-                                    <tr key={user.id} className="hover:bg-dark-700/30 transition-colors">
+                                    <tr key={user.id} className="hover:bg-surface/30 transition-colors">
                                         <td className="table-cell">
-                                            <span className="font-medium text-dark-100">
+                                            <span className="font-medium text-primary">
                                                 {user.first_name} {user.last_name}
                                             </span>
                                         </td>
                                         <td className="table-cell">
-                                            <span className="text-dark-300">{user.email}</span>
+                                            <span className="text-secondary">{user.email}</span>
                                         </td>
                                         <td className="table-cell">
                                             {user.team_name ? (
                                                 <span className="badge-purple">{user.team_name}</span>
                                             ) : (
-                                                <span className="text-dark-500">-</span>
+                                                <span className="text-tertiary">-</span>
                                             )}
                                         </td>
                                         <td className="table-cell text-center">
                                             {jiraStatus.total > 0 ? (
                                                 <span className={`inline-flex items-center gap-1 ${
-                                                    allConfigured ? 'text-accent-green' : 'text-yellow-400'
+                                                    allConfigured ? 'text-success' : 'text-yellow-400'
                                                 }`}>
                                                     {allConfigured ? <CheckIcon /> : <XIcon />}
                                                     <span className="text-sm">
@@ -245,21 +245,21 @@ export default function UsersSection({ users, teams, jiraInstances, onUsersChang
                                                     </span>
                                                 </span>
                                             ) : (
-                                                <span className="text-dark-500">-</span>
+                                                <span className="text-tertiary">-</span>
                                             )}
                                         </td>
                                         <td className="table-cell text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 <button
                                                     onClick={() => handleEdit(user)}
-                                                    className="p-2 text-dark-400 hover:text-accent-blue hover:bg-dark-700 rounded-lg transition-colors"
+                                                    className="p-2 text-tertiary hover:text-accent-blue hover:bg-surface rounded-lg transition-colors"
                                                     title="Modifica"
                                                 >
                                                     <EditIcon />
                                                 </button>
                                                 <button
                                                     onClick={() => setDeleteConfirm(user)}
-                                                    className="p-2 text-dark-400 hover:text-red-400 hover:bg-dark-700 rounded-lg transition-colors"
+                                                    className="p-2 text-tertiary hover:text-error hover:bg-surface rounded-lg transition-colors"
                                                     title="Elimina"
                                                 >
                                                     <TrashIcon />
@@ -302,20 +302,20 @@ export default function UsersSection({ users, teams, jiraInstances, onUsersChang
             {deleteConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center">
                     <div
-                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                         onClick={() => setDeleteConfirm(null)}
                     />
-                    <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 border border-dark-700 p-6">
-                        <h3 className="text-lg font-semibold text-dark-100 mb-2">
+                    <div className="relative bg-surface rounded-lg shadow-lg w-full max-w-md mx-4 border border-solid p-6">
+                        <h3 className="text-lg font-semibold text-primary mb-2">
                             Conferma eliminazione
                         </h3>
-                        <p className="text-dark-300 mb-6">
+                        <p className="text-secondary mb-6">
                             Sei sicuro di voler eliminare l'utente <strong>"{deleteConfirm.first_name} {deleteConfirm.last_name}"</strong>?
                         </p>
                         <div className="flex justify-end gap-3">
                             <button
                                 onClick={() => setDeleteConfirm(null)}
-                                className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors"
+                                className="px-4 py-2 text-secondary hover:text-primary transition-colors"
                             >
                                 Annulla
                             </button>

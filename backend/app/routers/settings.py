@@ -1005,6 +1005,29 @@ async def get_holidays(year: int, country: str = "IT", current_user: CurrentUser
     }
 
 
+@router.get("/holidays/range")
+async def get_holidays_for_range(
+    start_date: str,
+    end_date: str,
+    country: str = "IT",
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """Get active holiday dates for a date range (scoped to company)."""
+    storage = get_storage()
+
+    holiday_dates = await storage.get_active_holiday_dates(
+        start_date, end_date, current_user.company_id, country
+    )
+
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "country": country,
+        "holiday_dates": sorted(list(holiday_dates)),
+        "count": len(holiday_dates)
+    }
+
+
 @router.post("/holidays")
 async def create_holiday(data: HolidayCreate, current_user: CurrentUser = Depends(require_admin)):
     """Create a custom holiday (ADMIN only)."""
