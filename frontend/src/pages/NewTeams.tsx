@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { DataTable, Column, Badge, Button, Modal, Input, Select, DateRangePicker } from '../components/common'
 import { Search, Plus, Edit, Trash2, UserPlus } from 'lucide-react'
 import { getDashboard, getTeamDetail, getTeamMultiJiraOverview, createTeam, updateTeam, deleteTeam } from '../api/client'
@@ -17,6 +18,7 @@ interface TeamMember {
   name: string
   role: UserRole
   total_hours: number
+  user_id?: number
 }
 
 interface Worklog {
@@ -45,6 +47,7 @@ export default function NewTeams({ dateRange, selectedInstance, onDateRangeChang
   selectedInstance: string | null
   onDateRangeChange?: (range: { startDate: Date; endDate: Date }) => void
 }) {
+  const navigate = useNavigate()
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodPreset>('this-month')
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
@@ -237,7 +240,11 @@ export default function NewTeams({ dateRange, selectedInstance, onDateRangeChang
       label: 'Name',
       type: 'text',
       render: (_: any, row: TeamMember) => (
-        <div className="flex items-center gap-3">
+        <button
+          onClick={() => row.user_id && navigate(`/app/users/${row.user_id}`)}
+          className="flex items-center gap-3 w-full text-left hover:opacity-80 transition-opacity cursor-pointer disabled:cursor-default"
+          disabled={!row.user_id}
+        >
           <div className="w-7 h-7 rounded-full bg-accent-subtle flex items-center justify-center flex-shrink-0">
             <span className="text-accent-text font-medium text-xs">
               {getInitials(row.name, row.email)}
@@ -247,7 +254,7 @@ export default function NewTeams({ dateRange, selectedInstance, onDateRangeChang
             <p className="text-sm font-medium text-primary">{row.name || row.email}</p>
             <p className="text-xs text-tertiary">{row.email}</p>
           </div>
-        </div>
+        </button>
       ),
     },
     {

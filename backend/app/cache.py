@@ -4797,12 +4797,16 @@ class WorklogStorage:
 
     async def get_leaves_in_range(
         self,
+        company_id: int,
         start_date: date,
         end_date: date,
         user_id: Optional[int] = None,
         status_filter: Optional[str] = None
     ) -> list[dict]:
-        """Get leaves within date range from storage."""
+        """Get leaves within date range from storage (scoped to company)."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
         await self.initialize()
 
         query = """
@@ -4815,9 +4819,10 @@ class WorklogStorage:
                 fl.created_at
             FROM factorial_leaves fl
             JOIN users u ON fl.user_id = u.id
-            WHERE (fl.start_date <= ? AND fl.finish_date >= ?)
+            WHERE u.company_id = ?
+              AND (fl.start_date <= ? AND fl.finish_date >= ?)
         """
-        params = [end_date.isoformat(), start_date.isoformat()]
+        params = [company_id, end_date.isoformat(), start_date.isoformat()]
 
         if user_id:
             query += " AND fl.user_id = ?"
