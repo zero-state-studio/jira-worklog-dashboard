@@ -50,7 +50,7 @@ function App() {
                         <Routes>
                             <Route path="dashboard" element={<NewDashboard dateRange={dateRange} selectedInstance={selectedInstance} onDateRangeChange={setDateRange} />} />
                             <Route path="worklogs" element={<Worklogs dateRange={dateRange} selectedInstance={selectedInstance} />} />
-                            <Route path="teams" element={<NewTeams dateRange={dateRange} selectedInstance={selectedInstance} />} />
+                            <Route path="teams" element={<NewTeams dateRange={dateRange} selectedInstance={selectedInstance} onDateRangeChange={setDateRange} />} />
                             <Route path="teams/:teamName" element={<TeamView dateRange={dateRange} selectedInstance={selectedInstance} />} />
                             <Route path="users" element={<UsersListView dateRange={dateRange} selectedInstance={selectedInstance} />} />
                             <Route path="users/:userId" element={<UserView dateRange={dateRange} selectedInstance={selectedInstance} />} />

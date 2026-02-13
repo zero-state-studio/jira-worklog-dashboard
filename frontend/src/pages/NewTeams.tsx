@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { DataTable, Column, Badge, Button, Modal, Input, Select } from '../components/common'
 import { Search, Plus, Edit, Trash2, UserPlus } from 'lucide-react'
-import { getDashboard, getTeamDetail, createTeam, updateTeam, deleteTeam } from '../api/client'
+import { getDashboard, getTeamDetail, getTeamMultiJiraOverview, createTeam, updateTeam, deleteTeam } from '../api/client'
 
 interface Team {
   name: string
@@ -28,10 +28,23 @@ interface Worklog {
   project: string
 }
 
-export default function NewTeams({ dateRange, selectedInstance }: {
+type PeriodPreset = 'this-week' | 'this-month' | 'last-month' | 'this-quarter'
+
+// Instance color palette (matches Dashboard pattern)
+const INSTANCE_COLORS: { [key: number]: string } = {
+  0: 'var(--color-accent)', // #2563EB
+  1: '#16A34A', // green
+  2: '#D97706', // orange
+  3: '#8B5CF6', // purple
+  4: '#EC4899', // pink
+}
+
+export default function NewTeams({ dateRange, selectedInstance, onDateRangeChange }: {
   dateRange: { startDate: Date; endDate: Date }
   selectedInstance: string | null
+  onDateRangeChange?: (range: { startDate: Date; endDate: Date }) => void
 }) {
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodPreset>('this-month')
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
   const [teamDetail, setTeamDetail] = useState<any>(null)
@@ -41,10 +54,47 @@ export default function NewTeams({ dateRange, selectedInstance }: {
   const [loading, setLoading] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
 
+  // Multi-JIRA data states
+  const [multiJiraData, setMultiJiraData] = useState<any>(null)
+  const [memberInstanceHours, setMemberInstanceHours] = useState<Map<string, Record<string, number>>>(new Map())
+  const [memberComplementaryAlerts, setMemberComplementaryAlerts] = useState<Map<string, any>>(new Map())
+
   // Modal states
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false)
   const [showAddMemberModal, setShowAddMemberModal] = useState(false)
   const [editingTeam, setEditingTeam] = useState<Team | null>(null)
+
+  // Period change handler
+  const handlePeriodChange = (period: PeriodPreset) => {
+    setSelectedPeriod(period)
+    const now = new Date()
+    let startDate: Date
+    let endDate: Date = now
+
+    switch (period) {
+      case 'this-week':
+        startDate = new Date(now)
+        startDate.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1)) // Monday
+        break
+      case 'this-month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+        break
+      case 'last-month':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0) // Last day of previous month
+        break
+      case 'this-quarter':
+        const quarter = Math.floor(now.getMonth() / 3)
+        startDate = new Date(now.getFullYear(), quarter * 3, 1)
+        break
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+    }
+
+    if (onDateRangeChange) {
+      onDateRangeChange({ startDate, endDate })
+    }
+  }
 
   // Load teams
   const loadTeams = useCallback(async () => {
@@ -75,6 +125,60 @@ export default function NewTeams({ dateRange, selectedInstance }: {
     }
   }, [dateRange.startDate, dateRange.endDate, selectedInstance])
 
+  // Load multi-JIRA data for per-instance breakdown and complementary alerts
+  const loadMultiJiraData = useCallback(async (teamName: string) => {
+    try {
+      const result = await getTeamMultiJiraOverview(teamName, dateRange.startDate, dateRange.endDate)
+      setMultiJiraData(result)
+
+      // Build hours_by_instance map per member
+      const instanceHoursMap = new Map<string, Record<string, number>>()
+      result.instances?.forEach((instance: any) => {
+        instance.members?.forEach((member: any) => {
+          if (!instanceHoursMap.has(member.email)) {
+            instanceHoursMap.set(member.email, {})
+          }
+          instanceHoursMap.get(member.email)![instance.instance_name] = member.total_hours
+        })
+      })
+
+      // Detect complementary violations per member
+      const alertsMap = new Map<string, any>()
+      result.complementary_comparisons?.forEach((comp: any) => {
+        const primaryInst = result.instances.find((i: any) => i.instance_name === comp.primary_instance)
+        const secondaryInst = result.instances.find((i: any) => i.instance_name === comp.secondary_instance)
+
+        if (!primaryInst || !secondaryInst) return
+
+        const allMemberEmails = new Set([
+          ...(primaryInst.members?.map((m: any) => m.email) || []),
+          ...(secondaryInst.members?.map((m: any) => m.email) || [])
+        ])
+
+        allMemberEmails.forEach((email) => {
+          const primaryHours = primaryInst.members?.find((m: any) => m.email === email)?.total_hours || 0
+          const secondaryHours = secondaryInst.members?.find((m: any) => m.email === email)?.total_hours || 0
+          const delta = primaryHours - secondaryHours
+
+          if (Math.abs(delta) > 0.5) {
+            alertsMap.set(email, {
+              delta,
+              primaryInstance: comp.primary_instance,
+              secondaryInstance: comp.secondary_instance,
+              primaryHours,
+              secondaryHours
+            })
+          }
+        })
+      })
+
+      setMemberInstanceHours(instanceHoursMap)
+      setMemberComplementaryAlerts(alertsMap)
+    } catch (e) {
+      console.error('Failed to load multi-jira data:', e)
+    }
+  }, [dateRange.startDate, dateRange.endDate])
+
   useEffect(() => {
     loadTeams()
   }, [loadTeams])
@@ -82,9 +186,10 @@ export default function NewTeams({ dateRange, selectedInstance }: {
   useEffect(() => {
     if (selectedTeam) {
       loadTeamDetail(selectedTeam.name)
+      loadMultiJiraData(selectedTeam.name)
       setMemberSearchQuery('') // Reset search when switching teams
     }
-  }, [selectedTeam, loadTeamDetail])
+  }, [selectedTeam, loadTeamDetail, loadMultiJiraData])
 
   // Filter teams by search
   const filteredTeams = teams.filter((team) =>
@@ -101,8 +206,12 @@ export default function NewTeams({ dateRange, selectedInstance }: {
     )
   })
 
-  // Members columns
-  const membersColumns: Column[] = [
+  // Extract unique instances from multiJiraData for dynamic columns
+  const instancesList = multiJiraData?.instances?.map((i: any) => i.instance_name) || []
+  const hasComplementaryGroups = (multiJiraData?.complementary_comparisons || []).length > 0
+
+  // Members columns - dynamically build based on instances
+  const baseColumns: Column[] = [
     {
       key: 'name',
       label: 'Name',
@@ -135,15 +244,57 @@ export default function NewTeams({ dateRange, selectedInstance }: {
         return <Badge variant={variantMap[value] || 'default'}>{value}</Badge>
       },
     },
-    {
-      key: 'total_hours',
-      label: 'Hours',
-      type: 'duration',
-      width: '100px',
-      render: (value: number) => (
-        <span className="font-mono text-sm">{value?.toFixed(1) || '0.0'}h</span>
-      ),
+  ]
+
+  // Dynamically add instance columns
+  const instanceColumns: Column[] = instancesList.map((instanceName: string, idx: number) => ({
+    key: `instance_${instanceName}`,
+    label: instanceName,
+    type: 'duration',
+    width: '110px',
+    render: (_: any, row: TeamMember) => {
+      const instanceHours = memberInstanceHours.get(row.email) || {}
+      const hours = instanceHours[instanceName] || 0
+      const color = INSTANCE_COLORS[idx % Object.keys(INSTANCE_COLORS).length] || '#94A3B8'
+
+      return (
+        <div className="flex items-center gap-1.5">
+          <span
+            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+            style={{ backgroundColor: color }}
+          />
+          <span className="font-mono text-sm" style={{ color: color }}>
+            {hours.toFixed(1)}h
+          </span>
+        </div>
+      )
     },
+  }))
+
+  // Add delta column if complementary groups exist
+  const deltaColumn: Column[] = hasComplementaryGroups
+    ? [
+        {
+          key: 'delta',
+          label: 'Delta',
+          type: 'duration',
+          width: '100px',
+          render: (_: any, row: TeamMember) => {
+            const alert = memberComplementaryAlerts.get(row.email)
+            if (!alert) {
+              return <span className="text-xs text-tertiary">-</span>
+            }
+            return (
+              <Badge variant="warning">
+                {alert.delta > 0 ? '+' : ''}{alert.delta.toFixed(1)}h
+              </Badge>
+            )
+          },
+        },
+      ]
+    : []
+
+  const actionsColumn: Column[] = [
     {
       key: 'actions',
       label: 'Actions',
@@ -160,6 +311,14 @@ export default function NewTeams({ dateRange, selectedInstance }: {
         </div>
       ),
     },
+  ]
+
+  // Combine all columns
+  const membersColumns: Column[] = [
+    ...baseColumns,
+    ...instanceColumns,
+    ...deltaColumn,
+    ...actionsColumn,
   ]
 
   // Worklogs columns
@@ -268,6 +427,32 @@ export default function NewTeams({ dateRange, selectedInstance }: {
           <>
             {/* Header */}
             <div className="p-6 border-b border-solid">
+              {/* Period Selector */}
+              <div className="flex items-center gap-2 mb-4">
+                {(['this-week', 'this-month', 'last-month', 'this-quarter'] as const).map((period) => {
+                  const labels: Record<PeriodPreset, string> = {
+                    'this-week': 'This Week',
+                    'this-month': 'This Month',
+                    'last-month': 'Last Month',
+                    'this-quarter': 'This Quarter',
+                  }
+                  const isActive = selectedPeriod === period
+                  return (
+                    <button
+                      key={period}
+                      onClick={() => handlePeriodChange(period)}
+                      className={`h-[28px] px-3 text-xs font-medium rounded-md transition-colors ${
+                        isActive
+                          ? 'bg-accent-subtle text-accent-text'
+                          : 'bg-transparent text-secondary hover:bg-surface-hover'
+                      }`}
+                    >
+                      {labels[period]}
+                    </button>
+                  )
+                })}
+              </div>
+
               <div className="flex items-start justify-between">
                 <div>
                   <h2 className="text-xl font-bold text-primary">{selectedTeam.name}</h2>
