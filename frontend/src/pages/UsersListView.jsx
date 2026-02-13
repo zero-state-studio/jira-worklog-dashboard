@@ -137,6 +137,31 @@ export default function UsersListView({ dateRange, selectedInstance, onDateRange
         },
     ]
 
+    // Helper function to generate initials from name or email
+    const getInitials = (fullName, email) => {
+        if (fullName) {
+            // Generate from name (e.g., "John Doe" -> "JD")
+            const initials = fullName
+                .split(' ')
+                .map(n => n[0])
+                .join('')
+                .toUpperCase()
+                .slice(0, 2)
+            if (initials) return initials
+        }
+        if (email) {
+            // Generate from email (e.g., "gianluca.ricaldone@..." -> "GR")
+            const emailPart = email.split('@')[0]
+            const parts = emailPart.split(/[._-]/) // Split by dots, underscores, or hyphens
+            if (parts.length >= 2) {
+                return (parts[0][0] + parts[1][0]).toUpperCase()
+            }
+            // Fallback: first 2 chars of email
+            return emailPart.slice(0, 2).toUpperCase()
+        }
+        return 'U'
+    }
+
     // Prepare table data
     const tableColumns = [
         {
@@ -145,12 +170,7 @@ export default function UsersListView({ dateRange, selectedInstance, onDateRange
             type: 'text',
             sortable: true,
             render: (_, row) => {
-                const initials = row.full_name
-                    .split(' ')
-                    .map(n => n[0])
-                    .join('')
-                    .toUpperCase()
-                    .slice(0, 2)
+                const initials = getInitials(row.full_name, row.email)
 
                 return (
                     <button

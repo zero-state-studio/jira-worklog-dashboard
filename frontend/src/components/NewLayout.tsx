@@ -51,7 +51,14 @@ export default function NewLayout({
   const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   useEffect(() => {
-    getConfig().then(setConfig).catch(console.error)
+    getConfig()
+      .then((data) => {
+        console.log('Config loaded:', data)
+        setConfig(data)
+      })
+      .catch((err) => {
+        console.error('Error loading config:', err)
+      })
   }, [])
 
   // Navigation structure
@@ -95,12 +102,32 @@ export default function NewLayout({
 
   const breadcrumbs = generateBreadcrumbs()
 
-  // User info (mock - replace with actual user data)
+  // Helper function to generate initials from name or email
+  const getInitials = (name?: string, email?: string): string => {
+    if (name) {
+      // Generate from name (e.g., "John Doe" -> "JD")
+      const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+      if (initials) return initials
+    }
+    if (email) {
+      // Generate from email (e.g., "gianluca.ricaldone@..." -> "GR")
+      const emailPart = email.split('@')[0]
+      const parts = emailPart.split(/[._-]/) // Split by dots, underscores, or hyphens
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[1][0]).toUpperCase()
+      }
+      // Fallback: first 2 chars of email
+      return emailPart.slice(0, 2).toUpperCase()
+    }
+    return 'U'
+  }
+
+  // User info
   const user = {
-    name: config?.user?.name || 'User',
+    name: config?.user?.name || 'User waaa',
     email: config?.user?.email || 'user@example.com',
     role: config?.user?.role || 'Admin',
-    initials: 'U',
+    initials: getInitials(config?.user?.name, config?.user?.email),
   }
 
   return (

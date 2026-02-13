@@ -212,6 +212,25 @@ export default function NewTeams({ dateRange, selectedInstance, onDateRangeChang
   const hasComplementaryGroups = (multiJiraData?.complementary_comparisons || []).length > 0
 
   // Members columns - dynamically build based on instances
+  // Helper function to generate initials from name or email
+  const getInitials = (name: string | undefined, email: string | undefined): string => {
+    if (name) {
+      // Generate from name (e.g., "John Doe" -> "JD")
+      return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    }
+    if (email) {
+      // Generate from email (e.g., "gianluca.ricaldone@..." -> "GR")
+      const emailPart = email.split('@')[0]
+      const parts = emailPart.split(/[._-]/) // Split by dots, underscores, or hyphens
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[1][0]).toUpperCase()
+      }
+      // Fallback: first 2 chars of email
+      return emailPart.slice(0, 2).toUpperCase()
+    }
+    return 'U'
+  }
+
   const baseColumns: Column[] = [
     {
       key: 'name',
@@ -221,7 +240,7 @@ export default function NewTeams({ dateRange, selectedInstance, onDateRangeChang
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-full bg-accent-subtle flex items-center justify-center flex-shrink-0">
             <span className="text-accent-text font-medium text-xs">
-              {row.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U'}
+              {getInitials(row.name, row.email)}
             </span>
           </div>
           <div>
