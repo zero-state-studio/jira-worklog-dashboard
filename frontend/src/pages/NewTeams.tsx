@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { DataTable, Column, Badge, Button, Modal, Input, Select } from '../components/common'
+import { DataTable, Column, Badge, Button, Modal, Input, Select, DateRangePicker } from '../components/common'
 import { Search, Plus, Edit, Trash2, UserPlus } from 'lucide-react'
 import { getDashboard, getTeamDetail, getTeamMultiJiraOverview, createTeam, updateTeam, deleteTeam } from '../api/client'
+import { ROLE_OPTIONS, ROLE_BADGE_VARIANTS, type UserRole } from '../constants/roles'
 
 interface Team {
   name: string
@@ -14,7 +15,7 @@ interface Team {
 interface TeamMember {
   email: string
   name: string
-  role: 'ADMIN' | 'MANAGER' | 'USER'
+  role: UserRole
   total_hours: number
 }
 
@@ -211,6 +212,25 @@ export default function NewTeams({ dateRange, selectedInstance, onDateRangeChang
   const hasComplementaryGroups = (multiJiraData?.complementary_comparisons || []).length > 0
 
   // Members columns - dynamically build based on instances
+  // Helper function to generate initials from name or email
+  const getInitials = (name: string | undefined, email: string | undefined): string => {
+    if (name) {
+      // Generate from name (e.g., "John Doe" -> "JD")
+      return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    }
+    if (email) {
+      // Generate from email (e.g., "gianluca.ricaldone@..." -> "GR")
+      const emailPart = email.split('@')[0]
+      const parts = emailPart.split(/[._-]/) // Split by dots, underscores, or hyphens
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[1][0]).toUpperCase()
+      }
+      // Fallback: first 2 chars of email
+      return emailPart.slice(0, 2).toUpperCase()
+    }
+    return 'U'
+  }
+
   const baseColumns: Column[] = [
     {
       key: 'name',
@@ -218,9 +238,9 @@ export default function NewTeams({ dateRange, selectedInstance, onDateRangeChang
       type: 'text',
       render: (_: any, row: TeamMember) => (
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
-            <span className="text-xs font-semibold text-inverse">
-              {row.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U'}
+          <div className="w-7 h-7 rounded-full bg-accent-subtle flex items-center justify-center flex-shrink-0">
+            <span className="text-accent-text font-medium text-xs">
+              {getInitials(row.name, row.email)}
             </span>
           </div>
           <div>
@@ -236,13 +256,21 @@ export default function NewTeams({ dateRange, selectedInstance, onDateRangeChang
       type: 'badge',
       width: '120px',
       render: (value: string) => {
-        const variantMap: Record<string, 'default' | 'info' | 'success'> = {
-          ADMIN: 'error',
-          MANAGER: 'info',
-          USER: 'default',
-        }
-        return <Badge variant={variantMap[value] || 'default'}>{value}</Badge>
+        const variant = ROLE_BADGE_VARIANTS[value as UserRole] || 'default'
+        return <Badge variant={variant}>{value}</Badge>
       },
+    },
+    {
+      key: 'is_active',
+      label: 'Status',
+      type: 'badge',
+      width: '100px',
+      render: (value: boolean) =>
+        value === false ? (
+          <Badge variant="default" className="bg-surface-secondary text-tertiary">Inactive</Badge>
+        ) : (
+          <Badge variant="success">Active</Badge>
+        ),
     },
   ]
 
@@ -451,6 +479,19 @@ export default function NewTeams({ dateRange, selectedInstance, onDateRangeChang
                     </button>
                   )
                 })}
+
+                {/* Custom Date Picker */}
+                <DateRangePicker
+                  startDate={dateRange.startDate}
+                  endDate={dateRange.endDate}
+                  isActive={selectedPeriod === null}
+                  onChange={(range) => {
+                    setSelectedPeriod(null) // Deselect presets
+                    if (onDateRangeChange) {
+                      onDateRangeChange(range)
+                    }
+                  }}
+                />
               </div>
 
               <div className="flex items-start justify-between">
@@ -752,13 +793,13 @@ interface AddMemberModalProps {
 
 function AddMemberModal({ isOpen, teamName, onClose, onSave }: AddMemberModalProps) {
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState('USER')
+  const [role, setRole] = useState('DEV')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
       setEmail('')
-      setRole('USER')
+      setRole('DEV')
     }
   }, [isOpen])
 
@@ -799,11 +840,7 @@ function AddMemberModal({ isOpen, teamName, onClose, onSave }: AddMemberModalPro
         />
         <Select
           label="Role"
-          options={[
-            { value: 'USER', label: 'Member' },
-            { value: 'MANAGER', label: 'Manager' },
-            { value: 'ADMIN', label: 'Admin' },
-          ]}
+          options={ROLE_OPTIONS.map(r => ({ value: r.value, label: r.label }))}
           value={role}
           onChange={setRole}
         />

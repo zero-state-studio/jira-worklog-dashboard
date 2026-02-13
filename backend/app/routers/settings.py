@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from ..models import (
-    AppConfig,
+    AppConfig, UserRole,
     TeamCreate, TeamUpdate, TeamInDB, TeamWithMembers,
     UserCreate, UserUpdate, UserInDB,
     FetchAccountIdRequest, FetchAccountIdResponse,
@@ -46,17 +46,17 @@ async def create_team(team: TeamCreate, current_user: CurrentUser = Depends(requ
     if existing:
         raise HTTPException(status_code=400, detail="Team name already exists")
 
-    team_id = await storage.create_team(team.name, current_user.company_id)
-    created = await storage.get_team(team_id, current_user.company_id)
+    team_id = await storage.create_team(team.name, current_user.company_id, owner_id=team.owner_id)
+    created = await storage.get_team_with_owner(team_id, current_user.company_id)
     return TeamInDB(**created, member_count=0)
 
 
 @router.get("/teams/{team_id}", response_model=TeamWithMembers)
 async def get_team(team_id: int, current_user: CurrentUser = Depends(get_current_user)):
-    """Get a team by ID with its members (scoped to current user's company)."""
+    """Get a team by ID with its members and owner info (scoped to current user's company)."""
     storage = get_storage()
 
-    team = await storage.get_team(team_id, current_user.company_id)
+    team = await storage.get_team_with_owner(team_id, current_user.company_id)
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
 
@@ -85,9 +85,15 @@ async def update_team(team_id: int, team: TeamUpdate, current_user: CurrentUser 
 
         await storage.update_team(team_id, team.name, current_user.company_id)
 
-    updated = await storage.get_team(team_id, current_user.company_id)
+    if team.owner_id is not None:
+        # owner_id of 0 or None means clear the owner
+        owner_value = team.owner_id if team.owner_id > 0 else None
+        await storage.update_team_owner(team_id, owner_value, current_user.company_id)
+
     teams = await storage.get_all_teams(current_user.company_id)
-    team_data = next((t for t in teams if t["id"] == team_id), updated)
+    team_data = next((t for t in teams if t["id"] == team_id), None)
+    if not team_data:
+        team_data = await storage.get_team_with_owner(team_id, current_user.company_id)
     return TeamInDB(**team_data)
 
 
@@ -155,6 +161,7 @@ async def create_user(user: UserCreate, current_user: CurrentUser = Depends(requ
         last_name=created["last_name"],
         team_id=created["team_id"],
         team_name=created["team_name"],
+        is_active=created.get("is_active", True),
         created_at=created["created_at"],
         updated_at=created["updated_at"],
         jira_accounts=created["jira_accounts"]
@@ -177,6 +184,7 @@ async def get_user(user_id: int, current_user: CurrentUser = Depends(get_current
         last_name=user["last_name"],
         team_id=user["team_id"],
         team_name=user["team_name"],
+        is_active=user.get("is_active", True),
         created_at=user["created_at"],
         updated_at=user["updated_at"],
         jira_accounts=user["jira_accounts"]
@@ -225,6 +233,7 @@ async def update_user(user_id: int, user: UserUpdate, current_user: CurrentUser 
         last_name=updated["last_name"],
         team_id=updated["team_id"],
         team_name=updated["team_name"],
+        is_active=updated.get("is_active", True),
         created_at=updated["created_at"],
         updated_at=updated["updated_at"],
         jira_accounts=updated["jira_accounts"]
@@ -233,7 +242,11 @@ async def update_user(user_id: int, user: UserUpdate, current_user: CurrentUser 
 
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: int, current_user: CurrentUser = Depends(require_admin)):
-    """Delete a user (ADMIN only)."""
+    """Soft delete a user (marks as inactive) - ADMIN only.
+
+    This preserves all historical worklog data while hiding the user from active lists.
+    The user's worklogs, billing data, and reports remain intact.
+    """
     storage = get_storage()
 
     existing = await storage.get_user(user_id, current_user.company_id)
@@ -241,7 +254,25 @@ async def delete_user(user_id: int, current_user: CurrentUser = Depends(require_
         raise HTTPException(status_code=404, detail="User not found")
 
     await storage.delete_user(user_id, current_user.company_id)
-    return {"success": True, "message": "User deleted"}
+    return {"success": True, "message": "User deactivated (soft delete)"}
+
+
+@router.post("/users/{user_id}/reactivate")
+async def reactivate_user(user_id: int, current_user: CurrentUser = Depends(require_admin)):
+    """Reactivate a soft-deleted user - ADMIN only.
+
+    Restores a previously deactivated user, allowing them to appear in active lists again.
+    """
+    storage = get_storage()
+
+    # Note: We need to query the user without is_active filter to find deactivated users
+    # For now, just try to reactivate and check if it succeeded
+    success = await storage.reactivate_user(user_id, current_user.company_id)
+
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found or already active")
+
+    return {"success": True, "message": "User reactivated"}
 
 
 def extract_name_from_email(email: str) -> tuple[str, str]:
@@ -1165,3 +1196,54 @@ async def clear_all_worklogs(
     except Exception as e:
         logger.error(f"Failed to clear worklogs: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to clear worklogs: {str(e)}")
+
+
+# ========== Role Migration Endpoint ==========
+
+@router.post("/migrate-roles")
+async def migrate_roles(current_user: CurrentUser = Depends(require_admin)):
+    """
+    Migrate legacy USER roles to DEV and backfill role_level (ADMIN only).
+
+    This is a one-time migration for existing databases that had the old
+    USER role. It converts USER -> DEV and ensures role_level is set correctly.
+    """
+    storage = get_storage()
+
+    import aiosqlite
+    async with aiosqlite.connect(storage.db_path) as db:
+        # Count users with old USER role
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM oauth_users WHERE role = 'USER' AND company_id = ?",
+            (current_user.company_id,)
+        )
+        user_role_count = (await cursor.fetchone())[0]
+
+        # Migrate USER -> DEV
+        await db.execute(
+            "UPDATE oauth_users SET role = 'DEV', role_level = 1 WHERE role = 'USER' AND company_id = ?",
+            (current_user.company_id,)
+        )
+
+        # Backfill role_level for all roles
+        for role_name in UserRole.ALL_ROLES:
+            level = UserRole.get_level(role_name)
+            await db.execute(
+                "UPDATE oauth_users SET role_level = ? WHERE role = ? AND company_id = ?",
+                (level, role_name, current_user.company_id)
+            )
+
+        await db.commit()
+
+        # Get final counts
+        cursor = await db.execute(
+            "SELECT role, COUNT(*) FROM oauth_users WHERE company_id = ? GROUP BY role",
+            (current_user.company_id,)
+        )
+        role_counts = {row[0]: row[1] for row in await cursor.fetchall()}
+
+    return {
+        "success": True,
+        "migrated_from_user_to_dev": user_role_count,
+        "role_counts": role_counts
+    }

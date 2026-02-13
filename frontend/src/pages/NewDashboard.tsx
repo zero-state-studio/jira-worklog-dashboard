@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getDashboard, getWorklogs, getJiraInstances, getComplementaryGroups, getHolidaysForRange, getMultiJiraOverview } from '../api/client'
-import { KpiBar, DataTable, Column, Card, Badge } from '../components/common'
+import { KpiBar, DataTable, Column, Card, Badge, DateRangePicker } from '../components/common'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
 import { format, differenceInBusinessDays } from 'date-fns'
 import { it } from 'date-fns/locale'
@@ -20,6 +20,7 @@ interface WorklogData {
   total_hours: number
   expected_hours: number
   completion_percentage: number
+  daily_working_hours?: number
   teams: any[]
   top_epics: any[]
   top_projects?: any[]
@@ -53,6 +54,7 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
   const [selectedProjectInstance, setSelectedProjectInstance] = useState<string | null>(null)
   const [multiJiraOverview, setMultiJiraOverview] = useState<any>(null)
   const [instanceProjects, setInstanceProjects] = useState<{ [key: string]: any[] }>({})
+  const [dailyWorkingHours, setDailyWorkingHours] = useState(8) // Default fallback
 
   const handlePeriodChange = (period: PeriodPreset) => {
     setSelectedPeriod(period)
@@ -95,6 +97,11 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
         selectedInstance
       )
       setData(result)
+
+      // Extract daily_working_hours from backend response
+      if (result.daily_working_hours) {
+        setDailyWorkingHours(result.daily_working_hours)
+      }
 
       // Fetch JIRA instances
       const instancesResult = await getJiraInstances()
@@ -419,8 +426,8 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
     const contributors = instanceContributors.get(primaryInstanceName)?.size || 0
     const worklogCount = instanceWorklogs.get(primaryInstanceName) || 0
 
-    // Calculate available hours (working days × 8h × contributors)
-    const availableHours = workingDays * 8 * contributors
+    // Calculate available hours (working days × daily_working_hours × contributors)
+    const availableHours = workingDays * dailyWorkingHours * contributors
     const utilization = availableHours > 0 ? (hours / availableHours) * 100 : 0
 
     // Build member details for expandable rows (using member.name)
@@ -452,8 +459,8 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
     const contributors = instanceContributors.get(instance).size
     const worklogCount = instanceWorklogs.get(instance)
 
-    // Calculate available hours (working days × 8h × contributors)
-    const availableHours = workingDays * 8 * contributors
+    // Calculate available hours (working days × daily_working_hours × contributors)
+    const availableHours = workingDays * dailyWorkingHours * contributors
     const utilization = availableHours > 0 ? (hours / availableHours) * 100 : 0
 
     instanceData.push({
@@ -676,7 +683,7 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
     // Add child rows if group is expanded
     if (item.isGroup && expandedGroups.has(item.groupName)) {
       item.members.forEach((member: any) => {
-        const memberAvailable = workingDays * 8 * member.contributors
+        const memberAvailable = workingDays * dailyWorkingHours * member.contributors
         const memberUtilization = memberAvailable > 0 ? (member.hours / memberAvailable) * 100 : 0
 
         comparisonTableData.push({
@@ -745,6 +752,19 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
             </button>
           )
         })}
+
+        {/* Custom Date Picker */}
+        <DateRangePicker
+          startDate={dateRange.startDate}
+          endDate={dateRange.endDate}
+          isActive={selectedPeriod === null}
+          onChange={(range) => {
+            setSelectedPeriod(null) // Deselect presets
+            if (onDateRangeChange) {
+              onDateRangeChange(range)
+            }
+          }}
+        />
       </div>
 
       {/* Row 1: KPI Bar */}

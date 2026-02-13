@@ -324,6 +324,17 @@ async def get_config_info(current_user: CurrentUser = Depends(get_current_user))
                 "full_name": f"{user['first_name']} {user['last_name']}"
             })
 
+    # Get current user details from database
+    current_user_data = await storage.get_user(current_user.id, current_user.company_id)
+    user_info = {
+        "id": current_user.id,
+        "email": current_user.email,
+        "role": current_user.role,
+        "name": f"{current_user_data.get('first_name', '')} {current_user_data.get('last_name', '')}".strip() if current_user_data else None,
+        "first_name": current_user_data.get("first_name") if current_user_data else None,
+        "last_name": current_user_data.get("last_name") if current_user_data else None,
+    }
+
     return {
         "demo_mode": config.settings.demo_mode,
         "daily_working_hours": config.settings.daily_working_hours,
@@ -331,6 +342,7 @@ async def get_config_info(current_user: CurrentUser = Depends(get_current_user))
         "complementary_instances": config.settings.complementary_instances,
         "jira_instances": jira_instances,
         "user_count": len(users),
+        "user": user_info,
         "teams": [
             {
                 "name": team["name"],

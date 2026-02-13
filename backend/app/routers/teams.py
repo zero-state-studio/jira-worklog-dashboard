@@ -308,11 +308,13 @@ def calculate_member_hours_from_db(worklogs: list[Worklog], team_members: list[d
         email = member["email"]
         user_id = member.get("id")
         full_name = f"{member['first_name']} {member['last_name']}"
+        role = member.get("role")
         hours = member_data.get(email.lower(), 0)
         result.append(UserHours(
             email=email,
             user_id=user_id,
             full_name=full_name,
+            role=role,
             total_hours=round(hours, 2),
             team_name=team_name
         ))

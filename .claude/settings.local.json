@@ -60,7 +60,8 @@
       "Bash(python run_migration_003.py:*)",
       "Bash(npx tsc:*)",
       "Bash(./node_modules/.bin/tsc:*)",
-      "Bash(npx --package typescript tsc:*)"
+      "Bash(npx --package typescript tsc:*)",
+      "Bash(python:*)"
     ]
   }
 }

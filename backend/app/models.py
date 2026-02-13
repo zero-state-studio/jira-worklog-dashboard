@@ -6,6 +6,39 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+# ============ Role System ============
+
+class UserRole:
+    """Hierarchical role system with 4 levels."""
+    DEV = "DEV"
+    PM = "PM"
+    MANAGER = "MANAGER"
+    ADMIN = "ADMIN"
+
+    LEVELS = {
+        "DEV": 1,
+        "PM": 2,
+        "MANAGER": 3,
+        "ADMIN": 4,
+    }
+
+    ALL_ROLES = [DEV, PM, MANAGER, ADMIN]
+
+    @classmethod
+    def get_level(cls, role: str) -> int:
+        """Return the numeric level for a role. Raises ValueError if invalid."""
+        if role not in cls.LEVELS:
+            raise ValueError(f"Invalid role: {role}. Must be one of {cls.ALL_ROLES}")
+        return cls.LEVELS[role]
+
+    @classmethod
+    def validate(cls, role: str) -> str:
+        """Validate a role string and return it. Raises ValueError if invalid."""
+        if role not in cls.LEVELS:
+            raise ValueError(f"Invalid role: {role}. Must be one of {cls.ALL_ROLES}")
+        return role
+
+
 # ============ Configuration Models ============
 
 class JiraInstanceConfig(BaseModel):
@@ -116,17 +149,22 @@ class TeamBase(BaseModel):
 
 class TeamCreate(TeamBase):
     """Model for creating a new team."""
-    pass
+    owner_id: Optional[int] = None
 
 
 class TeamUpdate(BaseModel):
     """Model for updating a team."""
     name: Optional[str] = None
+    owner_id: Optional[int] = None
 
 
 class TeamInDB(TeamBase):
     """Team model with database fields."""
     id: int
+    owner_id: Optional[int] = None
+    owner_email: Optional[str] = None
+    owner_first_name: Optional[str] = None
+    owner_last_name: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     member_count: int = 0
@@ -150,6 +188,7 @@ class UserUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     team_id: Optional[int] = None
+    role: Optional[str] = Field(default=None, pattern="^(DEV|PM|MANAGER|ADMIN)$")
 
 
 class UserInDB(UserBase):
@@ -157,6 +196,7 @@ class UserInDB(UserBase):
     id: int
     team_id: Optional[int] = None
     team_name: Optional[str] = None
+    is_active: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     jira_accounts: list[UserJiraAccount] = Field(default_factory=list)
@@ -287,6 +327,7 @@ class UserHours(BaseModel):
     email: str
     user_id: Optional[int] = None
     full_name: str
+    role: Optional[str] = None
     total_hours: float
     team_name: str
 
@@ -306,6 +347,7 @@ class DashboardResponse(BaseModel):
     total_hours: float
     expected_hours: float
     completion_percentage: float
+    daily_working_hours: int
     teams: list[TeamHours]
     top_epics: list[EpicHours]
     top_projects: list[EpicHours] = []
@@ -751,7 +793,7 @@ class OAuthUserCreate(BaseModel):
     google_id: str
     email: str
     company_id: int
-    role: str = "USER"
+    role: str = Field(default="DEV", pattern="^(DEV|PM|MANAGER|ADMIN)$")
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     picture_url: Optional[str] = None
@@ -767,6 +809,7 @@ class OAuthUserResponse(BaseModel):
     last_name: Optional[str] = None
     picture_url: Optional[str] = None
     role: str
+    role_level: int = 1
     is_active: bool
     last_login_at: Optional[datetime] = None
     created_at: datetime
@@ -777,7 +820,7 @@ class OAuthUserUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     picture_url: Optional[str] = None
-    role: Optional[str] = None
+    role: Optional[str] = Field(default=None, pattern="^(DEV|PM|MANAGER|ADMIN)$")
     is_active: Optional[bool] = None
 
 
@@ -799,7 +842,7 @@ class RefreshTokenRequest(BaseModel):
 class InvitationCreate(BaseModel):
     """Request to create an invitation."""
     email: str
-    role: str = "USER"
+    role: str = Field(default="DEV", pattern="^(DEV|PM|MANAGER|ADMIN)$")
 
 
 class InvitationResponse(BaseModel):
@@ -852,7 +895,7 @@ class DevLoginRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=255)
     first_name: str = Field(default="Dev", min_length=1, max_length=100)
     last_name: str = Field(default="User", min_length=1, max_length=100)
-    role: str = Field(default="ADMIN", pattern="^(ADMIN|MANAGER|USER)$")
+    role: str = Field(default="ADMIN", pattern="^(DEV|PM|MANAGER|ADMIN)$")
 
 
 class AuthAuditLogEntry(BaseModel):

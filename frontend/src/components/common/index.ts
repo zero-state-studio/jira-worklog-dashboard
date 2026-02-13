@@ -31,3 +31,5 @@ export type { KpiBarProps, KpiItem } from './KpiBar'
 
 export { DataTable } from './DataTable'
 export type { DataTableProps, Column, ColumnType } from './DataTable'
+
+export { default as DateRangePicker } from './DateRangePicker'

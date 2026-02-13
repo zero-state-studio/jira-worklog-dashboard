@@ -252,7 +252,8 @@ async def calculate_contributors_from_db(worklogs: list[Worklog], users: list[di
         email_to_data[email_lower] = {
             "name": f"{u['first_name']} {u['last_name']}",
             "team": u.get("team_name"),
-            "user_id": u["id"]
+            "user_id": u["id"],
+            "role": u.get("role")
         }
 
     contributor_data = defaultdict(lambda: {"hours": 0, "name": "Unknown", "user_id": None})
@@ -270,11 +271,14 @@ async def calculate_contributors_from_db(worklogs: list[Worklog], users: list[di
 
     result = []
     for email, data in contributor_data.items():
-        team_name = email_to_data.get(email, {}).get("team", "External")
+        user_data = email_to_data.get(email, {})
+        team_name = user_data.get("team", "External")
+        role = user_data.get("role")
         result.append(UserHours(
             email=email,
             user_id=data["user_id"],
             full_name=data["name"],
+            role=role,
             total_hours=round(data["hours"], 2),
             team_name=team_name or "External"
         ))

@@ -110,6 +110,7 @@ async def get_dashboard(
         total_hours=round(total_hours, 2),
         expected_hours=round(expected_hours, 2),
         completion_percentage=round(completion, 1),
+        daily_working_hours=config.settings.daily_working_hours,
         teams=team_hours,
         top_epics=top_epics,
         top_projects=top_projects,
