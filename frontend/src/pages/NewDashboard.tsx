@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getDashboard, getWorklogs, getJiraInstances, getComplementaryGroups, getHolidaysForRange } from '../api/client'
+import { getDashboard, getWorklogs, getJiraInstances, getComplementaryGroups, getHolidaysForRange, getMultiJiraOverview } from '../api/client'
 import { KpiBar, DataTable, Column, Card, Badge } from '../components/common'
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
 import { format, differenceInBusinessDays } from 'date-fns'
 import { it } from 'date-fns/locale'
 import { formatHours } from '../hooks/useData'
@@ -23,7 +23,6 @@ interface WorklogData {
   teams: any[]
   top_epics: any[]
   top_projects?: any[]
-  daily_trend: any[]
   worklog_count?: number
   active_users?: number
   billable_ratio?: number
@@ -51,6 +50,8 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
   const [complementaryGroups, setComplementaryGroups] = useState<any[]>([])
   const [holidayDates, setHolidayDates] = useState<string[]>([])
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const [selectedProjectInstance, setSelectedProjectInstance] = useState<string | null>(null)
+  const [multiJiraOverview, setMultiJiraOverview] = useState<any>(null)
 
   const handlePeriodChange = (period: PeriodPreset) => {
     setSelectedPeriod(period)
@@ -152,21 +153,30 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
     fetchWorklogs()
   }, [dateRange.startDate, dateRange.endDate, selectedInstance])
 
-  // Fetch complementary groups and holidays
+  // Fetch complementary groups, holidays, and multi-jira overview (independent calls)
   useEffect(() => {
     const fetchMetadata = async () => {
       try {
-        // Fetch complementary groups
         const groupsResult = await getComplementaryGroups()
         setComplementaryGroups(groupsResult.groups || [])
+      } catch (err) {
+        console.error('[Dashboard] Failed to fetch groups:', err)
+      }
 
-        // Fetch holidays for the date range
+      try {
         const startDate = dateRange.startDate.toISOString().split('T')[0]
         const endDate = dateRange.endDate.toISOString().split('T')[0]
         const holidaysResult = await getHolidaysForRange(startDate, endDate)
         setHolidayDates(holidaysResult.holiday_dates || [])
       } catch (err) {
-        console.error('[Dashboard] Failed to fetch complementary groups or holidays:', err)
+        console.error('[Dashboard] Failed to fetch holidays:', err)
+      }
+
+      try {
+        const overviewResult = await getMultiJiraOverview(dateRange.startDate, dateRange.endDate)
+        setMultiJiraOverview(overviewResult)
+      } catch (err) {
+        console.error('[Dashboard] Failed to fetch multi-jira overview:', err)
       }
     }
 
@@ -203,8 +213,13 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
   if (!data) return null
 
   // Calculate working days in period (for Avg/Day KPI) - excluding weekends and holidays
-  const businessDays = differenceInBusinessDays(dateRange.endDate, dateRange.startDate) + 1
-  const workingDays = businessDays - holidayDates.length // Subtract holidays from business days
+  const businessDays = differenceInBusinessDays(dateRange.endDate, dateRange.startDate)
+  const weekdayHolidays = holidayDates.filter(dateStr => {
+    const date = new Date(dateStr)
+    const dayOfWeek = date.getDay()
+    return dayOfWeek !== 0 && dayOfWeek !== 6
+  })
+  const workingDays = businessDays - weekdayHolidays.length
   const avgHoursPerDay = workingDays > 0 ? data.total_hours / workingDays : 0
 
   // Calculate KPIs
@@ -227,18 +242,26 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
     },
   ]
 
-  // Prepare daily trend data
-  const dailyTrendData = data.daily_trend.map((item) => ({
-    date: format(new Date(item.date), 'd MMM', { locale: it }),
-    hours: item.hours || 0,
-  }))
-
   // Prepare projects data (top 5 + "Other")
   const allProjects = data.top_projects || data.top_epics || []
-  const top5Projects = allProjects.slice(0, 5)
-  const otherProjects = allProjects.slice(5)
 
-  const projectsData = top5Projects.map((project) => ({
+  // Get all configured JIRA instances for tab selector (shows all, even if no projects in current period)
+  const projectInstances = jiraInstances.map((inst: any) => inst.name).filter(Boolean) as string[]
+
+  // Auto-select first instance if none selected or current selection is invalid
+  const activeProjectInstance = selectedProjectInstance && projectInstances.includes(selectedProjectInstance)
+    ? selectedProjectInstance
+    : projectInstances[0] || null
+
+  // Filter projects by selected instance
+  const filteredProjects = activeProjectInstance
+    ? allProjects.filter((p: any) => p.jira_instance === activeProjectInstance)
+    : allProjects
+
+  const top5Projects = filteredProjects.slice(0, 5)
+  const otherProjects = filteredProjects.slice(5)
+
+  const projectsData = top5Projects.map((project: any) => ({
     name: project.epic_name.length > 25 ? project.epic_name.substring(0, 25) + '...' : project.epic_name,
     hours: project.total_hours,
     full_name: project.epic_name,
@@ -246,7 +269,7 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
 
   // Add "Other" if there are more than 5 projects
   if (otherProjects.length > 0) {
-    const otherHours = otherProjects.reduce((sum, p) => sum + p.total_hours, 0)
+    const otherHours = otherProjects.reduce((sum: number, p: any) => sum + p.total_hours, 0)
     projectsData.push({
       name: 'Other',
       hours: otherHours,
@@ -494,16 +517,31 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
     })
   }
 
+  // Build discrepancy lookup from multi-jira overview
+  const discrepancyMap = new Map<string, { delta: number; primaryHours: number; secondaryHours: number }>()
+  if (multiJiraOverview?.complementary_comparisons) {
+    multiJiraOverview.complementary_comparisons.forEach((c: any) => {
+      const delta = c.primary_total_hours - c.secondary_total_hours
+      discrepancyMap.set(c.group_name, {
+        delta,
+        primaryHours: c.primary_total_hours,
+        secondaryHours: c.secondary_total_hours,
+      })
+    })
+  }
+
   // Prepare data for comparison table
   const comparisonTableColumns: Column[] = [
     {
       key: 'instance',
       label: 'Instance',
       type: 'text',
-      width: '200px',
+      width: '280px',
       render: (value, row: any) => {
         const isExpanded = expandedGroups.has(row.groupName)
         const hasMembers = row.isGroup && row.members && row.members.length > 1
+        const discrepancy = row.isGroup ? discrepancyMap.get(row.groupName) : null
+        const hasDiscrepancy = discrepancy && Math.abs(discrepancy.delta) > 0.5
 
         return (
           <div
@@ -520,6 +558,11 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
               {value}
               {row.isPrimary && <span className="ml-2 text-xs text-accent">(primary)</span>}
             </span>
+            {hasDiscrepancy && (
+              <Badge variant="warning">
+                {discrepancy.delta > 0 ? '+' : ''}{formatHours(discrepancy.delta)}
+              </Badge>
+            )}
           </div>
         )
       },
@@ -634,8 +677,8 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
     worklogs: instanceData.reduce((sum, item) => sum + item.worklogCount, 0),
     contributors: new Set(allWorklogs.map((wl: any) => wl.author_email)).size,
     available: formatHours(totalAvailable),
-    utilization: `${Math.round((totalUsed / totalAvailable) * 100)}%`,
-    utilizationValue: (totalUsed / totalAvailable) * 100,
+    utilization: totalAvailable > 0 ? `${Math.round((totalUsed / totalAvailable) * 100)}%` : '0%',
+    utilizationValue: totalAvailable > 0 ? (totalUsed / totalAvailable) * 100 : 0,
   }
   comparisonTableData.push(totalRow)
 
@@ -680,49 +723,107 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
       {/* Row 1: KPI Bar */}
       <KpiBar items={kpiItems} />
 
+      {/* Row 1.5: Multi-JIRA Overview Cards */}
+      {multiJiraOverview && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {/* Complementary Group Cards */}
+          {(multiJiraOverview.complementary_comparisons || []).map((comparison: any) => {
+            const delta = comparison.primary_total_hours - comparison.secondary_total_hours
+            const hasDiscrepancy = Math.abs(delta) > 0.01
+            const discrepancyCount = (comparison.discrepancies || []).length
+
+            return (
+              <Card key={comparison.group_name} padding="compact">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-semibold text-primary">{comparison.group_name}</span>
+                  {hasDiscrepancy && (
+                    <Badge variant="warning">{discrepancyCount} discrepancies</Badge>
+                  )}
+                  {!hasDiscrepancy && (
+                    <Badge variant="success">Aligned</Badge>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-tertiary mb-1">
+                      {comparison.primary_instance} <span className="text-accent">(primary)</span>
+                    </p>
+                    <p className="font-mono text-base font-bold text-primary">
+                      {formatHours(comparison.primary_total_hours)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-tertiary mb-1">{comparison.secondary_instance}</p>
+                    <p className="font-mono text-base font-bold text-primary">
+                      {formatHours(comparison.secondary_total_hours)}
+                    </p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-xs text-tertiary mb-1">Delta</p>
+                    <p className={`font-mono text-base font-bold ${hasDiscrepancy ? 'text-warning' : 'text-success'}`}>
+                      {delta > 0 ? '+' : ''}{formatHours(delta)}
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            )
+          })}
+
+          {/* Standalone Instance Cards */}
+          {(multiJiraOverview.instances || [])
+            .filter((inst: any) => {
+              // Exclude instances that are part of complementary groups
+              const groupInstances = new Set<string>()
+              ;(multiJiraOverview.complementary_comparisons || []).forEach((c: any) => {
+                groupInstances.add(c.primary_instance)
+                groupInstances.add(c.secondary_instance)
+              })
+              return !groupInstances.has(inst.instance_name)
+            })
+            .map((inst: any) => (
+              <Card key={inst.instance_name} padding="compact">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-semibold text-primary">{inst.instance_name}</span>
+                  <Badge variant="default">{inst.contributor_count} contributors</Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-tertiary mb-1">Hours</p>
+                    <p className="font-mono text-base font-bold text-primary">
+                      {formatHours(inst.total_hours)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-tertiary mb-1">Completion</p>
+                    <p className={`font-mono text-base font-bold ${
+                      inst.completion_percentage >= 85 ? 'text-success' :
+                      inst.completion_percentage >= 50 ? 'text-primary' : 'text-warning'
+                    }`}>
+                      {Math.round(inst.completion_percentage)}%
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-tertiary mb-1">Expected</p>
+                    <p className="font-mono text-sm text-secondary">
+                      {formatHours(inst.expected_hours)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-tertiary mb-1">Initiatives</p>
+                    <p className="font-mono text-sm text-secondary">
+                      {inst.initiative_count}
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            ))}
+        </div>
+      )}
+
       {/* ============ BY INSTANCE SECTION ============ */}
       {showInstanceSection && (
         <>
-          {/* Row 1: KPI Cards per Instance */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {instanceData.map((item, index) => {
-              const utilizationColor =
-                item.utilization < 50
-                  ? 'text-warning'
-                  : item.utilization >= 50 && item.utilization < 85
-                  ? 'text-primary'
-                  : item.utilization >= 85 && item.utilization <= 100
-                  ? 'text-success'
-                  : 'text-error'
-
-              return (
-                <Card key={item.instance} padding="compact">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm font-semibold text-primary">{item.instance}</span>
-                    <Badge variant="default">{item.worklogCount} worklogs</Badge>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-xs uppercase text-tertiary mb-1">Hours</p>
-                      <p className="font-mono text-base font-bold text-primary">{formatHours(item.hours)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase text-tertiary mb-1">Contributors</p>
-                      <p className="font-mono text-base font-bold text-primary">{item.contributors}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <p className="text-xs uppercase text-tertiary mb-1">Utilization (est.)</p>
-                      <p className={`font-mono text-base font-bold ${utilizationColor}`}>
-                        {Math.round(item.utilization)}%
-                      </p>
-                    </div>
-                  </div>
-                </Card>
-              )
-            })}
-          </div>
-
-          {/* Row 2: Charts */}
+          {/* Row 1: Charts */}
           <div className="grid grid-cols-12 gap-6">
             {/* Donut Chart - Utilization by Instance */}
             <div className="col-span-12 md:col-span-5">
@@ -843,135 +944,93 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
         </>
       )}
 
-      {/* Row 2: Charts (Overview) */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* Hours by Day */}
-        <div className="col-span-2">
-          <div className="flat-card p-4">
-            <div className="mb-4">
-              <h3 className="text-base font-semibold text-primary">Hours by Day</h3>
-              <p className="text-sm text-secondary">Daily tracking overview</p>
-            </div>
-            <ResponsiveContainer width="100%" height={250}>
-              <AreaChart data={dailyTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-accent)" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="var(--color-accent)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--color-border)"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="date"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
-                  dy={10}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
-                  tickFormatter={(value) => `${value}h`}
-                  dx={-10}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: 'var(--color-surface)',
-                    border: '1px solid var(--color-border-strong)',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                  }}
-                  labelStyle={{ color: 'var(--color-text-secondary)', fontSize: 12 }}
-                  itemStyle={{ color: 'var(--color-text-primary)', fontSize: 13 }}
-                  formatter={(value: any) => [formatHours(value), 'Hours']}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="hours"
-                  stroke="var(--color-accent)"
-                  strokeWidth={2}
-                  fill="url(#colorHours)"
-                  dot={false}
-                  activeDot={{ r: 6, fill: 'var(--color-accent)', stroke: '#fff', strokeWidth: 2 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+      {/* Row 2: By Project Chart */}
+      <Card padding="compact">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-base font-semibold text-primary">By Project</h3>
+            <p className="text-xs text-secondary">Top 5 initiatives</p>
           </div>
-        </div>
-
-        {/* By Project */}
-        <div>
-          <div className="flat-card p-4">
-            <div className="mb-4">
-              <h3 className="text-base font-semibold text-primary">By Project</h3>
-              <p className="text-sm text-secondary">Top 5 initiatives</p>
+          {projectInstances.length > 0 && (
+            <div className="flex items-center gap-1">
+              {projectInstances.map((instance) => {
+                const isActive = instance === activeProjectInstance
+                return (
+                  <button
+                    key={instance}
+                    onClick={() => setSelectedProjectInstance(instance)}
+                    className={`h-[28px] px-3 text-xs font-medium rounded-md transition-colors ${
+                      isActive
+                        ? 'bg-accent-subtle text-accent-text'
+                        : 'bg-transparent text-secondary hover:bg-surface-hover'
+                    }`}
+                  >
+                    {instance}
+                  </button>
+                )
+              })}
             </div>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart
-                data={projectsData}
-                layout="vertical"
-                margin={{ top: 10, right: 40, left: 10, bottom: 10 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--color-border)"
-                  horizontal
-                  vertical={false}
-                />
-                <XAxis
-                  type="number"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
-                  tickFormatter={(value) => `${Math.round(value)}h`}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: 'var(--color-text-primary)', fontSize: 11 }}
-                  width={80}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: 'var(--color-surface)',
-                    border: '1px solid var(--color-border-strong)',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                  }}
-                  formatter={(value: any, name: any, props: any) => [
-                    formatHours(value),
-                    props.payload.full_name,
-                  ]}
-                />
-                <Bar
-                  dataKey="hours"
-                  radius={[0, 4, 4, 0]}
-                  maxBarSize={24}
-                >
-                  {projectsData.map((entry, index) => {
-                    const colors = [
-                      'var(--color-accent)',      // #2563EB - first bar
-                      '#64748B',                   // slate-500
-                      '#94A3B8',                   // slate-400
-                      '#CBD5E1',                   // slate-300
-                      '#E2E8F0',                   // slate-200
-                      '#F1F5F9',                   // slate-100 - for "Other"
-                    ]
-                    return <Cell key={`cell-${index}`} fill={colors[index] || colors[colors.length - 1]} />
-                  })}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          )}
         </div>
-      </div>
+        <ResponsiveContainer width="100%" height={250}>
+          <BarChart
+            data={projectsData}
+            layout="vertical"
+            margin={{ top: 10, right: 40, left: 10, bottom: 10 }}
+          >
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="var(--color-border)"
+              horizontal
+              vertical={false}
+            />
+            <XAxis
+              type="number"
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12 }}
+              tickFormatter={(value) => `${Math.round(value)}h`}
+            />
+            <YAxis
+              type="category"
+              dataKey="name"
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: 'var(--color-text-primary)', fontSize: 11 }}
+              width={120}
+            />
+            <Tooltip
+              contentStyle={{
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-border-strong)',
+                borderRadius: '6px',
+                padding: '8px 12px',
+              }}
+              formatter={(value: any, name: any, props: any) => [
+                formatHours(value),
+                props.payload.full_name,
+              ]}
+            />
+            <Bar
+              dataKey="hours"
+              radius={[0, 4, 4, 0]}
+              maxBarSize={24}
+            >
+              {projectsData.map((entry, index) => {
+                const colors = [
+                  'var(--color-accent)',      // #2563EB - first bar
+                  '#64748B',                   // slate-500
+                  '#94A3B8',                   // slate-400
+                  '#CBD5E1',                   // slate-300
+                  '#E2E8F0',                   // slate-200
+                  '#F1F5F9',                   // slate-100 - for "Other"
+                ]
+                return <Cell key={`cell-${index}`} fill={colors[index] || colors[colors.length - 1]} />
+              })}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </Card>
 
       {/* Row 3: Recent Activity */}
       <DataTable
