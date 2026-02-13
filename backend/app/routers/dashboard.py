@@ -94,9 +94,6 @@ async def get_dashboard(
         all_worklogs=all_worklogs  # Pass all worklogs for per-instance breakdown
     )
 
-    # Daily trend
-    daily_trend = calculate_daily_trend(worklogs, start_date, end_date)
-
     # Top epics
     top_epics = calculate_epic_hours(worklogs)[:10]
 
@@ -114,7 +111,6 @@ async def get_dashboard(
         expected_hours=round(expected_hours, 2),
         completion_percentage=round(completion, 1),
         teams=team_hours,
-        daily_trend=daily_trend,
         top_epics=top_epics,
         top_projects=top_projects,
         period_start=start_date,

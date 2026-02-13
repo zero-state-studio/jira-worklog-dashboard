@@ -880,6 +880,8 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
                     data={groupedTeamData}
                     layout="vertical"
                     margin={{ top: 10, right: 30, left: 10, bottom: 10 }}
+                    barGap={2}
+                    barCategoryGap="15%"
                   >
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -918,13 +920,13 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
                       iconSize={8}
                       wrapperStyle={{ fontSize: '11px', paddingBottom: '8px' }}
                     />
-                    {instanceData.map((item, index) => (
+                    {jiraInstances.map((inst, index) => (
                       <Bar
-                        key={item.instance}
-                        dataKey={item.instance}
+                        key={inst.name}
+                        dataKey={inst.name}
                         fill={INSTANCE_COLORS[index] || '#94A3B8'}
                         radius={[0, 4, 4, 0]}
-                        maxBarSize={18}
+                        maxBarSize={12}
                       />
                     ))}
                   </BarChart>
