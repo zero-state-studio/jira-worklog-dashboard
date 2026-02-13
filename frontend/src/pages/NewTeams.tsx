@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { DataTable, Column, Badge, Button, Modal, Input, Select } from '../components/common'
 import { Search, Plus, Edit, Trash2, UserPlus } from 'lucide-react'
 import { getDashboard, getTeamDetail, getTeamMultiJiraOverview, createTeam, updateTeam, deleteTeam } from '../api/client'
+import { ROLE_OPTIONS, ROLE_BADGE_VARIANTS, type UserRole } from '../constants/roles'
 
 interface Team {
   name: string
@@ -14,7 +15,7 @@ interface Team {
 interface TeamMember {
   email: string
   name: string
-  role: 'ADMIN' | 'MANAGER' | 'USER'
+  role: UserRole
   total_hours: number
 }
 
@@ -236,12 +237,8 @@ export default function NewTeams({ dateRange, selectedInstance, onDateRangeChang
       type: 'badge',
       width: '120px',
       render: (value: string) => {
-        const variantMap: Record<string, 'default' | 'info' | 'success'> = {
-          ADMIN: 'error',
-          MANAGER: 'info',
-          USER: 'default',
-        }
-        return <Badge variant={variantMap[value] || 'default'}>{value}</Badge>
+        const variant = ROLE_BADGE_VARIANTS[value as UserRole] || 'default'
+        return <Badge variant={variant}>{value}</Badge>
       },
     },
   ]
@@ -752,13 +749,13 @@ interface AddMemberModalProps {
 
 function AddMemberModal({ isOpen, teamName, onClose, onSave }: AddMemberModalProps) {
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState('USER')
+  const [role, setRole] = useState('DEV')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
       setEmail('')
-      setRole('USER')
+      setRole('DEV')
     }
   }, [isOpen])
 
@@ -799,11 +796,7 @@ function AddMemberModal({ isOpen, teamName, onClose, onSave }: AddMemberModalPro
         />
         <Select
           label="Role"
-          options={[
-            { value: 'USER', label: 'Member' },
-            { value: 'MANAGER', label: 'Manager' },
-            { value: 'ADMIN', label: 'Admin' },
-          ]}
+          options={ROLE_OPTIONS.map(r => ({ value: r.value, label: r.label }))}
           value={role}
           onChange={setRole}
         />

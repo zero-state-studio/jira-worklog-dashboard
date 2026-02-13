@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 import asyncio
 
-from .models import Worklog, Epic, Issue
+from .models import Worklog, Epic, Issue, UserRole
 
 
 class WorklogStorage:
@@ -128,6 +128,7 @@ class WorklogStorage:
                     CREATE TABLE IF NOT EXISTS teams (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         name TEXT NOT NULL UNIQUE,
+                        owner_id INTEGER REFERENCES oauth_users(id) ON DELETE SET NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -600,7 +601,8 @@ class WorklogStorage:
                         first_name TEXT,
                         last_name TEXT,
                         picture_url TEXT,
-                        role TEXT NOT NULL DEFAULT 'USER',
+                        role TEXT NOT NULL DEFAULT 'DEV',
+                        role_level INTEGER NOT NULL DEFAULT 1,
                         is_active INTEGER DEFAULT 1,
                         last_login_at TIMESTAMP,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -907,6 +909,70 @@ class WorklogStorage:
                 await db.execute("""
                     CREATE INDEX IF NOT EXISTS idx_complementary_groups_company
                     ON complementary_groups(company_id)
+                """)
+
+                # ========== Role System Migration ==========
+                # Add role_level to oauth_users for hierarchical role queries
+                try:
+                    await db.execute("""
+                        ALTER TABLE oauth_users
+                        ADD COLUMN role_level INTEGER NOT NULL DEFAULT 1
+                    """)
+                    # Backfill role_level from existing role values
+                    await db.execute("UPDATE oauth_users SET role_level = 4 WHERE role = 'ADMIN'")
+                    await db.execute("UPDATE oauth_users SET role_level = 3 WHERE role = 'MANAGER'")
+                    await db.execute("UPDATE oauth_users SET role_level = 2 WHERE role = 'PM'")
+                    await db.execute("UPDATE oauth_users SET role_level = 1 WHERE role IN ('USER', 'DEV')")
+                    # Migrate old role names: USER -> DEV
+                    await db.execute("UPDATE oauth_users SET role = 'DEV' WHERE role = 'USER'")
+                    await db.commit()
+                except Exception:
+                    pass  # Column already exists
+
+                # Add owner_id to teams for team ownership
+                try:
+                    await db.execute("""
+                        ALTER TABLE teams
+                        ADD COLUMN owner_id INTEGER REFERENCES oauth_users(id) ON DELETE SET NULL
+                    """)
+                except Exception:
+                    pass  # Column already exists
+
+                # Indexes for role system
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_oauth_users_role_level
+                    ON oauth_users(company_id, role_level)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_teams_owner_id
+                    ON teams(company_id, owner_id)
+                """)
+
+                # Add role and role_level to users table (for team members)
+                try:
+                    await db.execute("""
+                        ALTER TABLE users
+                        ADD COLUMN role TEXT NOT NULL DEFAULT 'DEV'
+                    """)
+                    await db.execute("""
+                        ALTER TABLE users
+                        ADD COLUMN role_level INTEGER NOT NULL DEFAULT 1
+                    """)
+                    # Backfill role_level from existing role values if any
+                    await db.execute("UPDATE users SET role_level = 4 WHERE role = 'ADMIN'")
+                    await db.execute("UPDATE users SET role_level = 3 WHERE role = 'MANAGER'")
+                    await db.execute("UPDATE users SET role_level = 2 WHERE role = 'PM'")
+                    await db.execute("UPDATE users SET role_level = 1 WHERE role IN ('USER', 'DEV')")
+                    # Migrate old role names: USER -> DEV
+                    await db.execute("UPDATE users SET role = 'DEV' WHERE role = 'USER'")
+                    await db.commit()
+                except Exception:
+                    pass  # Columns already exist
+
+                # Index for role-based queries on users
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_users_role_level
+                    ON users(company_id, role_level)
                 """)
 
                 # Migrate worklog IDs to composite format (id__jira_instance)
@@ -1531,12 +1597,13 @@ class WorklogStorage:
     
     # ========== Team Operations ==========
 
-    async def create_team(self, name: str, company_id: int) -> int:
+    async def create_team(self, name: str, company_id: int, owner_id: Optional[int] = None) -> int:
         """Create a new team for a specific company.
 
         Args:
             name: Team name
             company_id: Company ID (REQUIRED for multi-tenant isolation)
+            owner_id: Optional OAuth user ID to set as team owner
 
         Returns:
             Created team ID
@@ -1548,8 +1615,8 @@ class WorklogStorage:
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "INSERT INTO teams (name, company_id) VALUES (?, ?)",
-                (name, company_id)
+                "INSERT INTO teams (name, company_id, owner_id) VALUES (?, ?, ?)",
+                (name, company_id, owner_id)
             )
             await db.commit()
             return cursor.lastrowid
@@ -1571,7 +1638,7 @@ class WorklogStorage:
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT id, name, created_at, updated_at FROM teams WHERE id = ? AND company_id = ?",
+                "SELECT id, name, owner_id, created_at, updated_at FROM teams WHERE id = ? AND company_id = ?",
                 (team_id, company_id)
             ) as cursor:
                 row = await cursor.fetchone()
@@ -1579,8 +1646,9 @@ class WorklogStorage:
                     return {
                         "id": row[0],
                         "name": row[1],
-                        "created_at": row[2],
-                        "updated_at": row[3]
+                        "owner_id": row[2],
+                        "created_at": row[3],
+                        "updated_at": row[4]
                     }
         return None
 
@@ -1601,7 +1669,7 @@ class WorklogStorage:
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT id, name, created_at, updated_at FROM teams WHERE name = ? AND company_id = ?",
+                "SELECT id, name, owner_id, created_at, updated_at FROM teams WHERE name = ? AND company_id = ?",
                 (name, company_id)
             ) as cursor:
                 row = await cursor.fetchone()
@@ -1609,13 +1677,14 @@ class WorklogStorage:
                     return {
                         "id": row[0],
                         "name": row[1],
-                        "created_at": row[2],
-                        "updated_at": row[3]
+                        "owner_id": row[2],
+                        "created_at": row[3],
+                        "updated_at": row[4]
                     }
         return None
 
     async def get_all_teams(self, company_id: int) -> list[dict]:
-        """Get all teams with member counts for a specific company.
+        """Get all teams with member counts and owner info for a specific company.
 
         Args:
             company_id: Company ID to filter teams by (REQUIRED for multi-tenant isolation)
@@ -1632,21 +1701,28 @@ class WorklogStorage:
         teams = []
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT t.id, t.name, t.created_at, t.updated_at,
-                       COUNT(u.id) as member_count
+                SELECT t.id, t.name, t.owner_id, t.created_at, t.updated_at,
+                       COUNT(u.id) as member_count,
+                       o.email as owner_email, o.first_name as owner_first_name,
+                       o.last_name as owner_last_name
                 FROM teams t
                 LEFT JOIN users u ON u.team_id = t.id AND u.company_id = ?
+                LEFT JOIN oauth_users o ON o.id = t.owner_id AND o.company_id = ?
                 WHERE t.company_id = ?
                 GROUP BY t.id
                 ORDER BY t.name
-            """, (company_id, company_id)) as cursor:
+            """, (company_id, company_id, company_id)) as cursor:
                 async for row in cursor:
                     teams.append({
                         "id": row[0],
                         "name": row[1],
-                        "created_at": row[2],
-                        "updated_at": row[3],
-                        "member_count": row[4]
+                        "owner_id": row[2],
+                        "created_at": row[3],
+                        "updated_at": row[4],
+                        "member_count": row[5],
+                        "owner_email": row[6],
+                        "owner_first_name": row[7],
+                        "owner_last_name": row[8]
                     })
         return teams
 
@@ -1696,6 +1772,68 @@ class WorklogStorage:
             )
             await db.commit()
             return cursor.rowcount > 0
+
+    async def update_team_owner(self, team_id: int, owner_id: Optional[int], company_id: int) -> bool:
+        """Update the owner of a team.
+
+        Args:
+            team_id: Team ID to update
+            owner_id: OAuth user ID to set as owner (None to clear)
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            True if updated, False if team not found or doesn't belong to company
+        """
+        await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "UPDATE teams SET owner_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?",
+                (owner_id, team_id, company_id)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def get_team_with_owner(self, team_id: int, company_id: int) -> Optional[dict]:
+        """Get a team by ID with owner details.
+
+        Args:
+            team_id: Team ID to retrieve
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Team dict with owner info if found, None otherwise
+        """
+        await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT t.id, t.name, t.owner_id, t.created_at, t.updated_at,
+                       o.email as owner_email, o.first_name as owner_first_name,
+                       o.last_name as owner_last_name
+                FROM teams t
+                LEFT JOIN oauth_users o ON o.id = t.owner_id AND o.company_id = ?
+                WHERE t.id = ? AND t.company_id = ?
+            """, (company_id, team_id, company_id)) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return {
+                        "id": row[0],
+                        "name": row[1],
+                        "owner_id": row[2],
+                        "created_at": row[3],
+                        "updated_at": row[4],
+                        "owner_email": row[5],
+                        "owner_first_name": row[6],
+                        "owner_last_name": row[7]
+                    }
+        return None
 
     # ========== User Operations ==========
 
@@ -1828,7 +1966,8 @@ class WorklogStorage:
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT u.id, u.email, u.first_name, u.last_name, u.team_id,
-                       u.created_at, u.updated_at, t.name as team_name
+                       u.created_at, u.updated_at, t.name as team_name,
+                       u.role, u.role_level
                 FROM users u
                 LEFT JOIN teams t ON t.id = u.team_id AND t.company_id = ?
                 WHERE u.company_id = ?
@@ -1844,6 +1983,8 @@ class WorklogStorage:
                         "created_at": row[5],
                         "updated_at": row[6],
                         "team_name": row[7],
+                        "role": row[8],
+                        "role_level": row[9],
                         "jira_accounts": []
                     })
 
@@ -4822,19 +4963,20 @@ class WorklogStorage:
         google_id: str,
         email: str,
         company_id: int,
-        role: str = "USER",
+        role: str = "DEV",
         first_name: str = None,
         last_name: str = None,
         picture_url: str = None
     ) -> int:
-        """Create a new OAuth user."""
+        """Create a new OAuth user with role_level calculated from role."""
         await self.initialize()
+        role_level = UserRole.get_level(role)
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute("""
                 INSERT INTO oauth_users
-                (company_id, google_id, email, first_name, last_name, picture_url, role, last_login_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (company_id, google_id, email, first_name, last_name, picture_url, role))
+                (company_id, google_id, email, first_name, last_name, picture_url, role, role_level, last_login_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (company_id, google_id, email, first_name, last_name, picture_url, role, role_level))
             await db.commit()
             return cursor.lastrowid
 
@@ -4909,7 +5051,7 @@ class WorklogStorage:
         role: str = None,
         is_active: int = None
     ):
-        """Update OAuth user profile."""
+        """Update OAuth user profile. Automatically syncs role_level when role changes."""
         await self.initialize()
 
         updates = []
@@ -4927,6 +5069,9 @@ class WorklogStorage:
         if role is not None:
             updates.append("role = ?")
             params.append(role)
+            # Sync role_level whenever role changes
+            updates.append("role_level = ?")
+            params.append(UserRole.get_level(role))
         if is_active is not None:
             updates.append("is_active = ?")
             params.append(is_active)

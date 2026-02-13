@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Depends, status
 import secrets
 
-from ..models import InvitationCreate, InvitationResponse
+from ..models import InvitationCreate, InvitationResponse, UserRole
 from ..auth.dependencies import require_admin, CurrentUser
 from ..auth_config import auth_settings
 from ..cache import get_storage
@@ -37,11 +37,10 @@ async def create_invitation(
     storage = get_storage()
 
     # Validate role
-    valid_roles = ["ADMIN", "MANAGER", "USER"]
-    if invitation.role not in valid_roles:
+    if invitation.role not in UserRole.ALL_ROLES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid role. Must be one of: {', '.join(valid_roles)}"
+            detail=f"Invalid role. Must be one of: {', '.join(UserRole.ALL_ROLES)}"
         )
 
     # Check if user already exists

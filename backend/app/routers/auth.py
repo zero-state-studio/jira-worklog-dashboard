@@ -11,7 +11,8 @@ from urllib.parse import urlencode
 from ..models import (
     TokenResponse, RefreshTokenRequest, OAuthUserResponse, CompanyResponse,
     OnboardingRequiredResponse, CompleteOnboardingRequest,
-    UpdateProfileRequest, UpdateCompanyRequest, DevLoginRequest
+    UpdateProfileRequest, UpdateCompanyRequest, DevLoginRequest,
+    UserRole
 )
 from ..auth.jwt import create_access_token, create_refresh_token, create_onboarding_token, verify_token
 from ..auth.dependencies import get_current_user, get_current_user_optional, require_admin, CurrentUser
@@ -171,7 +172,8 @@ async def oauth_callback(request: Request):
                     )
 
         # Generate tokens
-        access_token = create_access_token(user_id, company_id, email, role)
+        role_level = UserRole.get_level(role)
+        access_token = create_access_token(user_id, company_id, email, role, role_level=role_level)
         refresh_token_str = create_refresh_token()
 
         # Save session
@@ -276,11 +278,13 @@ async def refresh_token(request: RefreshTokenRequest):
         )
 
     # Generate new access token
+    role_level = UserRole.get_level(user["role"])
     access_token = create_access_token(
         user["id"],
         user["company_id"],
         user["email"],
-        user["role"]
+        user["role"],
+        role_level=role_level
     )
 
     logger.info(f"Token refreshed for user: {user['email']}")
@@ -420,7 +424,8 @@ async def dev_login(request: DevLoginRequest):
         )
 
     # 5. Generate real JWT tokens (same as OAuth flow)
-    access_token = create_access_token(user_id, company_id, email, role)
+    role_level = UserRole.get_level(role)
+    access_token = create_access_token(user_id, company_id, email, role, role_level=role_level)
     refresh_token_str = create_refresh_token()
 
     expires_at = datetime.utcnow() + timedelta(
@@ -518,7 +523,7 @@ async def complete_onboarding(request: CompleteOnboardingRequest):
     )
 
     # 6. Generate tokens (same as normal login)
-    access_token = create_access_token(user_id, company_id, email, "ADMIN")
+    access_token = create_access_token(user_id, company_id, email, "ADMIN", role_level=UserRole.LEVELS[UserRole.ADMIN])
     refresh_token_str = create_refresh_token()
 
     expires_at = datetime.utcnow() + timedelta(days=auth_settings.REFRESH_TOKEN_EXPIRE_DAYS)

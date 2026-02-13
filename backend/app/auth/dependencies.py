@@ -7,6 +7,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from .jwt import verify_token
 from ..cache import get_storage
+from ..models import UserRole
 
 
 # HTTP Bearer token security scheme
@@ -26,7 +27,8 @@ class CurrentUser:
         role: str,
         google_id: str,
         first_name: str = None,
-        last_name: str = None
+        last_name: str = None,
+        role_level: int = None
     ):
         self.id = id
         self.company_id = company_id
@@ -35,14 +37,27 @@ class CurrentUser:
         self.google_id = google_id
         self.first_name = first_name
         self.last_name = last_name
+        self.role_level = role_level if role_level is not None else UserRole.get_level(role)
 
     def is_admin(self) -> bool:
         """Check if user has ADMIN role."""
-        return self.role == "ADMIN"
+        return self.role == UserRole.ADMIN
 
     def is_manager(self) -> bool:
         """Check if user has MANAGER role or higher."""
-        return self.role in ["ADMIN", "MANAGER"]
+        return self.role_level >= UserRole.LEVELS[UserRole.MANAGER]
+
+    def has_role_level(self, min_level: int) -> bool:
+        """Check if user has at least the specified role level."""
+        return self.role_level >= min_level
+
+    def can_manage_teams(self) -> bool:
+        """Check if user can manage teams (PM or higher, level >= 2)."""
+        return self.role_level >= UserRole.LEVELS[UserRole.PM]
+
+    def can_manage_users(self) -> bool:
+        """Check if user can manage users (MANAGER or higher, level >= 3)."""
+        return self.role_level >= UserRole.LEVELS[UserRole.MANAGER]
 
     @property
     def full_name(self) -> str:
@@ -98,6 +113,9 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"}
         )
 
+    # Extract role_level from JWT payload (backward compatible: derive from role if missing)
+    role_level = payload.get("role_level")
+
     return CurrentUser(
         id=user["id"],
         company_id=user["company_id"],
@@ -105,7 +123,8 @@ async def get_current_user(
         role=user["role"],
         google_id=user["google_id"],
         first_name=user.get("first_name"),
-        last_name=user.get("last_name")
+        last_name=user.get("last_name"),
+        role_level=role_level
     )
 
 
@@ -165,3 +184,49 @@ def require_manager(current_user: CurrentUser = Depends(get_current_user)) -> Cu
             detail="Manager privileges required"
         )
     return current_user
+
+
+def require_pm(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    """
+    FastAPI dependency that requires PM role or higher (level >= 2).
+
+    Args:
+        current_user: Current authenticated user
+
+    Returns:
+        CurrentUser instance
+
+    Raises:
+        HTTPException: 403 if user level is below PM
+    """
+    if not current_user.can_manage_teams():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="PM privileges required"
+        )
+    return current_user
+
+
+def require_role_level(min_level: int):
+    """
+    Factory function that creates a FastAPI dependency requiring a minimum role level.
+
+    Args:
+        min_level: Minimum role level required (1=DEV, 2=PM, 3=MANAGER, 4=ADMIN)
+
+    Returns:
+        FastAPI dependency function
+
+    Usage:
+        @router.get("/resource")
+        async def get_resource(current_user: CurrentUser = Depends(require_role_level(3))):
+            ...
+    """
+    def dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+        if not current_user.has_role_level(min_level):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Insufficient role level. Required: {min_level}, current: {current_user.role_level}"
+            )
+        return current_user
+    return dependency

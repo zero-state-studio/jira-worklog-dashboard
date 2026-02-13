@@ -1,20 +1,42 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { Select } from '../common'
+import { canManageTeams } from '../../constants/roles'
 
-export default function TeamModal({ isOpen, onClose, onSave, team, loading }) {
+export default function TeamModal({ isOpen, onClose, onSave, team, users = [], loading }) {
     const [name, setName] = useState('')
+    const [ownerId, setOwnerId] = useState('')
+
+    const eligibleOwners = useMemo(() => {
+        return users.filter(u => u.role && canManageTeams(u.role))
+    }, [users])
+
+    const ownerOptions = useMemo(() => {
+        return [
+            { value: '', label: 'Nessun owner' },
+            ...eligibleOwners.map(u => ({
+                value: String(u.id),
+                label: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email
+            }))
+        ]
+    }, [eligibleOwners])
 
     useEffect(() => {
         if (team) {
             setName(team.name)
+            setOwnerId(team.owner_id ? String(team.owner_id) : '')
         } else {
             setName('')
+            setOwnerId('')
         }
     }, [team, isOpen])
 
     const handleSubmit = (e) => {
         e.preventDefault()
         if (name.trim()) {
-            onSave({ name: name.trim() })
+            onSave({
+                name: name.trim(),
+                owner_id: ownerId ? parseInt(ownerId) : null
+            })
         }
     }
 
@@ -58,6 +80,17 @@ export default function TeamModal({ isOpen, onClose, onSave, team, loading }) {
                             placeholder="Es: Frontend Team"
                             className="w-full px-4 py-3 bg-surface border border-solid rounded-md text-primary placeholder-tertiary focus:outline-none focus:border-focus focus:ring-1 focus:ring-accent/20"
                             autoFocus
+                        />
+                    </div>
+
+                    <div className="px-6 pb-4">
+                        <Select
+                            label="Owner"
+                            options={ownerOptions}
+                            value={ownerId}
+                            onChange={setOwnerId}
+                            searchable
+                            helper="Optional - Must have PM role or higher"
                         />
                     </div>
 

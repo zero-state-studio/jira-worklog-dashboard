@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { fetchJiraAccountId, deleteJiraAccount } from '../../api/client'
+import { Select } from '../common'
+import { ROLE_OPTIONS } from '../../constants/roles'
 
 const RefreshIcon = () => (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -24,6 +26,7 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
     const [firstName, setFirstName] = useState('')
     const [lastName, setLastName] = useState('')
     const [teamId, setTeamId] = useState('')
+    const [role, setRole] = useState('DEV')
     const [jiraAccounts, setJiraAccounts] = useState([])
     const [fetchingInstance, setFetchingInstance] = useState(null)
     const [fetchError, setFetchError] = useState(null)
@@ -34,12 +37,14 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
             setFirstName(user.first_name || '')
             setLastName(user.last_name || '')
             setTeamId(user.team_id || '')
+            setRole(user.role || 'DEV')
             setJiraAccounts(user.jira_accounts || [])
         } else {
             setEmail('')
             setFirstName('')
             setLastName('')
             setTeamId('')
+            setRole('DEV')
             setJiraAccounts([])
         }
         setFetchError(null)
@@ -52,7 +57,8 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                 email: email.trim(),
                 first_name: firstName.trim(),
                 last_name: lastName.trim(),
-                team_id: teamId ? parseInt(teamId) : null
+                team_id: teamId ? parseInt(teamId) : null,
+                role
             })
         }
     }
@@ -191,6 +197,15 @@ export default function UserModal({ isOpen, onClose, onSave, onUserChange, user,
                                 ))}
                             </select>
                         </div>
+
+                        {/* Role */}
+                        <Select
+                            label="Ruolo"
+                            options={ROLE_OPTIONS.map(r => ({ value: r.value, label: r.label }))}
+                            value={role}
+                            onChange={setRole}
+                            helper="Determines user permissions and feature access"
+                        />
 
                         {/* JIRA Accounts - Only show for existing users */}
                         {user && jiraInstances.length > 0 && (
