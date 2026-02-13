@@ -18,6 +18,7 @@ import Login from './pages/Login'
 import Landing from './pages/Landing'
 import Onboarding from './pages/Onboarding'
 import Profile from './pages/Profile'
+import Sync from './pages/Sync'
 
 function App() {
     // Global date range state
@@ -57,6 +58,7 @@ function App() {
                             <Route path="epics" element={<EpicView dateRange={dateRange} selectedInstance={selectedInstance} />} />
                             <Route path="epics/:epicKey" element={<EpicView dateRange={dateRange} selectedInstance={selectedInstance} />} />
                             <Route path="issues/:issueKey" element={<IssueView dateRange={dateRange} />} />
+                            <Route path="sync" element={<Sync />} />
                             <Route path="billing/*" element={<NewBilling dateRange={dateRange} />} />
                             <Route path="settings" element={<Settings />} />
                             <Route path="profile" element={<Profile />} />
