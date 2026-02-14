@@ -171,36 +171,61 @@ class ParentLinkingMatcher(MatchingAlgorithm):
 
     def _extract_linking_key(self, worklog: Any) -> Optional[str]:
         """
-        Extract linking key with priority: direct > title > parent.
+        Extract linking key with intelligent priority to match cross-instance issues.
 
-        Sequential logic:
-        1. DIRECT: use issue_key if it matches PROJ-123 pattern
-        2. TITLE (issue_summary): extract first PROJ-123 pattern
-        3. TITLE (parent_name): extract first PROJ-123 from parent name
-        4. PARENT: use parent_key as direct fallback
+        Priority logic (stops at first match):
+        1. PARENT_NAME: Extract PROJ-123 pattern from parent_name field
+           - Captures "DLREQ-1447" from "DLREQ-1447 - 01D6-Migrazione..."
+           - This is the "real project key" referenced across instances
+
+        2. SUMMARY: Extract PROJ-123 pattern from issue_summary field
+           - Captures "DLREQ-1447" from "DLREQ-1447 - PM - Task description"
+           - Fallback if parent_name doesn't contain a pattern
+
+        3. PARENT_KEY: Use parent_key if it's a complete PROJ-123 pattern
+           - ✅ "DLREQ-1447" is valid (complete pattern)
+           - ❌ "DLREQ" is invalid (too generic, no number)
+           - Ensures we only use meaningful parent keys
+
+        4. ISSUE_KEY: Use issue_key as last fallback
+           - For issues without cross-instance references
+           - Ensures every worklog has a linking_key
+
+        Examples:
+            DLWMS-864 (MMFG):
+                parent_key="DLREQ-1447" → linking_key="DLREQ-1447"
+
+            SYSMMFG-5344 (OT):
+                parent_name="DLREQ-1447 - 01D6-Migrazione..." → linking_key="DLREQ-1447"
+
+            → Both match on "DLREQ-1447" ✅
         """
         issue_pattern = r'[A-Z][A-Z0-9]+-\d+'
 
-        # 1. DIRECT: use issue_key if valid (PROJ-123)
-        if hasattr(worklog, 'issue_key') and worklog.issue_key:
-            if re.match(f'^{issue_pattern}$', worklog.issue_key):
-                return worklog.issue_key
-
-        # 2. TITLE (summary): extract first PROJ-123 pattern
-        if hasattr(worklog, 'issue_summary') and worklog.issue_summary:
-            matches = re.findall(issue_pattern, worklog.issue_summary)
-            if matches:
-                return matches[0]
-
-        # 3. TITLE (parent_name): extract from parent name
+        # PRIORITY 1: Extract pattern from parent_name
+        # This captures the "real project key" that links issues across instances
         if hasattr(worklog, 'parent_name') and worklog.parent_name:
-            matches = re.findall(issue_pattern, worklog.parent_name)
-            if matches:
-                return matches[0]
+            match = re.search(issue_pattern, worklog.parent_name)
+            if match:
+                return match.group(0)
 
-        # 4. PARENT: use parent_key directly
+        # PRIORITY 2: Extract pattern from issue_summary
+        # Fallback if parent_name doesn't contain a linking key
+        if hasattr(worklog, 'issue_summary') and worklog.issue_summary:
+            match = re.search(issue_pattern, worklog.issue_summary)
+            if match:
+                return match.group(0)
+
+        # PRIORITY 3: Use parent_key if it's a complete PROJ-123 pattern
+        # Reject generic parent keys like "DLREQ" (without number)
         if hasattr(worklog, 'parent_key') and worklog.parent_key:
-            return worklog.parent_key
+            if re.match(f'^{issue_pattern}$', worklog.parent_key):
+                return worklog.parent_key
+
+        # PRIORITY 4: Fallback to issue_key
+        # Ensures every worklog has a linking_key, even if no cross-instance match
+        if hasattr(worklog, 'issue_key') and worklog.issue_key:
+            return worklog.issue_key
 
         return None
 

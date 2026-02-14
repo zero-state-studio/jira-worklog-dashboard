@@ -61,7 +61,9 @@
       "Bash(npx tsc:*)",
       "Bash(./node_modules/.bin/tsc:*)",
       "Bash(npx --package typescript tsc:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(git push:*)",
+      "Bash(git reset:*)"
     ]
   }
 }
