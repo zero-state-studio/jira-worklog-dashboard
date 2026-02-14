@@ -295,7 +295,7 @@ class JiraClient:
     async def get_issues_by_ids(self, issue_ids: list[str]) -> dict[str, dict]:
         """
         Get issue details for multiple issue IDs.
-        Returns a dict mapping issue_id -> {key, summary, parent_key, parent_name, parent_type, epic_key, epic_name}
+        Returns a dict mapping issue_id -> {key, summary, issue_type, parent_key, parent_name, parent_type, epic_key, epic_name}
         """
         if not issue_ids:
             return {}
@@ -353,6 +353,7 @@ class JiraClient:
                 result_map[issue_id] = {
                     "key": issue.get("key"),
                     "summary": fields.get("summary", ""),
+                    "issue_type": fields.get("issuetype", {}).get("name", ""),
                     "parent_key": parent_key,
                     "parent_name": parent_name,
                     "parent_type": parent_type,
@@ -499,12 +500,13 @@ class JiraClient:
                     issue_result = await self._request(
                         "GET",
                         f"/issue/{issue_key}",
-                        params={"fields": "summary,parent,customfield_10014,worklog"}
+                        params={"fields": "summary,parent,customfield_10014,worklog,issuetype"}
                     )
                     
                     fields = issue_result.get("fields", {})
                     issue_summary = fields.get("summary", "")
-                    
+                    issue_type = fields.get("issuetype", {}).get("name", "")
+
                     # Get parent/epic info
                     parent_key = None
                     parent_name = None
@@ -559,7 +561,8 @@ class JiraClient:
                             parent_name=parent_name,
                             parent_type=parent_type,
                             epic_key=epic_key,
-                            epic_name=epic_name
+                            epic_name=epic_name,
+                            issue_type=issue_type
                         )
                         all_worklogs.append(worklog)
                         

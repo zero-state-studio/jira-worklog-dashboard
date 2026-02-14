@@ -19,7 +19,8 @@ class TempoClient:
         tempo_api_token: str,
         jira_instance_name: str,
         jira_base_url: str,
-        account_id_to_email: dict[str, str] = None
+        account_id_to_email: dict[str, str] = None,
+        jira_client=None
     ):
         self.api_token = tempo_api_token
         self.jira_instance_name = jira_instance_name
@@ -32,6 +33,8 @@ class TempoClient:
         }
         # Mapping from Jira accountId to user email
         self.account_id_to_email = account_id_to_email or {}
+        # Optional JIRA client for enriching worklogs with issue details
+        self.jira_client = jira_client
     
     async def _request(self, method: str, endpoint: str, **kwargs) -> dict:
         """Make an authenticated request to Tempo API."""
@@ -80,8 +83,16 @@ class TempoClient:
                 account_id, start_date, end_date
             )
             all_worklogs.extend(user_worklogs)
-        
+
         print(f"Total Tempo worklogs fetched: {len(all_worklogs)}")
+
+        # Enrich worklogs with issue details from JIRA API if client is provided
+        if self.jira_client and all_worklogs:
+            print(f"JIRA client available, enriching worklogs...")
+            await self._enrich_worklogs_with_issue_details(all_worklogs)
+        elif not self.jira_client:
+            print(f"WARNING: No JIRA client provided - worklogs will have empty issue_type")
+
         return all_worklogs
     
     async def _get_user_worklogs_internal(
@@ -168,6 +179,59 @@ class TempoClient:
         
         return all_worklogs
     
+    async def _enrich_worklogs_with_issue_details(self, worklogs: list[Worklog]) -> None:
+        """
+        Enrich worklogs with issue details from JIRA API (issue_type, parent, epic, summary).
+        Modifies worklog objects in place.
+        Only fetches details for worklogs that are missing issue_type.
+        """
+        # Collect unique issue keys for worklogs that need enrichment
+        # (those without issue_type or with empty issue_type)
+        issue_keys = list(set(
+            wl.issue_key for wl in worklogs
+            if wl.issue_key and (not wl.issue_type or wl.issue_type == "")
+        ))
+
+        if not issue_keys:
+            print(f"  All worklogs already have issue_type - skipping enrichment")
+            return
+
+        worklogs_to_enrich = [wl for wl in worklogs if wl.issue_key in issue_keys]
+        print(f"  Enriching {len(worklogs_to_enrich)} worklogs with details for {len(issue_keys)} unique issues...")
+
+        try:
+            # Batch fetch issue details from JIRA
+            issues_dict = await self.jira_client.get_issues_by_ids(issue_keys)
+            print(f"  Fetched {len(issues_dict)} issue details from JIRA")
+
+            # Update each worklog with issue details
+            enriched_count = 0
+            for wl in worklogs_to_enrich:
+                if not wl.issue_key or wl.issue_key not in issues_dict:
+                    print(f"  WARNING: No details found for issue {wl.issue_key}")
+                    continue
+
+                issue_data = issues_dict[wl.issue_key]
+
+                # Update worklog object attributes directly
+                # issue_data is already flattened by get_issues_by_ids
+                wl.issue_summary = issue_data.get("summary", "")
+                wl.issue_type = issue_data.get("issue_type", "")
+                wl.parent_key = issue_data.get("parent_key")
+                wl.parent_name = issue_data.get("parent_name")
+                wl.parent_type = issue_data.get("parent_type")
+                wl.epic_key = issue_data.get("epic_key")
+                wl.epic_name = issue_data.get("epic_name")
+                enriched_count += 1
+
+            print(f"  Enrichment complete: {enriched_count} worklogs updated")
+
+        except Exception as e:
+            print(f"  ERROR: Failed to enrich worklogs with issue details: {e}")
+            import traceback
+            traceback.print_exc()
+            # Continue without enrichment rather than failing the entire sync
+
     async def get_user_worklogs(
         self,
         account_id: str,
@@ -181,7 +245,7 @@ class TempoClient:
         all_worklogs = []
         offset = 0
         limit = 1000
-        
+
         while True:
             try:
                 params = {
@@ -190,18 +254,18 @@ class TempoClient:
                     "limit": limit,
                     "offset": offset
                 }
-                
+
                 result = await self._request(
-                    "GET", 
+                    "GET",
                     f"/worklogs/user/{account_id}",
                     params=params
                 )
-                
+
                 worklogs_data = result.get("results", [])
-                
+
                 for wl in worklogs_data:
                     author = wl.get("author", {})
-                    
+
                     # Parse dates
                     try:
                         start_date_str = wl.get("startDate", "")
@@ -212,9 +276,9 @@ class TempoClient:
                             continue
                     except (ValueError, TypeError):
                         continue
-                    
+
                     issue = wl.get("issue", {})
-                    
+
                     worklog = Worklog(
                         id=f"{self.jira_instance_name}_tempo_{wl.get('tempoWorklogId', '')}",
                         issue_key=issue.get("key", ""),
@@ -228,14 +292,14 @@ class TempoClient:
                         epic_name=None
                     )
                     all_worklogs.append(worklog)
-                
+
                 if len(worklogs_data) < limit:
                     break
-                
+
                 offset += limit
-                
+
             except httpx.HTTPError as e:
                 print(f"Error fetching user worklogs: {e}")
                 break
-        
+
         return all_worklogs

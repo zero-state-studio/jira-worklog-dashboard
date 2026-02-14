@@ -147,11 +147,25 @@ async def sync_worklogs(
                             user_account_ids = instance_account_ids.get(instance_name, [])
                             print(f"  Filtering for {len(user_account_ids)} user account IDs")
 
+                            # Create JIRA client for enriching worklogs with issue details
+                            jira_client = JiraClient(inst_config)
+
+                            # Populate issue types cache only if empty (first sync)
+                            try:
+                                cached_types = await storage.get_cached_jira_issue_types(current_user.company_id)
+                                if not cached_types:
+                                    issue_types_data = await jira_client.get_all_issue_types()
+                                    issue_types = [it["name"] for it in issue_types_data if not it.get("subtask", False)]
+                                    await storage.upsert_jira_issue_types(current_user.company_id, inst_config.name, issue_types)
+                            except Exception as e:
+                                print(f"Warning: Failed to update issue types cache for {inst_config.name}: {e}")
+
                             tempo_client = TempoClient(
                                 tempo_api_token=inst_config.tempo_api_token,
                                 jira_instance_name=inst_config.name,
                                 jira_base_url=inst_config.url,
-                                account_id_to_email=account_id_to_email
+                                account_id_to_email=account_id_to_email,
+                                jira_client=jira_client
                             )
                             worklogs = await tempo_client.get_worklogs_in_range(
                                 request.start_date,
@@ -170,7 +184,6 @@ async def sync_worklogs(
 
                                 if issue_ids_to_resolve:
                                     print(f"  Resolving {len(issue_ids_to_resolve)} issue IDs via JIRA API...")
-                                    jira_client = JiraClient(inst_config)
                                     issue_details = await jira_client.get_issues_by_ids(list(issue_ids_to_resolve))
 
                                     # Recreate worklogs with resolved data
@@ -179,10 +192,11 @@ async def sync_worklogs(
                                     for wl in worklogs:
                                         if wl.issue_key in issue_details:
                                             details = issue_details[wl.issue_key]
+                                            # details is already flattened by get_issues_by_ids
                                             enriched_worklogs.append(Worklog(
                                                 id=wl.id,
                                                 issue_key=details.get("key") or wl.issue_key,
-                                                issue_summary=details.get("summary") or "",
+                                                issue_summary=details.get("summary", ""),
                                                 author_email=wl.author_email,
                                                 author_display_name=wl.author_display_name,
                                                 time_spent_seconds=wl.time_spent_seconds,
@@ -192,7 +206,8 @@ async def sync_worklogs(
                                                 parent_name=details.get("parent_name"),
                                                 parent_type=details.get("parent_type"),
                                                 epic_key=details.get("epic_key"),
-                                                epic_name=details.get("epic_name")
+                                                epic_name=details.get("epic_name"),
+                                                issue_type=details.get("issue_type", "")
                                             ))
                                         else:
                                             enriched_worklogs.append(wl)
@@ -381,11 +396,25 @@ async def sync_worklogs_stream(
                                     }) + "\n"
                                 await asyncio.sleep(0)
 
+                                # Create JIRA client for enriching worklogs with issue details
+                                jira_client = JiraClient(inst_config)
+
+                                # Populate issue types cache only if empty (first sync)
+                                try:
+                                    cached_types = await storage.get_cached_jira_issue_types(current_user.company_id)
+                                    if not cached_types:
+                                        issue_types_data = await jira_client.get_all_issue_types()
+                                        issue_types = [it["name"] for it in issue_types_data if not it.get("subtask", False)]
+                                        await storage.upsert_jira_issue_types(current_user.company_id, inst_config.name, issue_types)
+                                except Exception as e:
+                                    print(f"Warning: Failed to update issue types cache for {inst_config.name}: {e}")
+
                                 tempo_client = TempoClient(
                                     tempo_api_token=inst_config.tempo_api_token,
                                     jira_instance_name=inst_config.name,
                                     jira_base_url=inst_config.url,
-                                    account_id_to_email=account_id_to_email
+                                    account_id_to_email=account_id_to_email,
+                                    jira_client=jira_client
                                 )
                                 worklogs = await tempo_client.get_worklogs_in_range(
                                     request.start_date,
@@ -418,7 +447,6 @@ async def sync_worklogs_stream(
                                         }) + "\n"
                                         await asyncio.sleep(0)
 
-                                        jira_client = JiraClient(inst_config)
                                         issue_details = await jira_client.get_issues_by_ids(list(issue_ids_to_resolve))
 
                                         from ..models import Worklog
@@ -426,10 +454,11 @@ async def sync_worklogs_stream(
                                         for wl in worklogs:
                                             if wl.issue_key in issue_details:
                                                 details = issue_details[wl.issue_key]
+                                                # details is already flattened by get_issues_by_ids
                                                 enriched_worklogs.append(Worklog(
                                                     id=wl.id,
                                                     issue_key=details.get("key") or wl.issue_key,
-                                                    issue_summary=details.get("summary") or "",
+                                                    issue_summary=details.get("summary", ""),
                                                     author_email=wl.author_email,
                                                     author_display_name=wl.author_display_name,
                                                     time_spent_seconds=wl.time_spent_seconds,
@@ -439,7 +468,8 @@ async def sync_worklogs_stream(
                                                     parent_name=details.get("parent_name"),
                                                     parent_type=details.get("parent_type"),
                                                     epic_key=details.get("epic_key"),
-                                                    epic_name=details.get("epic_name")
+                                                    epic_name=details.get("epic_name"),
+                                                    issue_type=details.get("issue_type", "")
                                                 ))
                                             else:
                                                 enriched_worklogs.append(wl)

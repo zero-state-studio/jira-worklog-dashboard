@@ -17,6 +17,9 @@ from ..models import (
     BulkUserCreateRequest, BulkUserCreateResult, BulkUserCreateResponse,
     BulkFetchAccountResult, BulkFetchAccountSummary, BulkFetchAccountResponse,
     HolidayCreate, HolidayUpdate,
+    MatchingAlgorithmUpdate,
+    JiraExclusionCreate,
+    GenericIssueCreate,
 )
 from ..config import get_config
 from ..cache import get_storage
@@ -1246,4 +1249,215 @@ async def migrate_roles(current_user: CurrentUser = Depends(require_admin)):
         "success": True,
         "migrated_from_user_to_dev": user_role_count,
         "role_counts": role_counts
+    }
+
+
+# ========== Matching Algorithms Endpoints ==========
+
+@router.get("/matching-algorithms")
+async def get_matching_algorithms(current_user: CurrentUser = Depends(get_current_user)):
+    """Get all matching algorithms configuration for current company."""
+    storage = get_storage()
+
+    # Initialize algorithms if not exists
+    await storage.initialize_matching_algorithms(current_user.company_id)
+
+    # Get algorithms
+    algorithms = await storage.get_matching_algorithms(current_user.company_id)
+
+    return {
+        "algorithms": algorithms
+    }
+
+
+@router.put("/matching-algorithms/{algorithm_type}")
+async def update_matching_algorithm(
+    algorithm_type: str,
+    update_data: MatchingAlgorithmUpdate,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Update matching algorithm settings (ADMIN only)."""
+    storage = get_storage()
+
+    # Verify algorithm exists
+    algorithms = await storage.get_matching_algorithms(current_user.company_id)
+    algorithm = next((a for a in algorithms if a['algorithm_type'] == algorithm_type), None)
+
+    if not algorithm:
+        raise HTTPException(status_code=404, detail=f"Algorithm '{algorithm_type}' not found")
+
+    # Update
+    await storage.update_matching_algorithm(
+        current_user.company_id,
+        algorithm_type,
+        update_data.enabled,
+        config=update_data.config,
+        priority=update_data.priority
+    )
+
+    return {
+        "success": True,
+        "algorithm_type": algorithm_type,
+        "enabled": update_data.enabled
+    }
+
+
+# ========== JIRA Exclusions Endpoints ==========
+
+@router.get("/jira-exclusions")
+async def get_jira_exclusions(current_user: CurrentUser = Depends(get_current_user)):
+    """Get all JIRA exclusions for current company."""
+    storage = get_storage()
+    exclusions = await storage.get_jira_exclusions(current_user.company_id)
+    return {"exclusions": exclusions}
+
+
+@router.post("/jira-exclusions")
+async def add_jira_exclusion(
+    exclusion_data: JiraExclusionCreate,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Add a new JIRA exclusion (ADMIN only)."""
+    storage = get_storage()
+
+    exclusion = await storage.add_jira_exclusion(
+        current_user.company_id,
+        exclusion_data.exclusion_key,
+        exclusion_data.exclusion_type,
+        exclusion_data.description
+    )
+
+    return {
+        "success": True,
+        "exclusion": exclusion
+    }
+
+
+@router.delete("/jira-exclusions/{exclusion_id}")
+async def delete_jira_exclusion(
+    exclusion_id: int,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Delete a JIRA exclusion (ADMIN only)."""
+    storage = get_storage()
+
+    await storage.delete_jira_exclusion(current_user.company_id, exclusion_id)
+
+    return {"success": True}
+
+
+# ============ Generic Issues ============
+
+@router.get("/generic-issues")
+async def list_generic_issues(
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """List all generic issue mappings for the company."""
+    storage = get_storage()
+    generic_issues = await storage.get_generic_issues(current_user.company_id)
+    return {"generic_issues": generic_issues}
+
+
+@router.post("/generic-issues")
+async def create_generic_issue(
+    generic_issue_data: GenericIssueCreate,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Create a new generic issue mapping (ADMIN only)."""
+    storage = get_storage()
+
+    generic_issue = await storage.add_generic_issue(
+        current_user.company_id,
+        generic_issue_data.issue_code,
+        generic_issue_data.issue_type,
+        generic_issue_data.team_id,
+        generic_issue_data.description
+    )
+
+    return {
+        "success": True,
+        "generic_issue": generic_issue
+    }
+
+
+@router.delete("/generic-issues/{generic_issue_id}")
+async def delete_generic_issue(
+    generic_issue_id: int,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Delete a generic issue mapping (ADMIN only)."""
+    storage = get_storage()
+
+    await storage.delete_generic_issue(current_user.company_id, generic_issue_id)
+
+    return {"success": True}
+
+
+@router.get("/jira-issue-types")
+async def get_jira_issue_types(
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """Get all available issue types from cache (populated during sync)."""
+    storage = get_storage()
+
+    # Read from cache instead of calling JIRA
+    issue_types = await storage.get_cached_jira_issue_types(current_user.company_id)
+
+    return {"issue_types": issue_types}
+
+
+@router.post("/jira-issue-types/refresh")
+async def refresh_jira_issue_types(
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Manually refresh JIRA issue types cache by fetching from JIRA APIs (ADMIN only)."""
+    from ..jira_client import JiraClient
+    from ..models import JiraInstanceConfig
+    storage = get_storage()
+
+    # Get all JIRA instances for this company
+    instances_data = await storage.get_all_jira_instances(current_user.company_id, include_credentials=True)
+
+    refreshed_count = 0
+
+    for instance_dict in instances_data:
+        try:
+            # Convert dict to JiraInstanceConfig
+            instance = JiraInstanceConfig(
+                name=instance_dict["name"],
+                url=instance_dict["url"],
+                email=instance_dict["email"],
+                api_token=instance_dict["api_token"],
+                tempo_api_token=instance_dict.get("tempo_api_token")
+            )
+
+            jira_client = JiraClient(instance)
+            issue_types_data = await jira_client.get_all_issue_types()
+
+            # Extract names (exclude subtasks)
+            issue_types = [
+                it["name"] for it in issue_types_data
+                if not it.get("subtask", False)
+            ]
+
+            # Upsert to cache
+            await storage.upsert_jira_issue_types(
+                current_user.company_id,
+                instance_dict["name"],
+                issue_types
+            )
+
+            refreshed_count += len(issue_types)
+
+        except Exception as e:
+            print(f"Warning: Failed to fetch issue types from {instance_dict.get('name', 'unknown')}: {e}")
+            continue
+
+    # Get updated cache
+    all_types = await storage.get_cached_jira_issue_types(current_user.company_id)
+
+    return {
+        "success": True,
+        "refreshed_count": refreshed_count,
+        "issue_types": all_types
     }

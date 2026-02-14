@@ -42,9 +42,7 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodPreset>('this-month')
   const [complementaryGroups, setComplementaryGroups] = useState<any[]>([])
   const [holidayDates, setHolidayDates] = useState<string[]>([])
-  const [selectedProjectInstance, setSelectedProjectInstance] = useState<string | null>(null)
   const [multiJiraOverview, setMultiJiraOverview] = useState<any>(null)
-  const [instanceProjects, setInstanceProjects] = useState<{ [key: string]: any[] }>({})
   const [dailyWorkingHours, setDailyWorkingHours] = useState(8)
   const [discrepancyWorklogs, setDiscrepancyWorklogs] = useState<any[]>([])
 
@@ -154,26 +152,6 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
 
     fetchDiscrepancyWorklogs()
   }, [dateRange.startDate, dateRange.endDate, multiJiraOverview])
-
-  // Fetch projects for selected instance
-  useEffect(() => {
-    const fetchInstanceProjects = async () => {
-      if (!selectedProjectInstance) return
-      if (instanceProjects[selectedProjectInstance]) return
-
-      try {
-        const result = await getDashboard(dateRange.startDate, dateRange.endDate, selectedProjectInstance)
-        setInstanceProjects((prev) => ({
-          ...prev,
-          [selectedProjectInstance]: result.top_projects || [],
-        }))
-      } catch (err) {
-        console.error(`[Dashboard] Failed to fetch projects for ${selectedProjectInstance}:`, err)
-      }
-    }
-
-    fetchInstanceProjects()
-  }, [selectedProjectInstance, dateRange.startDate, dateRange.endDate])
 
   if (loading) {
     return (
@@ -295,23 +273,15 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
   if (multiJiraOverview?.complementary_comparisons && discrepancyWorklogs.length > 0) {
     multiJiraOverview.complementary_comparisons.forEach((comp: any) => {
       const delta = comp.primary_total_hours - comp.secondary_total_hours
-      if (Math.abs(delta) < 0.5) return // Skip if aligned
+      const discrepancyCount = comp.discrepancies?.length || 0
 
-      // Find worklogs unique to each instance
-      const primaryWorklogs = discrepancyWorklogs.filter(
-        (w) => w.jira_instance === comp.primary_instance
-      )
-      const secondaryWorklogs = discrepancyWorklogs.filter(
-        (w) => w.jira_instance === comp.secondary_instance
-      )
+      // Skip if no discrepancies found (matching algorithm found all matches)
+      if (discrepancyCount === 0) return
 
-      // Find unique issues (simplified - in real implementation, would need better matching)
-      const primaryIssueKeys = new Set(primaryWorklogs.map((w) => w.issue_key))
-      const secondaryIssueKeys = new Set(secondaryWorklogs.map((w) => w.issue_key))
+      // Skip if delta is negligible
+      if (Math.abs(delta) < 0.5) return
 
-      const primaryOnly = primaryWorklogs.filter((w) => !secondaryIssueKeys.has(w.issue_key))
-      const secondaryOnly = secondaryWorklogs.filter((w) => !primaryIssueKeys.has(w.issue_key))
-
+      // Use discrepancy groups from backend (aggregated by linking_key)
       discrepancyPanelData.push({
         groupName: comp.group_name,
         primaryInstance: comp.primary_instance,
@@ -319,46 +289,11 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
         primaryHours: comp.primary_total_hours,
         secondaryHours: comp.secondary_total_hours,
         delta,
-        discrepancyCount: comp.discrepancies?.length || 0,
-        primaryOnlyWorklogs: primaryOnly.slice(0, 10),
-        secondaryOnlyWorklogs: secondaryOnly.slice(0, 10),
+        discrepancyCount,
+        discrepancyGroups: comp.discrepancies || [], // Aggregated groups from backend
       })
     })
   }
-
-  // Prepare projects data
-  const allProjects = data.top_projects || data.top_epics || []
-  const projectInstances = jiraInstances.map((inst: any) => inst.name).filter(Boolean) as string[]
-  const activeProjectInstance =
-    selectedProjectInstance && projectInstances.includes(selectedProjectInstance)
-      ? selectedProjectInstance
-      : projectInstances[0] || null
-
-  const filteredProjects = activeProjectInstance
-    ? instanceProjects[activeProjectInstance] ||
-      allProjects.filter((p: any) => p.jira_instance === activeProjectInstance)
-    : allProjects
-
-  const top5Projects = filteredProjects.slice(0, 5)
-  const otherProjects = filteredProjects.slice(5)
-
-  const projectsData = top5Projects.map((project: any) => ({
-    name:
-      project.epic_name.length > 25 ? project.epic_name.substring(0, 25) + '...' : project.epic_name,
-    hours: project.total_hours,
-    full_name: project.epic_name,
-  }))
-
-  if (otherProjects.length > 0) {
-    const otherHours = otherProjects.reduce((sum: number, p: any) => sum + p.total_hours, 0)
-    projectsData.push({
-      name: 'Other',
-      hours: otherHours,
-      full_name: `${otherProjects.length} other projects`,
-    })
-  }
-
-  projectsData.sort((a, b) => b.hours - a.hours)
 
   // Prepare team chart data (grouped by instance)
   const teamInstanceData: any[] = []
@@ -448,150 +383,63 @@ export default function NewDashboard({ dateRange, selectedInstance, onDateRangeC
         </div>
       )}
 
-      {/* TEAM & PROJECT CHARTS (2-column) */}
-      {showInstanceSection && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Hours by Team (Grouped Bar Chart) */}
-          <Card padding="compact">
-            <div className="mb-4">
-              <h3 className="text-sm font-semibold text-primary">Hours by Team</h3>
-              <p className="text-xs text-tertiary">Team distribution across instances</p>
-            </div>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart
-                data={teamInstanceData}
-                layout="vertical"
-                margin={{ top: 10, right: 30, left: 10, bottom: 10 }}
-                barGap={2}
-                barCategoryGap="15%"
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--color-border)"
-                  horizontal
-                  vertical={false}
+      {/* TEAM CHART */}
+      {showInstanceSection && teamInstanceData.length > 0 && (
+        <Card padding="compact">
+          <div className="mb-4">
+            <h3 className="text-sm font-semibold text-primary">Hours by Team</h3>
+            <p className="text-xs text-tertiary">Team distribution across instances</p>
+          </div>
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart
+              data={teamInstanceData}
+              layout="vertical"
+              margin={{ top: 10, right: 30, left: 10, bottom: 10 }}
+              barGap={2}
+              barCategoryGap="15%"
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="var(--color-border)"
+                horizontal
+                vertical={false}
+              />
+              <XAxis
+                type="number"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: 'var(--color-text-tertiary)', fontSize: 11 }}
+                tickFormatter={(value) => `${Math.round(value)}h`}
+              />
+              <YAxis
+                type="category"
+                dataKey="team"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: 'var(--color-text-primary)', fontSize: 11 }}
+                width={100}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-border-strong)',
+                  borderRadius: '6px',
+                  padding: '6px 10px',
+                }}
+                formatter={(value: any) => formatHours(value)}
+              />
+              {jiraInstances.map((inst, index) => (
+                <Bar
+                  key={inst.name}
+                  dataKey={inst.name}
+                  fill={INSTANCE_COLORS[index] || '#94A3B8'}
+                  radius={[0, 4, 4, 0]}
+                  maxBarSize={14}
                 />
-                <XAxis
-                  type="number"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: 'var(--color-text-tertiary)', fontSize: 11 }}
-                  tickFormatter={(value) => `${Math.round(value)}h`}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="team"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: 'var(--color-text-primary)', fontSize: 11 }}
-                  width={100}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: 'var(--color-surface)',
-                    border: '1px solid var(--color-border-strong)',
-                    borderRadius: '6px',
-                    padding: '6px 10px',
-                  }}
-                  formatter={(value: any) => formatHours(value)}
-                />
-                {jiraInstances.map((inst, index) => (
-                  <Bar
-                    key={inst.name}
-                    dataKey={inst.name}
-                    fill={INSTANCE_COLORS[index] || '#94A3B8'}
-                    radius={[0, 4, 4, 0]}
-                    maxBarSize={14}
-                  />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
-
-          {/* Hours by Project */}
-          <Card padding="compact">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-semibold text-primary">Hours by Project</h3>
-                <p className="text-xs text-tertiary">Top 5 initiatives</p>
-              </div>
-              {projectInstances.length > 0 && (
-                <div className="flex items-center gap-1">
-                  {projectInstances.map((instance) => {
-                    const isActive = instance === activeProjectInstance
-                    return (
-                      <button
-                        key={instance}
-                        onClick={() => setSelectedProjectInstance(instance)}
-                        className={`h-[28px] px-3 text-xs font-medium rounded-md transition-colors ${
-                          isActive
-                            ? 'bg-accent-subtle text-accent-text'
-                            : 'bg-transparent text-secondary hover:bg-surface-hover'
-                        }`}
-                      >
-                        {instance}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart
-                data={projectsData}
-                layout="vertical"
-                margin={{ top: 10, right: 40, left: 10, bottom: 10 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--color-border)"
-                  horizontal
-                  vertical={false}
-                />
-                <XAxis
-                  type="number"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: 'var(--color-text-tertiary)', fontSize: 11 }}
-                  tickFormatter={(value) => `${Math.round(value)}h`}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: 'var(--color-text-primary)', fontSize: 11 }}
-                  width={120}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: 'var(--color-surface)',
-                    border: '1px solid var(--color-border-strong)',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                  }}
-                  formatter={(value: any, name: any, props: any) => [
-                    formatHours(value),
-                    props.payload.full_name,
-                  ]}
-                />
-                <Bar dataKey="hours" radius={[0, 4, 4, 0]} maxBarSize={24}>
-                  {projectsData.map((entry, index) => {
-                    const colors = [
-                      'var(--color-accent)',
-                      '#64748B',
-                      '#94A3B8',
-                      '#CBD5E1',
-                      '#E2E8F0',
-                      '#F1F5F9',
-                    ]
-                    return <Cell key={`cell-${index}`} fill={colors[index] || colors[colors.length - 1]} />
-                  })}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
-        </div>
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
       )}
     </div>
   )
