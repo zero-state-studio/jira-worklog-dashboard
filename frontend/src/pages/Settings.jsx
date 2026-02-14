@@ -8,6 +8,9 @@ import PackageTemplatesSection from '../components/settings/PackageTemplatesSect
 import HolidaysSection from '../components/settings/HolidaysSection'
 import FactorialSection from '../components/settings/FactorialSection'
 import DatabaseSection from '../components/settings/DatabaseSection'
+import { MatchingAlgorithmsSettings } from '../components/settings/MatchingAlgorithmsSettings'
+import { JiraExclusionsSettings } from '../components/settings/JiraExclusionsSettings'
+import { GenericIssuesSettings } from '../components/settings/GenericIssuesSettings'
 
 const CatIconSystem = () => (
     <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -117,8 +120,17 @@ export default function Settings() {
             category: 'Configurazione',
             icon: CatIconConfig,
             items: [
-                { id: 'packages', label: 'Pacchetti Ore' },
                 { id: 'holidays', label: 'Giorni Festivi' }
+            ]
+        },
+        {
+            category: 'Configurazioni JIRA',
+            icon: CatIconIntegration,
+            items: [
+                { id: 'jira-exclusions', label: 'Esclusioni' },
+                { id: 'generic-issues', label: 'Issue Generiche' },
+                { id: 'packages', label: 'Pacchetti Ore' },
+                { id: 'matching', label: 'Algoritmi di Match' }
             ]
         },
         {
@@ -227,6 +239,15 @@ export default function Settings() {
                             )}
                             {activeTab === 'holidays' && (
                                 <HolidaysSection />
+                            )}
+                            {activeTab === 'matching' && (
+                                <MatchingAlgorithmsSettings />
+                            )}
+                            {activeTab === 'jira-exclusions' && (
+                                <JiraExclusionsSettings />
+                            )}
+                            {activeTab === 'generic-issues' && (
+                                <GenericIssuesSettings />
                             )}
                             {activeTab === 'database' && (
                                 <DatabaseSection />

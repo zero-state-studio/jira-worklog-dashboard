@@ -44,10 +44,10 @@ export function Button({
 
   // Variant styles
   const variantStyles = {
-    primary: 'bg-accent text-inverse hover:bg-accent-hover rounded-md',
+    primary: 'bg-accent text-white hover:bg-accent-hover rounded-md',
     secondary: 'bg-surface text-primary border border-solid hover:bg-surface-hover hover:border-strong rounded-md',
     ghost: 'bg-transparent text-secondary hover:bg-surface-hover rounded-md',
-    danger: 'bg-error text-inverse hover:bg-error hover:opacity-90 rounded-md',
+    danger: 'bg-error text-white hover:bg-error hover:opacity-90 rounded-md',
   }
 
   // Loading spinner

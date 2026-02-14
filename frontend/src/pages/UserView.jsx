@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { ArrowLeft, TrendingUp, Target, FileText, ChevronDown } from 'lucide-react'
 import { getUserDetail, getComplementaryGroups, getFactorialLeaves } from '../api/client'
+import { Card, Badge, Button, KpiBar } from '../components/common'
 import MultiJiraSection from '../components/MultiJiraStats'
 import { formatHours } from '../hooks/useData'
-import { StatCard, ProgressBar, EpicCard, ErrorState, EmptyState } from '../components/Cards'
-import { TrendChart, MultiTrendChart, DistributionChart, ChartCard } from '../components/Charts'
+import { TrendChart, MultiTrendChart, DistributionChart } from '../components/Charts'
 import { getInstanceColor } from '../components/WorklogCalendar/calendarUtils'
 import WorklogCalendar from '../components/WorklogCalendar'
 
@@ -60,18 +61,35 @@ export default function UserView({ dateRange, selectedInstance }) {
 
     if (loading) {
         return (
-            <div className="space-y-6 animate-slide-up">
-                <div className="glass-card p-6">
-                    <div className="loading-shimmer h-16 w-16 rounded-full mb-4" />
-                    <div className="loading-shimmer h-8 w-1/3 rounded mb-2" />
-                    <div className="loading-shimmer h-4 w-1/4 rounded" />
+            <div className="space-y-6">
+                <Card>
+                    <div className="h-20 bg-surface-secondary rounded animate-pulse" />
+                </Card>
+                <Card>
+                    <div className="h-32 bg-surface-secondary rounded animate-pulse" />
+                </Card>
+                <div className="grid grid-cols-2 gap-6">
+                    <Card>
+                        <div className="h-64 bg-surface-secondary rounded animate-pulse" />
+                    </Card>
+                    <Card>
+                        <div className="h-64 bg-surface-secondary rounded animate-pulse" />
+                    </Card>
                 </div>
             </div>
         )
     }
 
     if (error) {
-        return <ErrorState message={error} onRetry={fetchData} />
+        return (
+            <Card>
+                <div className="text-center py-12">
+                    <p className="text-error font-medium mb-2">Errore durante il caricamento</p>
+                    <p className="text-secondary mb-4">{error}</p>
+                    <Button onClick={fetchData}>Riprova</Button>
+                </div>
+            </Card>
+        )
     }
 
     if (!data) return null
@@ -79,7 +97,7 @@ export default function UserView({ dateRange, selectedInstance }) {
     // Check if data is empty
     const isDataEmpty = data.worklogs.length === 0 && data.total_hours === 0
 
-    // Get initials (needed for empty state too)
+    // Get initials
     const initials = data.full_name
         .split(' ')
         .map(n => n[0])
@@ -89,40 +107,38 @@ export default function UserView({ dateRange, selectedInstance }) {
 
     if (isDataEmpty) {
         return (
-            <div className="space-y-6 animate-slide-up">
-                <div className="glass-card p-6">
-                    <div className="flex items-start gap-4">
-                        <button
+            <div className="space-y-6">
+                <Card>
+                    <div className="flex items-center gap-4">
+                        <Button
+                            variant="ghost"
                             onClick={() => navigate(-1)}
-                            className="p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+                            className="flex-shrink-0"
                         >
-                            <svg className="w-5 h-5 text-dark-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                            </svg>
-                        </button>
-                        <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center flex-shrink-0 ">
-                            <span className="text-white font-bold text-xl">{initials}</span>
+                            <ArrowLeft className="w-4 h-4" />
+                        </Button>
+                        <div className="w-12 h-12 rounded-full bg-accent-subtle flex items-center justify-center flex-shrink-0">
+                            <span className="text-accent-text font-semibold text-sm">{initials}</span>
                         </div>
-                        <div className="flex-1">
-                            <h1 className="text-2xl font-bold text-dark-100">{data.full_name}</h1>
-                            <p className="text-dark-400">{data.email}</p>
-                            <span className="badge-blue mt-2 inline-block">{data.team_name}</span>
+                        <div className="flex-1 min-w-0">
+                            <h1 className="text-xl font-semibold text-primary truncate">{data.full_name}</h1>
+                            <p className="text-sm text-tertiary truncate">{data.email}</p>
                         </div>
+                        {data.team_name && (
+                            <Badge variant="info">{data.team_name}</Badge>
+                        )}
                     </div>
-                </div>
-                <div className="glass-card p-8">
-                    <EmptyState
-                        title="Nessun worklog registrato"
-                        message="Non ci sono ore registrate per questo utente nel periodo selezionato."
-                        icon={
-                            <svg className="w-8 h-8 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        }
-                        actionLabel="Torna indietro"
-                        onAction={() => navigate(-1)}
-                    />
-                </div>
+                </Card>
+                <Card>
+                    <div className="text-center py-12">
+                        <div className="w-12 h-12 rounded-full bg-surface-secondary mx-auto mb-4 flex items-center justify-center">
+                            <FileText className="w-6 h-6 text-tertiary" />
+                        </div>
+                        <p className="text-primary font-medium mb-1">Nessun worklog registrato</p>
+                        <p className="text-sm text-secondary mb-6">Non ci sono ore registrate per questo utente nel periodo selezionato.</p>
+                        <Button onClick={() => navigate(-1)}>Torna indietro</Button>
+                    </div>
+                </Card>
             </div>
         )
     }
@@ -148,16 +164,8 @@ export default function UserView({ dateRange, selectedInstance }) {
             const instances = instanceNames.map(name => {
                 const instanceLogs = data.worklogs.filter(w => w.jira_instance === name)
                 const totalHours = instanceLogs.reduce((sum, w) => sum + w.time_spent_seconds / 3600, 0)
-
-                // Calculate expected hours approximation (splitting simply by ratio or just using total expected? 
-                // For user view, showing total expected vs instance hours is fine, or we can just hide expected per instance if unknown)
-                // Actually, InstanceCard expects 'expected_hours' and 'completion_percentage'.
-                // We'll calculate completion based on the ratio of total expected hours * (instance_hours / total_hours)
-                // This is an approximation but visually consistent.
-                // Use total expected hours for the period as the reference capacity for each instance
                 const instanceExpected = data.expected_hours
                 const completion = instanceExpected > 0 ? (totalHours / instanceExpected) * 100 : 0
-
                 const uniqueEpics = new Set(instanceLogs.map(w => w.epic_key).filter(Boolean))
 
                 return {
@@ -167,7 +175,7 @@ export default function UserView({ dateRange, selectedInstance }) {
                     completion_percentage: completion,
                     daily_trend: data.daily_trend_by_instance[name],
                     initiative_count: uniqueEpics.size,
-                    contributor_count: 1 // It's a single user view
+                    contributor_count: 1
                 }
             })
 
@@ -181,9 +189,7 @@ export default function UserView({ dateRange, selectedInstance }) {
                     const secondaryInst = instances.find(i => i.instance_name === secondary)
 
                     if (primaryInst && secondaryInst) {
-                        // Find discrepancies (same epic, large diff)
                         const discrepancies = []
-                        // We need epic hours per instance.
                         const primaryEpics = {}
                         const secondaryEpics = {}
 
@@ -197,7 +203,6 @@ export default function UserView({ dateRange, selectedInstance }) {
                             const p = primaryEpics[key] || 0
                             const s = secondaryEpics[key] || 0
                             const delta = Math.abs(p - s)
-                            // Threshold for discrepancy: > 1 hour and > 20% diff
                             if (delta > 1 && (p > 0 || s > 0)) {
                                 const max = Math.max(p, s)
                                 if (delta / max > 0.2) {
@@ -235,167 +240,168 @@ export default function UserView({ dateRange, selectedInstance }) {
         }
     }
 
+    // KPI data
+    const kpiData = [
+        {
+            label: 'Ore totali',
+            value: formatHours(data.total_hours),
+            subtitle: `su ${formatHours(data.expected_hours)} previste`,
+            variant: 'default'
+        },
+        {
+            label: 'Completamento',
+            value: `${Math.round(completionPercentage)}%`,
+            variant: completionPercentage >= 90 ? 'success' : completionPercentage >= 70 ? 'default' : 'warning'
+        },
+        {
+            label: 'Iniziative',
+            value: data.epics.length.toString(),
+            variant: 'default'
+        },
+        {
+            label: 'Worklogs',
+            value: data.worklogs.length.toString(),
+            variant: 'default'
+        }
+    ]
+
     return (
-        <div className="space-y-6 animate-slide-up">
+        <div className="space-y-6">
             {/* Header */}
-            <div className="glass-card p-6">
-                <div className="flex items-start gap-4">
-                    <button
+            <Card>
+                <div className="flex items-center gap-4">
+                    <Button
+                        variant="ghost"
                         onClick={() => navigate(-1)}
-                        className="p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+                        className="flex-shrink-0"
                     >
-                        <svg className="w-5 h-5 text-dark-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
-                    </button>
-
-                    <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center flex-shrink-0 ">
-                        <span className="text-white font-bold text-xl">{initials}</span>
+                        <ArrowLeft className="w-4 h-4" />
+                    </Button>
+                    <div className="w-12 h-12 rounded-full bg-accent-subtle flex items-center justify-center flex-shrink-0">
+                        <span className="text-accent-text font-semibold text-sm">{initials}</span>
                     </div>
-
-                    <div className="flex-1">
-                        <h1 className="text-2xl font-bold text-dark-100">{data.full_name}</h1>
-                        <p className="text-dark-400">{data.email}</p>
-                        <span className="badge-blue mt-2 inline-block">{data.team_name}</span>
+                    <div className="flex-1 min-w-0">
+                        <h1 className="text-xl font-semibold text-primary truncate">{data.full_name}</h1>
+                        <p className="text-sm text-tertiary truncate">{data.email}</p>
                     </div>
-
-                    <div className="text-right">
-                        <p className="text-3xl font-bold bg-accent bg-clip-text text-transparent">
-                            {formatHours(data.total_hours)}
-                        </p>
-                        <p className="text-dark-400 text-sm">su {formatHours(data.expected_hours)} previste</p>
-                    </div>
+                    {data.team_name && (
+                        <Badge variant="info">{data.team_name}</Badge>
+                    )}
                 </div>
-                <div className="mt-4">
-                    <ProgressBar value={data.total_hours} max={data.expected_hours} size="md" />
-                </div>
-            </div>
+            </Card>
+
+            {/* KPI Bar */}
+            <KpiBar items={kpiData} />
 
             {/* Multi-JIRA Stats */}
             {overviewData && (
-                <div className="mb-8">
+                <div>
                     <MultiJiraSection overview={overviewData} navigate={navigate} />
-                    <div className="h-px bg-dark-700 my-8" />
                 </div>
             )}
 
-            {/* Show specific Stats and Charts only if NOT in Multi-Jira mode (or if overviewData is null) */}
+            {/* Charts - Only show if NOT in Multi-Jira mode */}
             {!overviewData && (
-                <>
-                    {/* Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <StatCard
-                            label="Completamento"
-                            value={`${Math.round(completionPercentage)}%`}
-                            color={completionPercentage >= 90 ? 'green' : completionPercentage >= 70 ? 'blue' : 'orange'}
-                            icon={
-                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Card>
+                        <div className="mb-4">
+                            <h3 className="text-sm font-semibold text-primary">Trend Giornaliero</h3>
+                            <p className="text-xs text-tertiary">Ore registrate nel periodo</p>
+                        </div>
+                        {(() => {
+                            const byInstance = data.daily_trend_by_instance || {}
+                            const instanceNames = Object.keys(byInstance).sort()
+                            if (instanceNames.length > 1) {
+                                const series = instanceNames.map(name => ({
+                                    name,
+                                    data: byInstance[name],
+                                    color: getInstanceColor(name, instanceNames).hex
+                                }))
+                                return <MultiTrendChart series={series} height={240} />
                             }
-                        />
-                        <StatCard
-                            label="Iniziative Lavorate"
-                            value={data.epics.length}
-                            color="purple"
-                            icon={
-                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                </svg>
-                            }
-                        />
-                        <StatCard
-                            label="Worklog Registrati"
-                            value={data.worklogs.length}
-                            color="blue"
-                            icon={
-                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                </svg>
-                            }
-                        />
-                    </div>
+                            return <TrendChart data={data.daily_trend} height={240} />
+                        })()}
+                    </Card>
 
-                    {/* Charts */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <ChartCard title="Trend Giornaliero" subtitle="Ore registrate nel periodo">
-                            {(() => {
-                                const byInstance = data.daily_trend_by_instance || {}
-                                const instanceNames = Object.keys(byInstance).sort()
-                                if (instanceNames.length > 1) {
-                                    const series = instanceNames.map(name => ({
-                                        name,
-                                        data: byInstance[name],
-                                        color: getInstanceColor(name, instanceNames).hex
-                                    }))
-                                    return <MultiTrendChart series={series} height={280} />
-                                }
-                                return <TrendChart data={data.daily_trend} height={280} />
-                            })()}
-                        </ChartCard>
-
-                        <ChartCard title="Distribuzione Iniziative" subtitle="Come sono distribuite le ore">
-                            {initiativePieData.length > 0 ? (
-                                <DistributionChart data={initiativePieData} height={280} />
-                            ) : (
-                                <div className="h-64 flex items-center justify-center text-dark-400">
-                                    Nessuna iniziativa nel periodo selezionato
-                                </div>
-                            )}
-                        </ChartCard>
-                    </div>
-                </>
+                    <Card>
+                        <div className="mb-4">
+                            <h3 className="text-sm font-semibold text-primary">Distribuzione Iniziative</h3>
+                            <p className="text-xs text-tertiary">Come sono distribuite le ore</p>
+                        </div>
+                        {initiativePieData.length > 0 ? (
+                            <DistributionChart data={initiativePieData} height={240} />
+                        ) : (
+                            <div className="h-60 flex items-center justify-center">
+                                <p className="text-sm text-tertiary">Nessuna iniziativa nel periodo</p>
+                            </div>
+                        )}
+                    </Card>
+                </div>
             )}
 
             {/* Initiative Cards */}
             {data.epics.length > 0 && (
-                <div className="glass-card p-4">
+                <Card>
                     <button
                         onClick={() => setInitiativesOpen(!initiativesOpen)}
-                        className="flex items-center justify-between w-full group focus:outline-none"
+                        className="flex items-center justify-between w-full group"
                     >
                         <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg bg-dark-700 group-hover:bg-dark-600 transition-colors ${initiativesOpen ? 'text-accent-blue' : 'text-dark-400'}`}>
-                                <svg
-                                    className={`w-6 h-6 transition-transform duration-200 ${initiativesOpen ? 'rotate-180' : ''}`}
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
+                            <div className="w-8 h-8 rounded bg-surface-secondary flex items-center justify-center group-hover:bg-surface-tertiary transition-colors">
+                                <ChevronDown
+                                    className={`w-4 h-4 text-secondary transition-transform duration-200 ${initiativesOpen ? 'rotate-180' : ''}`}
+                                />
                             </div>
-                            <div>
-                                <h2 className="text-lg font-semibold text-dark-100 group-hover:text-accent-blue transition-colors">Iniziative Lavorate</h2>
-                                <p className="text-sm text-dark-400 text-left">
-                                    {data.epics.length} iniziativ{data.epics.length === 1 ? 'a' : 'e'} lavorat{data.epics.length === 1 ? 'a' : 'e'} nel periodo
+                            <div className="text-left">
+                                <h2 className="text-sm font-semibold text-primary group-hover:text-accent transition-colors">
+                                    Iniziative Lavorate
+                                </h2>
+                                <p className="text-xs text-tertiary">
+                                    {data.epics.length} iniziativ{data.epics.length === 1 ? 'a' : 'e'} nel periodo
                                 </p>
                             </div>
                         </div>
                     </button>
 
                     {initiativesOpen && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up mt-6 pt-4 border-t border-dark-700">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-6 border-t border-border">
                             {data.epics.map((epic) => (
-                                <EpicCard
+                                <button
                                     key={epic.epic_key}
-                                    epicKey={epic.epic_key}
-                                    name={epic.epic_name}
-                                    hours={epic.total_hours}
-                                    contributorCount={epic.contributor_count}
-                                    jiraInstance={epic.jira_instance}
-                                    parentType={epic.parent_type}
                                     onClick={() => navigate(`/app/epics/${encodeURIComponent(epic.epic_key)}`)}
-                                />
+                                    className="p-3 rounded-lg border border-border bg-surface hover:border-accent transition-colors text-left"
+                                >
+                                    <div className="flex items-start justify-between gap-2 mb-2">
+                                        <p className="text-xs font-mono text-secondary">{epic.epic_key}</p>
+                                        {epic.jira_instance && (
+                                            <Badge variant="outline" className="text-xs">
+                                                {epic.jira_instance}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <p className="text-sm font-medium text-primary mb-2 line-clamp-2">
+                                        {epic.epic_name}
+                                    </p>
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-base font-mono font-semibold text-accent">
+                                            {formatHours(epic.total_hours)}
+                                        </p>
+                                        {epic.contributor_count > 1 && (
+                                            <p className="text-xs text-tertiary">
+                                                {epic.contributor_count} contributors
+                                            </p>
+                                        )}
+                                    </div>
+                                </button>
                             ))}
                         </div>
                     )}
-                </div>
+                </Card>
             )}
 
             {/* Calendario Worklog */}
             <div>
-                <h2 className="text-lg font-semibold text-dark-100 mb-4 px-1">Calendario</h2>
+                <h2 className="text-sm font-semibold text-primary mb-4">Calendario</h2>
                 <WorklogCalendar
                     worklogs={data.worklogs}
                     leaves={leaves}

@@ -579,6 +579,55 @@ export async function removeInstanceFromGroup(groupId, instanceId) {
     return fetchApiDelete(`/settings/complementary-groups/${groupId}/members/${instanceId}`)
 }
 
+// ============ Settings API - Matching Algorithms ============
+
+export async function getMatchingAlgorithms() {
+    return fetchApi('/settings/matching-algorithms')
+}
+
+export async function updateMatchingAlgorithm(algorithmType, enabled, config = null, priority = null) {
+    const body = { enabled }
+    if (config !== null) body.config = config
+    if (priority !== null) body.priority = priority
+    return fetchApiPut(`/settings/matching-algorithms/${algorithmType}`, body)
+}
+
+// ============ Settings API - JIRA Exclusions ============
+
+export async function getJiraExclusions() {
+    return fetchApi('/settings/jira-exclusions')
+}
+
+export async function addJiraExclusion(exclusionKey, exclusionType, description = null) {
+    const body = {
+        exclusion_key: exclusionKey,
+        exclusion_type: exclusionType
+    }
+    if (description) body.description = description
+    return fetchApiPost('/settings/jira-exclusions', body)
+}
+
+export async function deleteJiraExclusion(exclusionId) {
+    return fetchApiDelete(`/settings/jira-exclusions/${exclusionId}`)
+}
+
+// ============ Settings API - Generic Issues ============
+
+export const getGenericIssues = () => fetchApi('/settings/generic-issues');
+
+export const addGenericIssue = (issueCode, issueType, teamId, description) =>
+  fetchApiPost('/settings/generic-issues', {
+    issue_code: issueCode,
+    issue_type: issueType,
+    team_id: teamId || null,
+    description
+  });
+
+export const deleteGenericIssue = (genericIssueId) =>
+  fetchApiDelete(`/settings/generic-issues/${genericIssueId}`);
+
+export const getAllJiraIssueTypes = () => fetchApi('/settings/jira-issue-types');
+
 // ============ Logs API ============
 
 export async function getLogs(params = {}) {

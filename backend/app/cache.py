@@ -497,6 +497,16 @@ class WorklogStorage:
                 except Exception:
                     pass  # Column already exists
 
+                # Add issue_type to worklogs table (migration 012)
+                try:
+                    await db.execute("ALTER TABLE worklogs ADD COLUMN issue_type TEXT")
+                except Exception:
+                    pass  # Column already exists
+                try:
+                    await db.execute("CREATE INDEX IF NOT EXISTS idx_worklogs_issue_type ON worklogs(company_id, issue_type)")
+                except Exception:
+                    pass  # Index already exists
+
                 # Add default_project_key to jira_instances (migration)
                 try:
                     await db.execute("ALTER TABLE jira_instances ADD COLUMN default_project_key TEXT")
@@ -999,6 +1009,57 @@ class WorklogStorage:
                     print(f"⚠️  Worklog ID migration skipped: {e}")
                     pass
 
+                # ========== Generic Issues Table (Migration 013) ==========
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS generic_issues (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id INTEGER NOT NULL,
+                        issue_code TEXT NOT NULL,
+                        issue_type TEXT NOT NULL,
+                        team_id INTEGER,
+                        description TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(company_id, issue_code, issue_type, team_id),
+                        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+                        FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+                    )
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_generic_issues_company
+                    ON generic_issues(company_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_generic_issues_lookup
+                    ON generic_issues(company_id, issue_code, issue_type)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_generic_issues_team
+                    ON generic_issues(company_id, team_id)
+                """)
+
+                # Cache dei tipi di issue JIRA (migration 014)
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS jira_issue_types (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id INTEGER NOT NULL,
+                        name TEXT NOT NULL,
+                        jira_instance TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(company_id, name, jira_instance),
+                        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+                    )
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_jira_issue_types_company
+                    ON jira_issue_types(company_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_jira_issue_types_name
+                    ON jira_issue_types(company_id, name)
+                """)
+
                 await db.commit()
 
             self._initialized = True
@@ -1240,7 +1301,8 @@ class WorklogStorage:
                 parent_name=wl.parent_name,
                 parent_type=wl.parent_type,
                 epic_key=wl.epic_key,
-                epic_name=wl.epic_name
+                epic_name=wl.epic_name,
+                issue_type=wl.issue_type
             )
             worklogs_with_unique_ids.append(wl_copy)
 
@@ -1283,6 +1345,7 @@ class WorklogStorage:
                         wl.parent_type,
                         wl.epic_key,
                         wl.epic_name,
+                        wl.issue_type,
                         wl.model_dump_json()
                     )
                     for wl in new_worklogs
@@ -1292,8 +1355,8 @@ class WorklogStorage:
                     INSERT INTO worklogs
                     (id, company_id, issue_key, issue_summary, author_email, author_display_name,
                      time_spent_seconds, started, jira_instance, parent_key, parent_name,
-                     parent_type, epic_key, epic_name, data)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     parent_type, epic_key, epic_name, issue_type, data)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, insert_data)
 
                 inserted = len(new_worklogs)
@@ -1315,6 +1378,7 @@ class WorklogStorage:
                         wl.parent_type,
                         wl.epic_key,
                         wl.epic_name,
+                        wl.issue_type,
                         wl.model_dump_json(),
                         wl.id
                     )
@@ -1336,6 +1400,7 @@ class WorklogStorage:
                         parent_type = ?,
                         epic_key = ?,
                         epic_name = ?,
+                        issue_type = ?,
                         data = ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
@@ -4797,12 +4862,16 @@ class WorklogStorage:
 
     async def get_leaves_in_range(
         self,
+        company_id: int,
         start_date: date,
         end_date: date,
         user_id: Optional[int] = None,
         status_filter: Optional[str] = None
     ) -> list[dict]:
-        """Get leaves within date range from storage."""
+        """Get leaves within date range from storage (scoped to company)."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
         await self.initialize()
 
         query = """
@@ -4815,9 +4884,10 @@ class WorklogStorage:
                 fl.created_at
             FROM factorial_leaves fl
             JOIN users u ON fl.user_id = u.id
-            WHERE (fl.start_date <= ? AND fl.finish_date >= ?)
+            WHERE u.company_id = ?
+              AND (fl.start_date <= ? AND fl.finish_date >= ?)
         """
-        params = [end_date.isoformat(), start_date.isoformat()]
+        params = [company_id, end_date.isoformat(), start_date.isoformat()]
 
         if user_id:
             query += " AND fl.user_id = ?"
@@ -5455,6 +5525,291 @@ class WorklogStorage:
                 json.dumps(metadata) if metadata else None
             ))
             await db.commit()
+
+    # ============================================
+    # MATCHING ALGORITHMS
+    # ============================================
+
+    async def get_matching_algorithms(self, company_id: int) -> list[dict]:
+        """Get all matching algorithms for company (scoped to company)."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT id, algorithm_type, algorithm_name, description, enabled, config, priority
+                FROM matching_algorithms
+                WHERE company_id = ?
+                ORDER BY priority ASC, algorithm_name ASC
+            """, (company_id,)) as cursor:
+                algorithms = []
+                async for row in cursor:
+                    algorithms.append({
+                        'id': row[0],
+                        'algorithm_type': row[1],
+                        'algorithm_name': row[2],
+                        'description': row[3],
+                        'enabled': bool(row[4]),
+                        'config': json.loads(row[5]) if row[5] else {},
+                        'priority': row[6]
+                    })
+                return algorithms
+
+    async def update_matching_algorithm(
+        self,
+        company_id: int,
+        algorithm_type: str,
+        enabled: bool,
+        config: dict = None,
+        priority: int = None
+    ) -> None:
+        """Update matching algorithm settings (scoped to company)."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            # Build update query dynamically
+            updates = ["enabled = ?"]
+            params = [int(enabled)]
+
+            if config is not None:
+                updates.append("config = ?")
+                params.append(json.dumps(config))
+
+            if priority is not None:
+                updates.append("priority = ?")
+                params.append(priority)
+
+            updates.append("updated_at = CURRENT_TIMESTAMP")
+            params.extend([company_id, algorithm_type])
+
+            await db.execute(f"""
+                UPDATE matching_algorithms
+                SET {', '.join(updates)}
+                WHERE company_id = ? AND algorithm_type = ?
+            """, params)
+            await db.commit()
+
+    async def initialize_matching_algorithms(self, company_id: int) -> None:
+        """Initialize default matching algorithms for company."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        await self.initialize()
+
+        # Import here to avoid circular dependency
+        from app.matching_algorithms import get_available_algorithms
+
+        available = get_available_algorithms()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            for algo in available:
+                # Check if already exists
+                async with db.execute("""
+                    SELECT id FROM matching_algorithms
+                    WHERE company_id = ? AND algorithm_type = ?
+                """, (company_id, algo['algorithm_type'])) as cursor:
+                    existing = await cursor.fetchone()
+
+                if not existing:
+                    # Insert default (disabled)
+                    await db.execute("""
+                        INSERT INTO matching_algorithms
+                        (company_id, algorithm_type, algorithm_name, description, enabled, priority)
+                        VALUES (?, ?, ?, ?, 0, 1)
+                    """, (
+                        company_id,
+                        algo['algorithm_type'],
+                        algo['algorithm_name'],
+                        algo['description']
+                    ))
+
+            await db.commit()
+
+    # ========== JIRA Exclusions Methods ==========
+
+    async def get_jira_exclusions(self, company_id: int) -> list[dict]:
+        """Get all JIRA exclusions for a company."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """
+                SELECT id, exclusion_key, exclusion_type, description, created_at
+                FROM jira_exclusions
+                WHERE company_id = ?
+                ORDER BY exclusion_key
+                """,
+                (company_id,)
+            )
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    async def add_jira_exclusion(
+        self,
+        company_id: int,
+        exclusion_key: str,
+        exclusion_type: str,
+        description: str = None
+    ) -> dict:
+        """Add a new JIRA exclusion."""
+        if not company_id:
+            raise ValueError("company_id is required")
+        if exclusion_type not in ['issue_key', 'parent_key']:
+            raise ValueError("exclusion_type must be 'issue_key' or 'parent_key'")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                INSERT INTO jira_exclusions (company_id, exclusion_key, exclusion_type, description)
+                VALUES (?, ?, ?, ?)
+                """,
+                (company_id, exclusion_key, exclusion_type, description)
+            )
+            await db.commit()
+
+            exclusion_id = cursor.lastrowid
+            return {
+                'id': exclusion_id,
+                'exclusion_key': exclusion_key,
+                'exclusion_type': exclusion_type,
+                'description': description
+            }
+
+    async def delete_jira_exclusion(self, company_id: int, exclusion_id: int):
+        """Delete a JIRA exclusion."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                DELETE FROM jira_exclusions
+                WHERE id = ? AND company_id = ?
+                """,
+                (exclusion_id, company_id)
+            )
+            await db.commit()
+
+    # ============ Generic Issues CRUD ============
+
+    async def get_generic_issues(self, company_id: int) -> list[dict]:
+        """Get all generic issue mappings for a company."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """
+                SELECT gi.id, gi.issue_code, gi.issue_type,
+                       gi.team_id, gi.description, gi.created_at, gi.updated_at,
+                       t.name as team_name
+                FROM generic_issues gi
+                LEFT JOIN teams t ON t.id = gi.team_id
+                WHERE gi.company_id = ?
+                ORDER BY gi.issue_code, gi.issue_type
+                """,
+                (company_id,)
+            )
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    async def add_generic_issue(
+        self,
+        company_id: int,
+        issue_code: str,
+        issue_type: str,
+        team_id: int,
+        description: str = None
+    ) -> dict:
+        """Add a new generic issue mapping."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                INSERT INTO generic_issues (company_id, issue_code, issue_type, team_id, description)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (company_id, issue_code, issue_type, team_id, description)
+            )
+            await db.commit()
+
+            generic_issue_id = cursor.lastrowid
+            return {
+                'id': generic_issue_id,
+                'issue_code': issue_code,
+                'issue_type': issue_type,
+                'team_id': team_id,
+                'description': description
+            }
+
+    async def delete_generic_issue(self, company_id: int, generic_issue_id: int):
+        """Delete a generic issue mapping."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                DELETE FROM generic_issues
+                WHERE id = ? AND company_id = ?
+                """,
+                (generic_issue_id, company_id)
+            )
+            await db.commit()
+
+    # ========== JIRA Issue Types Cache ==========
+
+    async def upsert_jira_issue_types(self, company_id: int, jira_instance: str, issue_types: list[str]):
+        """Upsert JIRA issue types cache for a specific instance."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            # Delete existing types for this instance
+            await db.execute(
+                "DELETE FROM jira_issue_types WHERE company_id = ? AND jira_instance = ?",
+                (company_id, jira_instance)
+            )
+
+            # Insert new types
+            for issue_type in issue_types:
+                await db.execute(
+                    """
+                    INSERT INTO jira_issue_types (company_id, name, jira_instance)
+                    VALUES (?, ?, ?)
+                    """,
+                    (company_id, issue_type, jira_instance)
+                )
+
+            await db.commit()
+
+    async def get_cached_jira_issue_types(self, company_id: int) -> list[str]:
+        """Get all unique JIRA issue types from cache."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                SELECT DISTINCT name
+                FROM jira_issue_types
+                WHERE company_id = ?
+                ORDER BY name
+                """,
+                (company_id,)
+            )
+            rows = await cursor.fetchall()
+            return [row[0] for row in rows]
 
 
 # Global storage instance

@@ -106,7 +106,9 @@ class Worklog(BaseModel):
     # Epic (se trovata nella gerarchia)
     epic_key: Optional[str] = None
     epic_name: Optional[str] = None
-    
+    # JIRA issue type (Bug, Story, Task, Sub-task, etc.)
+    issue_type: Optional[str] = None
+
     @property
     def hours(self) -> float:
         return self.time_spent_seconds / 3600
@@ -440,6 +442,7 @@ class DiscrepancyItem(BaseModel):
     secondary_hours: float
     delta_hours: float
     delta_percentage: float
+    is_excluded: bool = False  # True if this is an expected discrepancy (e.g., leaves, training)
 
 
 class ComplementaryComparison(BaseModel):
@@ -908,3 +911,50 @@ class AuthAuditLogEntry(BaseModel):
     ip_address: Optional[str] = None
     metadata: Optional[dict] = None
     created_at: datetime
+
+
+class MatchingAlgorithmUpdate(BaseModel):
+    """Request model for updating matching algorithm settings."""
+    enabled: bool
+    config: Optional[dict] = None
+    priority: Optional[int] = None
+
+
+class JiraExclusionCreate(BaseModel):
+    """Request model for creating JIRA exclusion."""
+    exclusion_key: str = Field(..., min_length=1, max_length=50)
+    exclusion_type: str = Field(default="parent_key", pattern="^(issue_key|parent_key)$")
+    description: Optional[str] = Field(None, max_length=200)
+
+
+# ============ Generic Issues Models ============
+
+class GenericIssueCreate(BaseModel):
+    """Request model for creating a generic issue mapping.
+
+    Maps a container issue (e.g., SYSMMFG-3658) to collect worklogs of a certain
+    issue type (e.g., Incident) from the complementary instance, optionally filtered by team.
+    """
+    issue_code: str = Field(..., min_length=1, max_length=50, description="Container issue code (e.g., SYSMMFG-3658)")
+    issue_type: str = Field(..., min_length=1, max_length=50, description="Issue type to match (e.g., Incident, Request)")
+    team_id: Optional[int] = Field(None, description="Optional team filter (NULL = global)")
+    description: Optional[str] = Field(None, max_length=200, description="User notes")
+
+
+class GenericIssueUpdate(BaseModel):
+    """Request model for updating a generic issue mapping."""
+    issue_code: Optional[str] = Field(None, min_length=1, max_length=50)
+    issue_type: Optional[str] = Field(None, min_length=1, max_length=50)
+    team_id: Optional[int] = None
+    description: Optional[str] = Field(None, max_length=200)
+
+
+class GenericIssueInDB(BaseModel):
+    """Generic issue mapping with database fields."""
+    id: int
+    issue_code: str
+    issue_type: str
+    team_id: Optional[int] = None
+    description: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None

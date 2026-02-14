@@ -1,6 +1,6 @@
 import React from 'react'
 
-export type BadgeVariant = 'default' | 'info' | 'success' | 'warning' | 'error'
+export type BadgeVariant = 'default' | 'info' | 'success' | 'warning' | 'error' | 'outline'
 
 export interface BadgeProps {
   variant?: BadgeVariant
@@ -24,26 +24,45 @@ export function Badge({ variant = 'default', children, className = '' }: BadgePr
     default: {
       dot: 'bg-border-strong',
       text: 'text-secondary',
+      isOutline: false,
     },
     info: {
       dot: 'bg-accent',
       text: 'text-accent',
+      isOutline: false,
     },
     success: {
       dot: 'bg-success',
       text: 'text-success',
+      isOutline: false,
     },
     warning: {
       dot: 'bg-warning',
       text: 'text-warning',
+      isOutline: false,
     },
     error: {
       dot: 'bg-error',
       text: 'text-error',
+      isOutline: false,
+    },
+    outline: {
+      dot: '',
+      text: 'text-secondary',
+      isOutline: true,
     },
   }
 
   const styles = variantStyles[variant]
+
+  // Outline variant uses border instead of dot
+  if (styles.isOutline) {
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium border border-border rounded ${styles.text} ${className}`}>
+        {children}
+      </span>
+    )
+  }
 
   return (
     <span className={`inline-flex items-center gap-[5px] ${className}`}>
