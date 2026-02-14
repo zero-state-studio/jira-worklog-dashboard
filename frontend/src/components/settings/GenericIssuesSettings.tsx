@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Badge, Button, Input, Select } from '../common'
+import { Card, Badge, Button, Input, Select, MultiSelect } from '../common'
 import { Settings, Trash2, Plus, Info } from 'lucide-react'
-import { getGenericIssues, addGenericIssue, deleteGenericIssue, getSettingsTeams, getAllJiraIssueTypes } from '../../api/client'
+import { getGenericIssues, addGenericIssue, deleteGenericIssue, getSettingsTeams } from '../../api/client'
+import { JIRA_ISSUE_TYPES } from '../../constants/issueTypes'
 
 interface GenericIssue {
   id: number
@@ -20,14 +21,13 @@ interface Team {
 export function GenericIssuesSettings() {
   const [genericIssues, setGenericIssues] = useState<GenericIssue[]>([])
   const [teams, setTeams] = useState<Team[]>([])
-  const [issueTypes, setIssueTypes] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
 
   // Form state
   const [newIssueCode, setNewIssueCode] = useState('')
-  const [newIssueType, setNewIssueType] = useState('')
+  const [newIssueTypes, setNewIssueTypes] = useState<string[]>([])  // Changed to array
   const [newTeamId, setNewTeamId] = useState('')
   const [newDescription, setNewDescription] = useState('')
 
@@ -39,14 +39,12 @@ export function GenericIssuesSettings() {
     try {
       setLoading(true)
       setError(null)
-      const [issuesData, teamsData, issueTypesData] = await Promise.all([
+      const [issuesData, teamsData] = await Promise.all([
         getGenericIssues(),
-        getSettingsTeams(),
-        getAllJiraIssueTypes()
+        getSettingsTeams()
       ])
       setGenericIssues(issuesData.generic_issues || [])
       setTeams(teamsData || [])
-      setIssueTypes(issueTypesData.issue_types || [])
     } catch (err: any) {
       setError(err.message || 'Failed to load generic issues')
     } finally {
@@ -55,24 +53,28 @@ export function GenericIssuesSettings() {
   }
 
   const handleAdd = async () => {
-    if (!newIssueCode.trim() || !newIssueType.trim()) {
-      setError('Issue code and issue type are required')
+    if (!newIssueCode.trim() || newIssueTypes.length === 0) {
+      setError('Issue code and at least one issue type are required')
       return
     }
 
     try {
       setAdding(true)
       setError(null)
+
+      // Join selected types with comma for backend
+      const issueTypeString = newIssueTypes.join(',')
+
       await addGenericIssue(
         newIssueCode.trim(),
-        newIssueType.trim(),
+        issueTypeString,
         newTeamId ? parseInt(newTeamId, 10) : null,
         newDescription.trim() || null
       )
 
       // Reset form and reload
       setNewIssueCode('')
-      setNewIssueType('')
+      setNewIssueTypes([])
       setNewTeamId('')
       setNewDescription('')
       await fetchData()
@@ -105,8 +107,6 @@ export function GenericIssuesSettings() {
     { value: '', label: 'Globale (tutti i team)' },
     ...teams.map(t => ({ value: String(t.id), label: t.name }))
   ]
-
-  const issueTypeOptions = issueTypes.map(it => ({ value: it, label: it }))
 
   if (loading) {
     return (
@@ -165,29 +165,13 @@ export function GenericIssuesSettings() {
             value={newIssueCode}
             onChange={(e) => setNewIssueCode(e.target.value)}
           />
-          <div>
-            <label className="block text-xs font-medium text-secondary mb-1.5">
-              Tipo Issue
-            </label>
-            <input
-              type="text"
-              list="issue-types-list"
-              className="w-full h-9 px-3 text-sm bg-surface border border-border rounded-md
-                         focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent
-                         placeholder:text-tertiary"
-              placeholder="es. Incident, Request, Bug"
-              value={newIssueType}
-              onChange={(e) => setNewIssueType(e.target.value)}
-            />
-            <datalist id="issue-types-list">
-              {issueTypes.map((type) => (
-                <option key={type} value={type} />
-              ))}
-            </datalist>
-            <p className="mt-1 text-xs text-tertiary">
-              Scrivi multipli tipi separati da virgola o seleziona dalla lista
-            </p>
-          </div>
+          <MultiSelect
+            label="Tipo Issue"
+            options={[...JIRA_ISSUE_TYPES]}
+            value={newIssueTypes}
+            onChange={setNewIssueTypes}
+            placeholder="Seleziona uno o più tipi"
+          />
           <Select
             label="Team"
             options={teamOptions}
@@ -206,7 +190,7 @@ export function GenericIssuesSettings() {
           <Button
             variant="primary"
             onClick={handleAdd}
-            disabled={adding || !newIssueCode.trim() || !newIssueType.trim()}
+            disabled={adding || !newIssueCode.trim() || newIssueTypes.length === 0}
           >
             <Plus className="w-4 h-4 mr-1" />
             Aggiungi
