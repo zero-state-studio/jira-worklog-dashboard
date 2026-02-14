@@ -112,10 +112,16 @@ export function JiraExclusionsSettings() {
       <div className="mb-4 p-3 bg-info-subtle border border-info rounded-lg flex items-start gap-2">
         <Info className="w-4 h-4 text-info flex-shrink-0 mt-0.5" />
         <div className="text-xs text-secondary leading-relaxed">
-          <strong>Come funziona:</strong> Le issue con questi parent key (es. ASS, FORM) non verranno
-          considerate errori negli algoritmi di match. Appariranno nella Dashboard con badge{' '}
+          <strong>Come funziona:</strong> Le issue con questi pattern verranno marcate come "discrepanze attese"
+          e appariranno nella Dashboard con badge{' '}
           <Badge variant="success" className="text-xs mx-1">OK</Badge> invece di{' '}
           <Badge variant="error" className="text-xs mx-1">Error</Badge>.
+          <br />
+          <strong>Wildcard:</strong> Usa <code className="px-1 bg-surface rounded font-mono">*</code> per pattern matching.
+          Es: <code className="px-1 bg-surface rounded font-mono">ASS-*</code> matcha{' '}
+          <code className="px-1 bg-surface rounded font-mono">ASS-19</code>,{' '}
+          <code className="px-1 bg-surface rounded font-mono">ASS-2</code>,{' '}
+          <code className="px-1 bg-surface rounded font-mono">ASS-9999</code>, ecc.
         </div>
       </div>
 
@@ -130,8 +136,8 @@ export function JiraExclusionsSettings() {
         <h3 className="text-sm font-semibold text-primary mb-3">Aggiungi Esclusione</h3>
         <div className="grid grid-cols-2 gap-3">
           <Input
-            label="Parent/Issue Key"
-            placeholder="es. ASS, FORM, ADMIN"
+            label="Parent/Issue Key (supporta wildcard *)"
+            placeholder="es. ASS-*, FORM-*, ADMIN-*"
             value={newKey}
             onChange={(e) => setNewKey(e.target.value)}
           />

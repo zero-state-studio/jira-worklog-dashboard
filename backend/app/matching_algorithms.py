@@ -12,6 +12,40 @@ from typing import List, Dict, Set, Any, Optional
 from dataclasses import dataclass
 
 
+def _matches_exclusion_pattern(linking_key: str, exclusions: List[str]) -> bool:
+    """
+    Check if linking_key matches any exclusion pattern.
+
+    Supports wildcard patterns:
+    - 'ASS-*' matches 'ASS-19', 'ASS-2', 'ASS-9999', etc.
+    - 'FORM-*' matches 'FORM-10', 'FORM-123', etc.
+    - 'ADMIN' matches exactly 'ADMIN' (no wildcard)
+
+    Args:
+        linking_key: The key to check (e.g., 'ASS-19')
+        exclusions: List of exclusion patterns (e.g., ['ASS-*', 'FORM-*', 'ADMIN'])
+
+    Returns:
+        True if linking_key matches any exclusion pattern
+    """
+    if not exclusions:
+        return False
+
+    for pattern in exclusions:
+        if '*' in pattern:
+            # Convert wildcard pattern to regex
+            # 'ASS-*' -> '^ASS-.*$'
+            regex_pattern = pattern.replace('*', '.*')
+            if re.match(f'^{regex_pattern}$', linking_key):
+                return True
+        else:
+            # Exact match
+            if linking_key == pattern:
+                return True
+
+    return False
+
+
 @dataclass
 class WorklogGroup:
     """Represents a group of matched worklogs across instances."""
@@ -118,7 +152,7 @@ class ParentLinkingMatcher(MatchingAlgorithm):
             delta = primary_hours - secondary_hours
 
             # Check if this group is excluded (expected discrepancy like leaves, training)
-            is_excluded = linking_key in exclusions
+            is_excluded = _matches_exclusion_pattern(linking_key, exclusions)
 
             # Include ALL groups, even if only on one side (solitaries are discrepancies)
             result[linking_key] = WorklogGroup(
