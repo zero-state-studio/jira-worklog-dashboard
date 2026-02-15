@@ -72,7 +72,8 @@ class MatchingAlgorithm:
         primary_worklogs: List[Any],
         secondary_worklogs: List[Any],
         config: Dict[str, Any] = None,
-        exclusions: List[str] = None
+        exclusions: List[str] = None,
+        generic_issue_codes: List[str] = None
     ) -> Dict[str, WorklogGroup]:
         """
         Find groups of related worklogs across instances.
@@ -81,6 +82,8 @@ class MatchingAlgorithm:
             primary_worklogs: Worklogs from primary instance
             secondary_worklogs: Worklogs from secondary instance
             config: Algorithm-specific configuration
+            exclusions: List of exclusion patterns
+            generic_issue_codes: List of issue codes to exclude from matching
 
         Returns:
             Dictionary mapping linking_key -> WorklogGroup
@@ -116,11 +119,23 @@ class ParentLinkingMatcher(MatchingAlgorithm):
         primary_worklogs: List[Any],
         secondary_worklogs: List[Any],
         config: Dict[str, Any] = None,
-        exclusions: List[str] = None
+        exclusions: List[str] = None,
+        generic_issue_codes: List[str] = None
     ) -> Dict[str, WorklogGroup]:
-        """Find groups based on parent linking keys."""
+        """Find groups based on parent linking keys.
+
+        Args:
+            primary_worklogs: Worklogs from primary instance
+            secondary_worklogs: Worklogs from secondary instance
+            config: Algorithm-specific configuration
+            exclusions: List of exclusion patterns
+            generic_issue_codes: List of issue codes configured as generic issues.
+                                 Worklogs on these issues are skipped from parent
+                                 linking to allow generic issue matching later.
+        """
         config = config or {}
         exclusions = exclusions or []
+        generic_issue_codes = set(generic_issue_codes or [])
 
         # Build groups
         groups = defaultdict(lambda: {
@@ -130,11 +145,14 @@ class ParentLinkingMatcher(MatchingAlgorithm):
 
         # Process primary worklogs
         for wl in primary_worklogs:
+            # Skip worklogs on generic issues (they'll be processed by apply_generic_issues)
+            if hasattr(wl, 'issue_key') and wl.issue_key in generic_issue_codes:
+                continue
             linking_key = self._extract_linking_key(wl)
             if linking_key:
                 groups[linking_key]['primary'].append(wl)
 
-        # Process secondary worklogs
+        # Process secondary worklogs (no need to skip - they match by issue_type)
         for wl in secondary_worklogs:
             linking_key = self._extract_linking_key(wl)
             if linking_key:
@@ -146,6 +164,12 @@ class ParentLinkingMatcher(MatchingAlgorithm):
             primary_wls = group_data['primary']
             secondary_wls = group_data['secondary']
 
+            # Skip groups with ONLY secondary worklogs (MMFG without OT match)
+            # These should remain unmatched for generic issue processing
+            # Only primary-only groups are valid discrepancies (OT hours not tracked in MMFG)
+            if not primary_wls:
+                continue
+
             # Calculate hours (0 if no worklogs on that side)
             primary_hours = sum(wl.time_spent_seconds for wl in primary_wls) / 3600 if primary_wls else 0
             secondary_hours = sum(wl.time_spent_seconds for wl in secondary_wls) / 3600 if secondary_wls else 0
@@ -154,7 +178,7 @@ class ParentLinkingMatcher(MatchingAlgorithm):
             # Check if this group is excluded (expected discrepancy like leaves, training)
             is_excluded = _matches_exclusion_pattern(linking_key, exclusions)
 
-            # Include ALL groups, even if only on one side (solitaries are discrepancies)
+            # Create group (primary required, secondary optional)
             result[linking_key] = WorklogGroup(
                 linking_key=linking_key,
                 primary_worklogs=primary_wls,
@@ -385,8 +409,13 @@ def _apply_single_generic_issue(
         matched_secondary_ids.add(id(wl))
         claimed_secondary_ids.add(id(wl))
 
-    # Build the group
-    linking_key = f"GENERIC_{issue_code}_{issue_type_config.replace(',', '_')}"
+    # Build the group with abbreviated linking key
+    # Format: "SYSMMFG-3658 (Generic)" instead of "GENERIC_SYSMMFG-3658_Task_Incident_Request_..."
+    if team_filter is not None:
+        linking_key = f"{issue_code} (Generic - Team {team_filter})"
+    else:
+        linking_key = f"{issue_code} (Generic)"
+
     primary_hours = sum(wl.time_spent_seconds for wl in primary_matches) / 3600 if primary_matches else 0
     secondary_hours = sum(wl.time_spent_seconds for wl in secondary_matches) / 3600 if secondary_matches else 0
 
