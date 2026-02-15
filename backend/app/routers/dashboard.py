@@ -473,13 +473,18 @@ async def get_multi_jira_overview(
                 algorithm = get_algorithm(algo_config['algorithm_type'])
 
                 if algorithm:
+                    # Get generic issues BEFORE matching to exclude them from parent linking
+                    generic_issues = await storage.get_generic_issues(current_user.company_id)
+                    generic_issue_codes = [gi['issue_code'] for gi in generic_issues] if generic_issues else []
+
                     # Get matched groups from algorithm
                     import json
                     config = json.loads(algo_config['config']) if isinstance(algo_config['config'], str) else algo_config['config']
-                    matched_groups = algorithm.find_groups(primary_wls, secondary_wls, config, exclusion_keys)
+                    matched_groups = algorithm.find_groups(
+                        primary_wls, secondary_wls, config, exclusion_keys, generic_issue_codes
+                    )
 
                     # Apply generic issues matching (container issues by issue_type)
-                    generic_issues = await storage.get_generic_issues(current_user.company_id)
                     if generic_issues:
                         user_to_team = {u["email"].lower(): u.get("team_id") for u in users}
                         matched_groups = apply_generic_issues(
