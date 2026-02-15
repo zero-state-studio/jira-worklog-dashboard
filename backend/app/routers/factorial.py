@@ -239,7 +239,7 @@ async def get_factorial_leaves(
 ):
     """Get leaves da storage locale (scoped to company)."""
     storage = get_storage()
-    leaves = await storage.get_leaves_in_range(start_date, end_date, user_id, status, current_user.company_id)
+    leaves = await storage.get_leaves_in_range(current_user.company_id, start_date, end_date, user_id, status)
 
     return [
         FactorialLeave(

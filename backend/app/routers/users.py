@@ -17,24 +17,31 @@ from .dashboard import calculate_expected_hours, calculate_daily_trend, calculat
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 
-def enrich_worklogs_with_names(worklogs: list[Worklog], users: list[dict]) -> list[Worklog]:
-    """Enrich worklogs with resolved author names from database."""
-    # Build email -> name lookup
-    email_to_name = {}
+def enrich_worklogs_with_user_data(worklogs: list[Worklog], users: list[dict]) -> list[Worklog]:
+    """Enrich worklogs with resolved author names and user IDs from database."""
+    # Build email -> (name, user_id) lookup
+    email_to_data = {}
     for u in users:
         email_lower = u["email"].lower()
-        email_to_name[email_lower] = f"{u['first_name']} {u['last_name']}"
+        email_to_data[email_lower] = {
+            "name": f"{u['first_name']} {u['last_name']}",
+            "user_id": u["id"]
+        }
 
     enriched = []
     for wl in worklogs:
         email_lower = wl.author_email.lower()
-        resolved_name = email_to_name.get(email_lower, wl.author_display_name or wl.author_email)
+        user_data = email_to_data.get(email_lower)
+
+        resolved_name = user_data["name"] if user_data else (wl.author_display_name or wl.author_email)
+        user_id = user_data["user_id"] if user_data else None
 
         enriched.append(Worklog(
             id=wl.id,
             issue_key=wl.issue_key,
             issue_summary=wl.issue_summary,
             author_email=wl.author_email,
+            author_user_id=user_id,
             author_display_name=resolved_name,
             time_spent_seconds=wl.time_spent_seconds,
             started=wl.started,
@@ -64,6 +71,7 @@ async def list_users(
     if not start_date or not end_date:
         return [
             {
+                "id": u["id"],
                 "email": u["email"],
                 "full_name": f"{u['first_name']} {u['last_name']}",
                 "team_name": u.get("team_name")
@@ -137,6 +145,7 @@ async def list_users(
         instance_hours = {k: round(v, 2) for k, v in user_instance_hours.get(email_lower, {}).items()}
 
         result.append({
+            "id": u["id"],
             "email": u["email"],
             "full_name": f"{u['first_name']} {u['last_name']}",
             "team_name": u.get("team_name"),
@@ -153,9 +162,9 @@ async def list_users(
     return result
 
 
-@router.get("/{email}", response_model=UserDetailResponse)
+@router.get("/{user_id}", response_model=UserDetailResponse)
 async def get_user_detail(
-    email: str,
+    user_id: int,
     start_date: date = Query(..., description="Start date for the period"),
     end_date: date = Query(..., description="End date for the period"),
     jira_instance: str = Query(None, description="Filter by JIRA instance name"),
@@ -166,18 +175,20 @@ async def get_user_detail(
     # Get users from database (scoped to company)
     users = await get_users_from_db(current_user.company_id)
 
-    # Find user by email
+    # Find user by ID (ensures company isolation)
     user_data = None
     for u in users:
-        if u["email"].lower() == email.lower():
+        if u["id"] == user_id:
             user_data = u
             break
 
     if not user_data:
-        raise HTTPException(status_code=404, detail=f"User '{email}' not found")
+        raise HTTPException(status_code=404, detail="User not found")
 
+    email = user_data["email"]
     full_name = f"{user_data['first_name']} {user_data['last_name']}"
     team_name = user_data.get("team_name")
+    user_internal_id = user_id  # Use the parameter directly (database ID)
 
     storage = get_storage()
 
@@ -230,14 +241,15 @@ async def get_user_detail(
     # Daily trend by instance (all worklogs, for multi-line chart)
     daily_trend_by_instance = calculate_daily_trend_by_instance(all_worklogs, start_date, end_date)
 
-    # Enrich all worklogs with resolved author names (for calendar)
-    enriched_worklogs = enrich_worklogs_with_names(all_worklogs, users)
+    # Enrich all worklogs with resolved author names and user IDs (for calendar)
+    enriched_worklogs = enrich_worklogs_with_user_data(all_worklogs, users)
 
     # Sort worklogs by date (newest first)
     sorted_worklogs = sorted(enriched_worklogs, key=lambda w: w.started, reverse=True)
 
     return UserDetailResponse(
         email=email,
+        user_id=user_internal_id,
         full_name=full_name,
         team_name=team_name or "Unknown",
         total_hours=round(total_hours, 2),

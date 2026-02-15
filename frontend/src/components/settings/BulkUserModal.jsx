@@ -119,22 +119,22 @@ export default function BulkUserModal({ isOpen, onClose, onSuccess, teams }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                 onClick={handleClose}
             />
 
             {/* Modal */}
-            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-xl mx-4 border border-dark-700 animate-fade-in max-h-[90vh] overflow-y-auto">
+            <div className="relative bg-surface rounded-lg shadow-lg w-full max-w-xl mx-4 border border-solid animate-slide-up max-h-[90vh] overflow-y-auto">
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-dark-700 sticky top-0 bg-dark-800 z-10">
-                    <h2 className="text-xl font-bold text-dark-100">
+                <div className="flex items-center justify-between p-6 border-b border-solid sticky top-0 bg-surface z-10">
+                    <h2 className="text-xl font-bold text-primary">
                         Importa Utenti in Bulk
                     </h2>
                     <button
                         onClick={handleClose}
-                        className="p-2 rounded-lg hover:bg-dark-700 transition-colors"
+                        className="p-2 rounded-lg hover:bg-surface transition-colors"
                     >
-                        <svg className="w-5 h-5 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
@@ -145,13 +145,13 @@ export default function BulkUserModal({ isOpen, onClose, onSuccess, teams }) {
                     {!results ? (
                         <>
                             {/* Tabs */}
-                            <div className="flex gap-2 p-1 bg-dark-700 rounded-lg">
+                            <div className="flex gap-2 p-1 bg-surface rounded-lg">
                                 <button
                                     onClick={() => setActiveTab('manual')}
                                     className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                                         activeTab === 'manual'
-                                            ? 'bg-dark-600 text-dark-100'
-                                            : 'text-dark-400 hover:text-dark-200'
+                                            ? 'bg-surface-hover text-primary'
+                                            : 'text-tertiary hover:text-secondary'
                                     }`}
                                 >
                                     Inserisci Email
@@ -160,8 +160,8 @@ export default function BulkUserModal({ isOpen, onClose, onSuccess, teams }) {
                                     onClick={() => setActiveTab('file')}
                                     className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                                         activeTab === 'file'
-                                            ? 'bg-dark-600 text-dark-100'
-                                            : 'text-dark-400 hover:text-dark-200'
+                                            ? 'bg-surface-hover text-primary'
+                                            : 'text-tertiary hover:text-secondary'
                                     }`}
                                 >
                                     Carica File
@@ -171,14 +171,14 @@ export default function BulkUserModal({ isOpen, onClose, onSuccess, teams }) {
                             {/* Manual Input Tab */}
                             {activeTab === 'manual' && (
                                 <div>
-                                    <label className="block text-sm font-medium text-dark-300 mb-2">
+                                    <label className="block text-sm font-medium text-secondary mb-2">
                                         Lista Email (una per riga)
                                     </label>
                                     <textarea
                                         value={emailText}
                                         onChange={(e) => setEmailText(e.target.value)}
                                         placeholder={"mario.rossi@company.com\ngiulia.bianchi@company.com\nluca.verdi@company.com"}
-                                        className="w-full h-48 px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 placeholder-dark-500 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50 font-mono text-sm resize-none"
+                                        className="w-full h-48 px-4 py-3 bg-surface border border-solid rounded-lg text-primary placeholder-dark-500 focus:outline-none focus:border-focus focus:ring-1 focus:ring-accent/20 font-mono text-sm resize-none"
                                     />
                                     {emailText && (
                                         <div className="mt-2 flex items-center gap-4 text-sm">
@@ -209,7 +209,7 @@ export default function BulkUserModal({ isOpen, onClose, onSuccess, teams }) {
                                     className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
                                         dragOver
                                             ? 'border-accent-blue bg-accent-blue/10'
-                                            : 'border-dark-600 hover:border-dark-500 hover:bg-dark-700/50'
+                                            : 'border-solid hover:border-strong hover:bg-surface/50'
                                     }`}
                                 >
                                     <input
@@ -220,18 +220,18 @@ export default function BulkUserModal({ isOpen, onClose, onSuccess, teams }) {
                                         className="hidden"
                                     />
                                     <div className="flex flex-col items-center gap-3">
-                                        <div className="text-dark-400">
+                                        <div className="text-tertiary">
                                             <UploadIcon />
                                         </div>
                                         <div>
-                                            <p className="text-dark-200 font-medium">
+                                            <p className="text-secondary font-medium">
                                                 Trascina qui un file
                                             </p>
-                                            <p className="text-dark-400 text-sm mt-1">
+                                            <p className="text-tertiary text-sm mt-1">
                                                 oppure clicca per selezionare
                                             </p>
                                         </div>
-                                        <p className="text-dark-500 text-xs">
+                                        <p className="text-tertiary text-xs">
                                             Formati supportati: .txt, .md
                                         </p>
                                     </div>
@@ -240,13 +240,13 @@ export default function BulkUserModal({ isOpen, onClose, onSuccess, teams }) {
 
                             {/* Team Selection */}
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-2">
+                                <label className="block text-sm font-medium text-secondary mb-2">
                                     Team (opzionale)
                                 </label>
                                 <select
                                     value={teamId}
                                     onChange={(e) => setTeamId(e.target.value)}
-                                    className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50"
+                                    className="w-full px-4 py-3 bg-surface border border-solid rounded-lg text-primary focus:outline-none focus:border-focus focus:ring-1 focus:ring-accent/20"
                                 >
                                     <option value="">Nessun team</option>
                                     {teams.map((team) => (
@@ -255,7 +255,7 @@ export default function BulkUserModal({ isOpen, onClose, onSuccess, teams }) {
                                         </option>
                                     ))}
                                 </select>
-                                <p className="text-xs text-dark-500 mt-2">
+                                <p className="text-xs text-tertiary mt-2">
                                     Il team verrà assegnato a tutti gli utenti importati
                                 </p>
                             </div>
@@ -265,11 +265,11 @@ export default function BulkUserModal({ isOpen, onClose, onSuccess, teams }) {
                         <div className="space-y-4">
                             {/* Summary */}
                             <div className="grid grid-cols-3 gap-3">
-                                <div className="bg-dark-700/50 rounded-lg p-4 text-center">
-                                    <div className="text-2xl font-bold text-dark-100">
+                                <div className="bg-surface/50 rounded-lg p-4 text-center">
+                                    <div className="text-2xl font-bold text-primary">
                                         {results.total}
                                     </div>
-                                    <div className="text-xs text-dark-400 mt-1">Totali</div>
+                                    <div className="text-xs text-tertiary mt-1">Totali</div>
                                 </div>
                                 <div className="bg-accent-green/10 border border-accent-green/30 rounded-lg p-4 text-center">
                                     <div className="text-2xl font-bold text-accent-green">
@@ -280,15 +280,15 @@ export default function BulkUserModal({ isOpen, onClose, onSuccess, teams }) {
                                 <div className={`rounded-lg p-4 text-center ${
                                     results.failed > 0
                                         ? 'bg-accent-orange/10 border border-accent-orange/30'
-                                        : 'bg-dark-700/50'
+                                        : 'bg-surface/50'
                                 }`}>
                                     <div className={`text-2xl font-bold ${
-                                        results.failed > 0 ? 'text-accent-orange' : 'text-dark-400'
+                                        results.failed > 0 ? 'text-accent-orange' : 'text-tertiary'
                                     }`}>
                                         {results.failed}
                                     </div>
                                     <div className={`text-xs mt-1 ${
-                                        results.failed > 0 ? 'text-accent-orange/80' : 'text-dark-400'
+                                        results.failed > 0 ? 'text-accent-orange/80' : 'text-tertiary'
                                     }`}>Falliti</div>
                                 </div>
                             </div>
@@ -301,8 +301,8 @@ export default function BulkUserModal({ isOpen, onClose, onSuccess, teams }) {
                                             key={idx}
                                             className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
                                                 item.success
-                                                    ? 'bg-accent-green/5 text-dark-200'
-                                                    : 'bg-accent-orange/5 text-dark-300'
+                                                    ? 'bg-accent-green/5 text-secondary'
+                                                    : 'bg-accent-orange/5 text-secondary'
                                             }`}
                                         >
                                             <span className="font-mono truncate flex-1">
@@ -326,11 +326,11 @@ export default function BulkUserModal({ isOpen, onClose, onSuccess, teams }) {
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-end gap-3 p-6 border-t border-dark-700 sticky bottom-0 bg-dark-800">
+                <div className="flex items-center justify-end gap-3 p-6 border-t border-solid sticky bottom-0 bg-surface">
                     <button
                         type="button"
                         onClick={handleClose}
-                        className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors"
+                        className="px-4 py-2 text-secondary hover:text-primary transition-colors"
                     >
                         {results ? 'Chiudi' : 'Annulla'}
                     </button>
@@ -338,7 +338,7 @@ export default function BulkUserModal({ isOpen, onClose, onSuccess, teams }) {
                         <button
                             onClick={handleSubmit}
                             disabled={validEmails.length === 0 || loading}
-                            className="px-5 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-5 py-2 bg-accent text-inverse font-medium rounded-md hover:bg-accent-hover transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {loading ? (
                                 <span className="flex items-center gap-2">

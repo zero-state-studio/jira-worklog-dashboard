@@ -46,8 +46,8 @@ export default function DatabaseSection() {
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-xl font-bold text-dark-100 mb-2">Gestione Database</h2>
-                <p className="text-dark-400 text-sm">
+                <h2 className="text-xl font-bold text-primary mb-2">Gestione Database</h2>
+                <p className="text-tertiary text-sm">
                     Strumenti per la gestione dei dati (solo dev/test)
                 </p>
             </div>
@@ -59,7 +59,7 @@ export default function DatabaseSection() {
             )}
 
             {error && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-red-400 text-sm">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-error text-sm">
                     {error}
                 </div>
             )}
@@ -71,10 +71,10 @@ export default function DatabaseSection() {
                         <TrashIcon />
                     </div>
                     <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-dark-100 mb-1">
+                        <h3 className="text-lg font-semibold text-primary mb-1">
                             Pulisci Tutti i Worklogs
                         </h3>
-                        <p className="text-dark-400 text-sm mb-4">
+                        <p className="text-tertiary text-sm mb-4">
                             Elimina tutti i worklogs della tua azienda dal database.
                             Utile per testing e development.
                         </p>
@@ -98,11 +98,11 @@ export default function DatabaseSection() {
             {/* Confirmation Modal */}
             {showConfirmModal && (
                 <div className="fixed inset-0 z-50 flex items-start justify-center py-8">
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !loading && setShowConfirmModal(false)} />
-                    <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 border border-dark-700 max-h-[calc(100vh-4rem)] overflow-y-auto">
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !loading && setShowConfirmModal(false)} />
+                    <div className="relative bg-surface rounded-lg shadow-lg w-full max-w-md mx-4 border border-solid max-h-[calc(100vh-4rem)] overflow-y-auto">
                         {/* Header */}
-                        <div className="p-6 border-b border-dark-700">
-                            <div className="flex items-center gap-3 text-red-400">
+                        <div className="p-6 border-b border-solid">
+                            <div className="flex items-center gap-3 text-error">
                                 <WarningIcon />
                                 <h3 className="text-lg font-semibold">
                                     Conferma Eliminazione
@@ -116,22 +116,22 @@ export default function DatabaseSection() {
                                 <p className="text-red-300 text-sm font-medium mb-2">
                                     ⚠️ ATTENZIONE: Operazione Irreversibile!
                                 </p>
-                                <p className="text-red-400 text-sm">
+                                <p className="text-error text-sm">
                                     Stai per eliminare <strong>TUTTI i worklogs</strong> della tua azienda.
                                     Questa azione non può essere annullata.
                                 </p>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-2">
-                                    Per confermare, scrivi <strong className="text-red-400">ELIMINA</strong>:
+                                <label className="block text-sm font-medium text-secondary mb-2">
+                                    Per confermare, scrivi <strong className="text-error">ELIMINA</strong>:
                                 </label>
                                 <input
                                     type="text"
                                     value={confirmText}
                                     onChange={(e) => setConfirmText(e.target.value)}
                                     placeholder="Scrivi ELIMINA"
-                                    className="w-full px-4 py-3 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 placeholder-dark-400 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/50"
+                                    className="w-full px-4 py-3 bg-surface border border-solid rounded-lg text-primary placeholder-tertiary focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/50"
                                     disabled={loading}
                                     autoFocus
                                 />
@@ -139,7 +139,7 @@ export default function DatabaseSection() {
                         </div>
 
                         {/* Footer */}
-                        <div className="flex items-center justify-end gap-3 p-6 border-t border-dark-700">
+                        <div className="flex items-center justify-end gap-3 p-6 border-t border-solid">
                             <button
                                 type="button"
                                 onClick={() => {
@@ -147,7 +147,7 @@ export default function DatabaseSection() {
                                     setConfirmText('')
                                 }}
                                 disabled={loading}
-                                className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors disabled:opacity-50"
+                                className="px-4 py-2 text-secondary hover:text-primary transition-colors disabled:opacity-50"
                             >
                                 Annulla
                             </button>

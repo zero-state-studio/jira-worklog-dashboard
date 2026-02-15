@@ -35,7 +35,7 @@ export default function PainPointsSection() {
     ]
 
     return (
-        <section className="section-padding bg-dark-900">
+        <section className="section-padding bg-surface">
             <div className="container mx-auto max-w-7xl">
                 <div className="section-header">
                     <h2 className="section-title">Ti riconosci in queste situazioni?</h2>
@@ -47,7 +47,7 @@ export default function PainPointsSection() {
                     ))}
                 </div>
 
-                <p className="text-center text-dark-400 mt-12 text-lg italic">
+                <p className="text-center text-tertiary mt-12 text-lg italic">
                     Se hai annuito almeno una volta, sei nel posto giusto.
                 </p>
             </div>

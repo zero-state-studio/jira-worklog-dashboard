@@ -9,11 +9,11 @@ export default function FinalCTASection() {
             <div className="absolute inset-0 bg-gradient-radial from-primary-from/10 via-transparent to-transparent opacity-50" />
 
             <div className="container mx-auto max-w-3xl relative z-10 text-center">
-                <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-dark-100 mb-6 leading-tight">
+                <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-primary mb-6 leading-tight">
                     Pronto a smettere di perdere tempo con i report manuali?
                 </h2>
 
-                <p className="text-xl text-dark-300 mb-10 leading-relaxed max-w-2xl mx-auto">
+                <p className="text-xl text-secondary mb-10 leading-relaxed max-w-2xl mx-auto">
                     Unisciti ai team che hanno già automatizzato il tracking delle ore e la fatturazione.
                     Setup in 5 minuti, gratis per sempre.
                 </p>
@@ -30,21 +30,21 @@ export default function FinalCTASection() {
                     </span>
                 </button>
 
-                <div className="mt-8 flex flex-wrap gap-6 justify-center text-dark-400 text-sm">
+                <div className="mt-8 flex flex-wrap gap-6 justify-center text-tertiary text-sm">
                     <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4 text-accent-green" fill="currentColor" viewBox="0 0 20 20">
+                        <svg className="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                         </svg>
                         <span>Setup in 5 minuti</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4 text-accent-green" fill="currentColor" viewBox="0 0 20 20">
+                        <svg className="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                         </svg>
                         <span>Nessuna carta di credito</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4 text-accent-green" fill="currentColor" viewBox="0 0 20 20">
+                        <svg className="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                         </svg>
                         <span>Cancella quando vuoi</span>

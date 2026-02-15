@@ -1,0 +1,15 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+numReplicas = 1
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+
+# Railway will mount this volume for SQLite persistence
+[[deploy.volumes]]
+name = "sqlite-data"
+mountPath = "/app/data"

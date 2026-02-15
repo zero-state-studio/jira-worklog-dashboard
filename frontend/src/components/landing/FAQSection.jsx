@@ -37,7 +37,7 @@ export default function FAQSection() {
     ]
 
     return (
-        <section id="faq" className="section-padding bg-dark-800/30">
+        <section id="faq" className="section-padding bg-surface/30">
             <div className="container mx-auto max-w-3xl">
                 <div className="section-header">
                     <h2 className="section-title">Domande frequenti</h2>
@@ -57,7 +57,7 @@ export default function FAQSection() {
                     ))}
                 </div>
 
-                <p className="text-center text-dark-500 text-sm mt-6">
+                <p className="text-center text-tertiary text-sm mt-6">
                     Non trovi la tua domanda?{' '}
                     <button className="text-accent-blue hover:underline">Contattaci</button>
                 </p>

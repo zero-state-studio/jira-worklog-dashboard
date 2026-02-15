@@ -8,7 +8,7 @@
 - **176 security modifications** for multi-tenant isolation
 - **111 API endpoints** across 11 routers
 - **24 database tables** with 40+ performance indexes
-- **9 specialized agent roles** for autonomous development
+- **10 specialized agent roles** for autonomous development
 - **20 security test cases** ensuring tenant isolation
 
 ---
@@ -105,8 +105,12 @@ Frontend displays cached data
 - **docs/database-schema.md** - All 24 tables with SQL
 - **backend/tests/README.md** - Security verification checklist
 
+### Documentation
+- **Public docs:** `docs-public/` - User-facing documentation (getting started, user guide, admin guide, FAQ)
+- **Developer docs:** `docs/` - Technical architecture and API reference
+
 ### Agent Roles
-- **agents/roles/*.md** - 9 specialized roles (Backend-Core, Database, Frontend, Security, etc.)
+- **agents/roles/*.md** - 10 specialized roles (Backend-Core, Database, Frontend, Security, Docs, etc.)
 - **agents/roles/README.md** - Role selection guide
 
 ### Configuration
@@ -248,8 +252,13 @@ jira-worklog-dashboard/
 │   ├── api-reference.md         # All 111 endpoints
 │   ├── conventions.md           # Code standards
 │   └── desktop/                 # Claude Desktop context
+├── docs-public/                 # Public user documentation
+│   ├── getting-started/         # Quickstart guides
+│   ├── user-guide/              # Feature documentation
+│   ├── admin-guide/             # Admin tasks
+│   └── faq.md, changelog.md     # Support resources
 ├── agents/
-│   └── roles/                   # 9 agent role definitions
+│   └── roles/                   # 10 agent role definitions
 ├── CLAUDE.md                    # Primary instructions
 └── README.md
 ```

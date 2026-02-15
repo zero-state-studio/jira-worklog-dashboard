@@ -27,18 +27,18 @@ export default function LandingNavbar() {
     ]
 
     return (
-        <nav className="sticky top-0 z-50 bg-dark-800/80 backdrop-blur-xl border-b border-dark-700">
+        <nav className="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-solid">
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-between h-16">
                     {/* Logo */}
                     <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-                        <div className="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center shadow-glow">
+                        <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center ">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
                         <div>
-                            <h1 className="font-bold text-dark-100 text-lg">Worklog Dashboard</h1>
+                            <h1 className="font-bold text-primary text-lg">Worklog Dashboard</h1>
                         </div>
                     </div>
 
@@ -48,7 +48,7 @@ export default function LandingNavbar() {
                             <button
                                 key={link.sectionId}
                                 onClick={() => scrollToSection(link.sectionId)}
-                                className="text-dark-300 hover:text-dark-100 transition-colors font-medium"
+                                className="text-secondary hover:text-primary transition-colors font-medium"
                             >
                                 {link.label}
                             </button>
@@ -88,7 +88,7 @@ export default function LandingNavbar() {
                     {/* Mobile Menu Button */}
                     <button
                         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                        className="md:hidden p-2 text-dark-300 hover:text-dark-100"
+                        className="md:hidden p-2 text-secondary hover:text-primary"
                     >
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             {mobileMenuOpen ? (
@@ -102,18 +102,18 @@ export default function LandingNavbar() {
 
                 {/* Mobile Menu */}
                 {mobileMenuOpen && (
-                    <div className="md:hidden py-4 border-t border-dark-700 animate-slide-up">
+                    <div className="md:hidden py-4 border-t border-solid animate-slide-up">
                         <div className="flex flex-col gap-4">
                             {navLinks.map((link) => (
                                 <button
                                     key={link.sectionId}
                                     onClick={() => scrollToSection(link.sectionId)}
-                                    className="text-dark-300 hover:text-dark-100 transition-colors font-medium text-left"
+                                    className="text-secondary hover:text-primary transition-colors font-medium text-left"
                                 >
                                     {link.label}
                                 </button>
                             ))}
-                            <div className="flex flex-col gap-2 pt-2 border-t border-dark-700">
+                            <div className="flex flex-col gap-2 pt-2 border-t border-solid">
                                 {isLoggedIn ? (
                                     <button
                                         onClick={() => navigate('/app/dashboard')}

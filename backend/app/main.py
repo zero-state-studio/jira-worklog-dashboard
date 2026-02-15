@@ -6,16 +6,19 @@ import os
 import time
 import json
 import traceback
+from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from .config import get_config, DEMO_CONFIG, get_teams_from_db, get_users_from_db
 from .cache import get_storage
-from .routers import dashboard, teams, users, epics, sync, settings, logs, issues, packages, billing, factorial, auth, invitations
+from .database import db
+from .routers import dashboard, teams, users, epics, sync, settings, logs, issues, packages, billing, factorial, auth, invitations, worklogs
 from .auth.dependencies import get_current_user, CurrentUser
 from .middleware.company_context import CompanyContextMiddleware
 from .logging_config import (
@@ -33,6 +36,10 @@ async def lifespan(app: FastAPI):
 
     # Startup
     logger.info("Starting JIRA Worklog Dashboard...")
+
+    # Connect to PostgreSQL database
+    await db.connect()
+    logger.info("Database connection pool created")
 
     # Try to load config, fall back to demo mode if not found
     try:
@@ -56,6 +63,8 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down...")
+    await db.disconnect()
+    logger.info("Database connection pool closed")
 
 
 # Create FastAPI application
@@ -229,6 +238,7 @@ app.include_router(logs.router)
 app.include_router(packages.router)
 app.include_router(billing.router)
 app.include_router(factorial.router)
+app.include_router(worklogs.router)
 
 
 # Global exception handler to log tracebacks
@@ -273,20 +283,29 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def health_check():
     """Health check endpoint."""
     try:
+        # Test database connection
+        async with db.acquire() as conn:
+            await conn.fetchval("SELECT 1")
+
         config = get_config()
-        teams = await get_teams_from_db()
         return {
             "status": "healthy",
+            "database": "connected",
             "demo_mode": config.settings.demo_mode,
-            "jira_instances": len(config.jira_instances),
-            "teams": len(teams)
+            "jira_instances": len(config.jira_instances)
         }
     except FileNotFoundError:
         return {
             "status": "healthy",
+            "database": "not_configured",
             "demo_mode": True,
-            "jira_instances": 2,
-            "teams": 3
+            "jira_instances": 2
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "database": "error",
+            "error": str(e)
         }
 
 
@@ -323,6 +342,17 @@ async def get_config_info(current_user: CurrentUser = Depends(get_current_user))
                 "full_name": f"{user['first_name']} {user['last_name']}"
             })
 
+    # Get current user details from database
+    current_user_data = await storage.get_user(current_user.id, current_user.company_id)
+    user_info = {
+        "id": current_user.id,
+        "email": current_user.email,
+        "role": current_user.role,
+        "name": f"{current_user_data.get('first_name', '')} {current_user_data.get('last_name', '')}".strip() if current_user_data else None,
+        "first_name": current_user_data.get("first_name") if current_user_data else None,
+        "last_name": current_user_data.get("last_name") if current_user_data else None,
+    }
+
     return {
         "demo_mode": config.settings.demo_mode,
         "daily_working_hours": config.settings.daily_working_hours,
@@ -330,6 +360,7 @@ async def get_config_info(current_user: CurrentUser = Depends(get_current_user))
         "complementary_instances": config.settings.complementary_instances,
         "jira_instances": jira_instances,
         "user_count": len(users),
+        "user": user_info,
         "teams": [
             {
                 "name": team["name"],
@@ -347,6 +378,35 @@ async def clear_cache():
     cache = get_cache()
     await cache.clear_all()
     return {"status": "ok", "message": "Cache cleared"}
+
+
+# ============================================================================
+# STATIC FILE SERVING (for production deployment)
+# ============================================================================
+
+# Get frontend build directory
+FRONTEND_DIR = Path(__file__).parent.parent.parent / "frontend" / "dist"
+
+# Mount static files only if frontend build exists (production mode)
+if FRONTEND_DIR.exists():
+    # Serve static assets (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
+
+    # Catch-all route for React SPA (must be last!)
+    # Serves index.html for any non-API route
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve React SPA - return index.html for all non-API routes."""
+        # If path starts with /api, let it 404 naturally
+        if full_path.startswith("api/"):
+            return JSONResponse({"detail": "Not found"}, status_code=404)
+
+        # Serve index.html for all other routes (React Router handles client-side routing)
+        index_file = FRONTEND_DIR / "index.html"
+        if index_file.exists():
+            return FileResponse(index_file)
+
+        return JSONResponse({"detail": "Frontend not built"}, status_code=404)
 
 
 # Entry point for running as standalone executable (Tauri sidecar)

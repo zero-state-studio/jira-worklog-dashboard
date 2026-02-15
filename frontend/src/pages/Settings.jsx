@@ -8,6 +8,9 @@ import PackageTemplatesSection from '../components/settings/PackageTemplatesSect
 import HolidaysSection from '../components/settings/HolidaysSection'
 import FactorialSection from '../components/settings/FactorialSection'
 import DatabaseSection from '../components/settings/DatabaseSection'
+import { MatchingAlgorithmsSettings } from '../components/settings/MatchingAlgorithmsSettings'
+import { JiraExclusionsSettings } from '../components/settings/JiraExclusionsSettings'
+import { GenericIssuesSettings } from '../components/settings/GenericIssuesSettings'
 
 const CatIconSystem = () => (
     <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -117,8 +120,17 @@ export default function Settings() {
             category: 'Configurazione',
             icon: CatIconConfig,
             items: [
-                { id: 'packages', label: 'Pacchetti Ore' },
                 { id: 'holidays', label: 'Giorni Festivi' }
+            ]
+        },
+        {
+            category: 'Configurazioni JIRA',
+            icon: CatIconIntegration,
+            items: [
+                { id: 'jira-exclusions', label: 'Esclusioni' },
+                { id: 'generic-issues', label: 'Issue Generiche' },
+                { id: 'packages', label: 'Pacchetti Ore' },
+                { id: 'matching', label: 'Algoritmi di Match' }
             ]
         },
         {
@@ -132,22 +144,22 @@ export default function Settings() {
     ]
 
     return (
-        <div className="animate-fade-in h-[calc(100vh-2rem)] flex flex-col">
+        <div className="animate-slide-up h-[calc(100vh-2rem)] flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between mb-6 flex-shrink-0">
                 <div className="flex items-center gap-3">
-                    <div className="p-3 bg-gradient-primary rounded-xl shadow-glow">
+                    <div className="p-3 bg-accent rounded-xl ">
                         <SettingsIcon />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-dark-100">Impostazioni</h1>
-                        <p className="text-dark-400 text-sm">Gestisci le configurazioni globali</p>
+                        <h1 className="text-2xl font-bold text-primary">Impostazioni</h1>
+                        <p className="text-tertiary text-sm">Gestisci le configurazioni globali</p>
                     </div>
                 </div>
             </div>
 
             {error && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm flex-shrink-0 flex justify-between items-center">
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-error text-sm flex-shrink-0 flex justify-between items-center">
                     <span>{error}</span>
                     <button onClick={() => setError(null)} className="text-red-300 hover:text-red-200 underline">
                         Chiudi
@@ -162,7 +174,7 @@ export default function Settings() {
                     <div className="space-y-6">
                         {navigation.map((section) => (
                             <div key={section.category}>
-                                <div className="flex items-center gap-2 mb-2 px-3 text-xs font-semibold text-dark-400 uppercase tracking-wider">
+                                <div className="flex items-center gap-2 mb-2 px-3 text-xs font-semibold text-tertiary uppercase tracking-wider">
                                     <section.icon />
                                     {section.category}
                                 </div>
@@ -172,15 +184,15 @@ export default function Settings() {
                                             key={item.id}
                                             onClick={() => setActiveTab(item.id)}
                                             className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === item.id
-                                                ? 'bg-gradient-primary text-white shadow-sm'
-                                                : 'text-dark-300 hover:bg-dark-800 hover:text-dark-100'
+                                                ? 'bg-accent text-white shadow-sm'
+                                                : 'text-secondary hover:bg-surface hover:text-primary'
                                                 }`}
                                         >
                                             <span>{item.label}</span>
                                             {item.count !== undefined && (
                                                 <span className={`text-xs px-2 py-0.5 rounded-full ${activeTab === item.id
                                                     ? 'bg-white/20 text-white'
-                                                    : 'bg-dark-800 text-dark-400'
+                                                    : 'bg-surface text-tertiary'
                                                     }`}>
                                                     {item.count}
                                                 </span>
@@ -194,7 +206,7 @@ export default function Settings() {
                 </div>
 
                 {/* Content Area */}
-                <div className="flex-1 bg-dark-900/50 rounded-2xl border border-dark-800/50 p-6 overflow-y-auto custom-scrollbar">
+                <div className="flex-1 bg-surface/50 rounded-lg border border-dark-800/50 p-6 overflow-y-auto custom-scrollbar">
                     {loading ? (
                         <div className="flex items-center justify-center h-full">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent-blue"></div>
@@ -227,6 +239,15 @@ export default function Settings() {
                             )}
                             {activeTab === 'holidays' && (
                                 <HolidaysSection />
+                            )}
+                            {activeTab === 'matching' && (
+                                <MatchingAlgorithmsSettings />
+                            )}
+                            {activeTab === 'jira-exclusions' && (
+                                <JiraExclusionsSettings />
+                            )}
+                            {activeTab === 'generic-issues' && (
+                                <GenericIssuesSettings />
                             )}
                             {activeTab === 'database' && (
                                 <DatabaseSection />

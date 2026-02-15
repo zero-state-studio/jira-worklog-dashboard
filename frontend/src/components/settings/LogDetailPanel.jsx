@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
 
 const levelColors = {
-    DEBUG: 'text-dark-400 bg-dark-700',
+    DEBUG: 'text-tertiary bg-surface',
     INFO: 'text-accent-blue bg-accent-blue/10',
     WARNING: 'text-accent-orange bg-accent-orange/10',
-    ERROR: 'text-red-400 bg-red-400/10',
+    ERROR: 'text-error bg-red-400/10',
     CRITICAL: 'text-red-500 bg-red-500/20'
 }
 
@@ -15,8 +15,8 @@ function JsonViewer({ data, title }) {
 
     return (
         <div className="mb-4">
-            <h4 className="text-sm font-medium text-dark-300 mb-2">{title}</h4>
-            <pre className="bg-dark-700/50 rounded-lg p-3 text-xs font-mono text-dark-200 overflow-x-auto max-h-64 overflow-y-auto">
+            <h4 className="text-sm font-medium text-secondary mb-2">{title}</h4>
+            <pre className="bg-surface/50 rounded-lg p-3 text-xs font-mono text-secondary overflow-x-auto max-h-64 overflow-y-auto">
                 {content}
             </pre>
         </div>
@@ -65,20 +65,20 @@ export default function LogDetailPanel({ log, onClose }) {
         <div className="fixed inset-0 z-50 flex justify-end">
             {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                 onClick={onClose}
             />
 
             {/* Panel */}
-            <div className="relative w-full max-w-lg bg-dark-800 border-l border-dark-700 flex flex-col animate-slide-in-right">
+            <div className="relative w-full max-w-lg bg-surface border-l border-solid flex flex-col ">
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-dark-700">
-                    <h3 className="text-lg font-semibold text-dark-100">Dettaglio Log</h3>
+                <div className="flex items-center justify-between p-4 border-b border-solid">
+                    <h3 className="text-lg font-semibold text-primary">Dettaglio Log</h3>
                     <button
                         onClick={onClose}
-                        className="p-2 rounded-lg hover:bg-dark-700 transition-colors"
+                        className="p-2 rounded-lg hover:bg-surface transition-colors"
                     >
-                        <svg className="w-5 h-5 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
@@ -93,44 +93,44 @@ export default function LogDetailPanel({ log, onClose }) {
                                 {log.level}
                             </span>
                             <span className={`text-sm font-mono ${
-                                log.status_code >= 400 ? 'text-red-400' :
+                                log.status_code >= 400 ? 'text-error' :
                                 log.status_code >= 300 ? 'text-accent-orange' :
-                                'text-accent-green'
+                                'text-success'
                             }`}>
                                 {log.status_code || '-'}
                             </span>
                         </div>
 
                         <div>
-                            <div className="text-xs text-dark-400 mb-1">Timestamp</div>
-                            <div className="text-sm text-dark-200 font-mono">{formatTimestamp(log.timestamp)}</div>
+                            <div className="text-xs text-tertiary mb-1">Timestamp</div>
+                            <div className="text-sm text-secondary font-mono">{formatTimestamp(log.timestamp)}</div>
                         </div>
 
                         <div>
-                            <div className="text-xs text-dark-400 mb-1">Endpoint</div>
-                            <div className="text-sm text-dark-200 font-mono">
+                            <div className="text-xs text-tertiary mb-1">Endpoint</div>
+                            <div className="text-sm text-secondary font-mono">
                                 {log.method && <span className="text-accent-blue mr-2">{log.method}</span>}
                                 {log.endpoint || '-'}
                             </div>
                         </div>
 
                         <div>
-                            <div className="text-xs text-dark-400 mb-1">Durata</div>
-                            <div className="text-sm text-dark-200 font-mono">
+                            <div className="text-xs text-tertiary mb-1">Durata</div>
+                            <div className="text-sm text-secondary font-mono">
                                 {log.duration_ms ? `${log.duration_ms.toFixed(1)} ms` : '-'}
                             </div>
                         </div>
 
                         <div>
-                            <div className="text-xs text-dark-400 mb-1">Request ID</div>
-                            <div className="text-sm text-dark-200 font-mono">{log.request_id || '-'}</div>
+                            <div className="text-xs text-tertiary mb-1">Request ID</div>
+                            <div className="text-sm text-secondary font-mono">{log.request_id || '-'}</div>
                         </div>
                     </div>
 
                     {/* Message */}
                     <div>
-                        <h4 className="text-sm font-medium text-dark-300 mb-2">Messaggio</h4>
-                        <div className="bg-dark-700/50 rounded-lg p-3 text-sm text-dark-200">
+                        <h4 className="text-sm font-medium text-secondary mb-2">Messaggio</h4>
+                        <div className="bg-surface/50 rounded-lg p-3 text-sm text-secondary">
                             {log.message}
                         </div>
                     </div>

@@ -15,7 +15,7 @@ const STATUS_COLORS = {
     DRAFT: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
     ISSUED: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
     PAID: 'bg-green-500/20 text-green-400 border-green-500/30',
-    VOID: 'bg-red-500/20 text-red-400 border-red-500/30',
+    VOID: 'bg-red-500/20 text-error border-red-500/30',
 }
 
 const STATUS_LABELS = {
@@ -119,32 +119,32 @@ export default function Billing({ dateRange }) {
         <div className="space-y-6">
             {/* Page Title */}
             <div>
-                <h1 className="text-2xl font-bold text-dark-100">Fatturazione</h1>
-                <p className="text-dark-400 mt-1">Gestisci clienti, progetti, tariffe e fatture</p>
+                <h1 className="text-2xl font-bold text-primary">Fatturazione</h1>
+                <p className="text-tertiary mt-1">Gestisci clienti, progetti, tariffe e fatture</p>
             </div>
 
             {/* Error */}
             {error && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-red-400">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-error">
                     {error}
                     <button onClick={() => setError(null)} className="ml-4 underline">Chiudi</button>
                 </div>
             )}
 
             {/* Tabs */}
-            <div className="flex gap-1 bg-dark-800 rounded-xl p-1 border border-dark-600">
+            <div className="flex gap-1 bg-surface rounded-xl p-1 border border-solid">
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
                         className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${activeTab === tab.id
-                            ? 'bg-gradient-primary text-white shadow-glow'
-                            : 'text-dark-400 hover:text-dark-200 hover:bg-dark-700'
+                            ? 'bg-accent text-white '
+                            : 'text-tertiary hover:text-secondary hover:bg-surface'
                         }`}
                     >
                         {tab.label}
                         {tab.count !== null && (
-                            <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === tab.id ? 'bg-white/20' : 'bg-dark-600'}`}>
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === tab.id ? 'bg-white/20' : 'bg-surface-hover'}`}>
                                 {tab.count}
                             </span>
                         )}
@@ -152,20 +152,20 @@ export default function Billing({ dateRange }) {
                 ))}
             </div>
 
-            {loading && <div className="text-center py-12 text-dark-400">Caricamento...</div>}
+            {loading && <div className="text-center py-12 text-tertiary">Caricamento...</div>}
 
             {/* ============ CLIENTS TAB ============ */}
             {!loading && activeTab === 'clients' && (
                 <div className="space-y-4">
                     <div className="flex justify-between items-center">
-                        <h2 className="text-lg font-semibold text-dark-200">Clienti</h2>
+                        <h2 className="text-lg font-semibold text-secondary">Clienti</h2>
                         <button onClick={() => { setEditingClient(null); setShowClientModal(true) }} className="btn-primary text-sm">
                             + Nuovo Cliente
                         </button>
                     </div>
 
                     {clients.length === 0 ? (
-                        <div className="glass-card p-12 text-center text-dark-400">
+                        <div className="glass-card p-12 text-center text-tertiary">
                             Nessun cliente configurato. Crea il primo cliente per iniziare.
                         </div>
                     ) : (
@@ -173,29 +173,29 @@ export default function Billing({ dateRange }) {
                             {clients.map(client => (
                                 <div key={client.id} className="glass-card p-5 space-y-3">
                                     <div className="flex justify-between items-start">
-                                        <h3 className="font-semibold text-dark-100">{client.name}</h3>
+                                        <h3 className="font-semibold text-primary">{client.name}</h3>
                                         <div className="flex gap-1">
-                                            <button onClick={() => { setEditingClient(client); setShowClientModal(true) }} className="p-1.5 text-dark-400 hover:text-dark-200 rounded-lg hover:bg-dark-700">
+                                            <button onClick={() => { setEditingClient(client); setShowClientModal(true) }} className="p-1.5 text-tertiary hover:text-secondary rounded-lg hover:bg-surface">
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                             </button>
-                                            <button onClick={async () => { if (confirm('Eliminare questo cliente?')) { await deleteBillingClient(client.id); loadClients() } }} className="p-1.5 text-dark-400 hover:text-red-400 rounded-lg hover:bg-dark-700">
+                                            <button onClick={async () => { if (confirm('Eliminare questo cliente?')) { await deleteBillingClient(client.id); loadClients() } }} className="p-1.5 text-tertiary hover:text-error rounded-lg hover:bg-surface">
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                             </button>
                                         </div>
                                     </div>
                                     <div className="space-y-1 text-sm">
-                                        <div className="flex justify-between text-dark-400">
+                                        <div className="flex justify-between text-tertiary">
                                             <span>Valuta</span>
-                                            <span className="text-dark-200">{client.billing_currency}</span>
+                                            <span className="text-secondary">{client.billing_currency}</span>
                                         </div>
-                                        <div className="flex justify-between text-dark-400">
+                                        <div className="flex justify-between text-tertiary">
                                             <span>Tariffa default</span>
-                                            <span className="text-dark-200">{client.default_hourly_rate ? `${client.default_hourly_rate} €/h` : '—'}</span>
+                                            <span className="text-secondary">{client.default_hourly_rate ? `${client.default_hourly_rate} €/h` : '—'}</span>
                                         </div>
                                         {client.jira_instance_id && (
-                                            <div className="flex justify-between text-dark-400">
+                                            <div className="flex justify-between text-tertiary">
                                                 <span>Istanza JIRA</span>
-                                                <span className="text-dark-200">{jiraInstances?.instances?.find(i => i.id === client.jira_instance_id)?.name || '—'}</span>
+                                                <span className="text-secondary">{jiraInstances?.instances?.find(i => i.id === client.jira_instance_id)?.name || '—'}</span>
                                             </div>
                                         )}
                                     </div>
@@ -210,14 +210,14 @@ export default function Billing({ dateRange }) {
             {!loading && activeTab === 'projects' && (
                 <div className="space-y-4">
                     <div className="flex justify-between items-center">
-                        <h2 className="text-lg font-semibold text-dark-200">Progetti di Fatturazione</h2>
+                        <h2 className="text-lg font-semibold text-secondary">Progetti di Fatturazione</h2>
                         <button onClick={() => { setEditingProject(null); setShowProjectModal(true) }} className="btn-primary text-sm" disabled={clients.length === 0}>
                             + Nuovo Progetto
                         </button>
                     </div>
 
                     {projects.length === 0 ? (
-                        <div className="glass-card p-12 text-center text-dark-400">
+                        <div className="glass-card p-12 text-center text-tertiary">
                             {clients.length === 0
                                 ? 'Crea prima un cliente, poi potrai aggiungere progetti.'
                                 : 'Nessun progetto di fatturazione. Crea il primo progetto.'}
@@ -228,35 +228,35 @@ export default function Billing({ dateRange }) {
                                 <div key={project.id} className="glass-card overflow-hidden">
                                     <div className="p-5 flex justify-between items-start">
                                         <div>
-                                            <h3 className="font-semibold text-dark-100">{project.name}</h3>
-                                            <p className="text-sm text-dark-400 mt-1">
-                                                Cliente: <span className="text-dark-300">{project.client_name}</span>
-                                                {project.default_hourly_rate && <> · Tariffa: <span className="text-dark-300">{project.default_hourly_rate} €/h</span></>}
+                                            <h3 className="font-semibold text-primary">{project.name}</h3>
+                                            <p className="text-sm text-tertiary mt-1">
+                                                Cliente: <span className="text-secondary">{project.client_name}</span>
+                                                {project.default_hourly_rate && <> · Tariffa: <span className="text-secondary">{project.default_hourly_rate} €/h</span></>}
                                             </p>
                                             {/* Mappings */}
                                             <div className="flex flex-wrap gap-2 mt-3">
                                                 {(project.mappings || []).map(m => (
                                                     <span key={m.id} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-accent-blue/10 text-accent-blue border border-accent-blue/20">
                                                         {m.jira_instance}:{m.jira_project_key}
-                                                        <button onClick={async () => { await removeBillingProjectMapping(project.id, m.id); loadProjects() }} className="hover:text-red-400 ml-1">&times;</button>
+                                                        <button onClick={async () => { await removeBillingProjectMapping(project.id, m.id); loadProjects() }} className="hover:text-error ml-1">&times;</button>
                                                     </span>
                                                 ))}
                                                 <button
                                                     onClick={() => { setMappingProjectId(project.id); setShowMappingModal(true) }}
-                                                    className="text-xs px-2 py-1 rounded-full border border-dashed border-dark-500 text-dark-400 hover:text-dark-200 hover:border-dark-400"
+                                                    className="text-xs px-2 py-1 rounded-full border border-dashed border-strong text-tertiary hover:text-secondary hover:border-dark-400"
                                                 >
                                                     + Mappa JIRA
                                                 </button>
                                             </div>
                                         </div>
                                         <div className="flex gap-1">
-                                            <button onClick={() => toggleProjectRates(project.id)} className={`p-1.5 rounded-lg hover:bg-dark-700 ${expandedProject === project.id ? 'text-accent-purple' : 'text-dark-400 hover:text-dark-200'}`} title="Tariffe">
+                                            <button onClick={() => toggleProjectRates(project.id)} className={`p-1.5 rounded-lg hover:bg-surface ${expandedProject === project.id ? 'text-accent-purple' : 'text-tertiary hover:text-secondary'}`} title="Tariffe">
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                             </button>
-                                            <button onClick={() => { setEditingProject(project); setShowProjectModal(true) }} className="p-1.5 text-dark-400 hover:text-dark-200 rounded-lg hover:bg-dark-700">
+                                            <button onClick={() => { setEditingProject(project); setShowProjectModal(true) }} className="p-1.5 text-tertiary hover:text-secondary rounded-lg hover:bg-surface">
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                             </button>
-                                            <button onClick={async () => { if (confirm('Eliminare questo progetto?')) { await deleteBillingProject(project.id); loadProjects() } }} className="p-1.5 text-dark-400 hover:text-red-400 rounded-lg hover:bg-dark-700">
+                                            <button onClick={async () => { if (confirm('Eliminare questo progetto?')) { await deleteBillingProject(project.id); loadProjects() } }} className="p-1.5 text-tertiary hover:text-error rounded-lg hover:bg-surface">
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                             </button>
                                         </div>
@@ -264,17 +264,17 @@ export default function Billing({ dateRange }) {
 
                                     {/* Rates section (expandable) */}
                                     {expandedProject === project.id && (
-                                        <div className="border-t border-dark-700 p-5 bg-dark-800/30">
+                                        <div className="border-t border-solid p-5 bg-surface/30">
                                             <div className="flex justify-between items-center mb-3">
-                                                <h4 className="text-sm font-medium text-dark-300">Tariffe Override</h4>
+                                                <h4 className="text-sm font-medium text-secondary">Tariffe Override</h4>
                                                 <button onClick={() => { setRateProjectId(project.id); setShowRateModal(true) }} className="text-xs text-accent-purple hover:underline">+ Aggiungi Tariffa</button>
                                             </div>
                                             {(projectRates[project.id] || []).length === 0 ? (
-                                                <p className="text-xs text-dark-500">Nessuna tariffa override. Verrà usata la tariffa default del progetto o del cliente.</p>
+                                                <p className="text-xs text-tertiary">Nessuna tariffa override. Verrà usata la tariffa default del progetto o del cliente.</p>
                                             ) : (
                                                 <table className="w-full text-sm">
                                                     <thead>
-                                                        <tr className="text-dark-500 text-xs">
+                                                        <tr className="text-tertiary text-xs">
                                                             <th className="text-left py-1">Utente</th>
                                                             <th className="text-left py-1">Tipo Issue</th>
                                                             <th className="text-right py-1">Tariffa</th>
@@ -284,13 +284,13 @@ export default function Billing({ dateRange }) {
                                                     </thead>
                                                     <tbody>
                                                         {(projectRates[project.id] || []).map(rate => (
-                                                            <tr key={rate.id} className="border-t border-dark-700/50">
-                                                                <td className="py-1.5 text-dark-300">{rate.user_email || '—'}</td>
-                                                                <td className="py-1.5 text-dark-300">{rate.issue_type || '—'}</td>
-                                                                <td className="py-1.5 text-right text-dark-200">{rate.hourly_rate} €/h</td>
-                                                                <td className="py-1.5 text-dark-400 text-xs">{rate.valid_from || '∞'} → {rate.valid_to || '∞'}</td>
+                                                            <tr key={rate.id} className="border-t border-solid/50">
+                                                                <td className="py-1.5 text-secondary">{rate.user_email || '—'}</td>
+                                                                <td className="py-1.5 text-secondary">{rate.issue_type || '—'}</td>
+                                                                <td className="py-1.5 text-right text-secondary">{rate.hourly_rate} €/h</td>
+                                                                <td className="py-1.5 text-tertiary text-xs">{rate.valid_from || '∞'} → {rate.valid_to || '∞'}</td>
                                                                 <td className="py-1.5 text-right">
-                                                                    <button onClick={async () => { await deleteBillingRate(rate.id); const rates = await getBillingRates(project.id); setProjectRates(prev => ({ ...prev, [project.id]: rates })) }} className="text-red-400 hover:text-red-300 text-xs">Elimina</button>
+                                                                    <button onClick={async () => { await deleteBillingRate(rate.id); const rates = await getBillingRates(project.id); setProjectRates(prev => ({ ...prev, [project.id]: rates })) }} className="text-error hover:text-red-300 text-xs">Elimina</button>
                                                                 </td>
                                                             </tr>
                                                         ))}
@@ -309,23 +309,23 @@ export default function Billing({ dateRange }) {
             {/* ============ INVOICE BUILDER TAB ============ */}
             {!loading && activeTab === 'invoice-builder' && (
                 <div className="space-y-6">
-                    <h2 className="text-lg font-semibold text-dark-200">Nuova Fattura</h2>
+                    <h2 className="text-lg font-semibold text-secondary">Nuova Fattura</h2>
 
                     <div className="glass-card p-6 space-y-5">
                         {/* Client selector */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-1">Cliente</label>
+                                <label className="block text-sm font-medium text-secondary mb-1">Cliente</label>
                                 <select value={selectedClientId} onChange={e => { setSelectedClientId(e.target.value); setSelectedProjectId(''); setPreview(null) }}
-                                    className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm">
+                                    className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm">
                                     <option value="">Seleziona cliente...</option>
                                     {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-1">Progetto (opzionale)</label>
+                                <label className="block text-sm font-medium text-secondary mb-1">Progetto (opzionale)</label>
                                 <select value={selectedProjectId} onChange={e => { setSelectedProjectId(e.target.value); setPreview(null) }}
-                                    className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm" disabled={!selectedClientId}>
+                                    className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm" disabled={!selectedClientId}>
                                     <option value="">Tutti i progetti</option>
                                     {projects.filter(p => p.client_id === Number(selectedClientId)).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                 </select>
@@ -335,29 +335,29 @@ export default function Billing({ dateRange }) {
                         {/* Period & Group By */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-1">Da</label>
+                                <label className="block text-sm font-medium text-secondary mb-1">Da</label>
                                 <DatePicker
                                     selected={invoicePeriod.start}
                                     onChange={d => { setInvoicePeriod(prev => ({ ...prev, start: d })); setPreview(null) }}
                                     dateFormat="dd/MM/yyyy"
                                     locale={it}
-                                    className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm"
+                                    className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-1">A</label>
+                                <label className="block text-sm font-medium text-secondary mb-1">A</label>
                                 <DatePicker
                                     selected={invoicePeriod.end}
                                     onChange={d => { setInvoicePeriod(prev => ({ ...prev, end: d })); setPreview(null) }}
                                     dateFormat="dd/MM/yyyy"
                                     locale={it}
-                                    className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm"
+                                    className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-1">Raggruppa per</label>
+                                <label className="block text-sm font-medium text-secondary mb-1">Raggruppa per</label>
                                 <select value={groupBy} onChange={e => { setGroupBy(e.target.value); setPreview(null) }}
-                                    className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm">
+                                    className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm">
                                     <option value="project">Progetto</option>
                                     <option value="user">Utente</option>
                                     <option value="issue">Issue</option>
@@ -393,10 +393,10 @@ export default function Billing({ dateRange }) {
                     {preview && (
                         <div className="glass-card p-6 space-y-5">
                             <div className="flex justify-between items-center">
-                                <h3 className="font-semibold text-dark-100">Preview Fattura</h3>
+                                <h3 className="font-semibold text-primary">Preview Fattura</h3>
                                 <div className="flex items-center gap-4 text-sm">
-                                    <span className="text-dark-400">Ore billable: <span className="text-accent-green font-medium">{preview.billable_hours}h</span></span>
-                                    <span className="text-dark-400">Non billable: <span className="text-dark-300">{preview.non_billable_hours}h</span></span>
+                                    <span className="text-tertiary">Ore billable: <span className="text-success font-medium">{preview.billable_hours}h</span></span>
+                                    <span className="text-tertiary">Non billable: <span className="text-secondary">{preview.non_billable_hours}h</span></span>
                                 </div>
                             </div>
 
@@ -404,7 +404,7 @@ export default function Billing({ dateRange }) {
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead>
-                                        <tr className="text-dark-500 text-xs border-b border-dark-700">
+                                        <tr className="text-tertiary text-xs border-b border-solid">
                                             <th className="text-left py-2 px-3">Descrizione</th>
                                             <th className="text-right py-2 px-3">Ore</th>
                                             <th className="text-right py-2 px-3">Tariffa</th>
@@ -413,38 +413,38 @@ export default function Billing({ dateRange }) {
                                     </thead>
                                     <tbody>
                                         {preview.line_items.map((li, idx) => (
-                                            <tr key={idx} className="border-b border-dark-700/50 hover:bg-dark-700/30">
-                                                <td className="py-2.5 px-3 text-dark-200">{li.description}</td>
-                                                <td className="py-2.5 px-3 text-right text-dark-300">{li.quantity_hours}</td>
-                                                <td className="py-2.5 px-3 text-right text-dark-300">{li.hourly_rate} €</td>
-                                                <td className="py-2.5 px-3 text-right text-dark-100 font-medium">{li.amount.toFixed(2)} €</td>
+                                            <tr key={idx} className="border-b border-solid/50 hover:bg-surface/30">
+                                                <td className="py-2.5 px-3 text-secondary">{li.description}</td>
+                                                <td className="py-2.5 px-3 text-right text-secondary">{li.quantity_hours}</td>
+                                                <td className="py-2.5 px-3 text-right text-secondary">{li.hourly_rate} €</td>
+                                                <td className="py-2.5 px-3 text-right text-primary font-medium">{li.amount.toFixed(2)} €</td>
                                             </tr>
                                         ))}
                                     </tbody>
                                     <tfoot>
-                                        <tr className="border-t-2 border-dark-600">
-                                            <td colSpan={3} className="py-3 px-3 text-right font-semibold text-dark-200">Subtotale</td>
-                                            <td className="py-3 px-3 text-right font-bold text-dark-100">{preview.subtotal_amount.toFixed(2)} €</td>
+                                        <tr className="border-t-2 border-solid">
+                                            <td colSpan={3} className="py-3 px-3 text-right font-semibold text-secondary">Subtotale</td>
+                                            <td className="py-3 px-3 text-right font-bold text-primary">{preview.subtotal_amount.toFixed(2)} €</td>
                                         </tr>
                                     </tfoot>
                                 </table>
                             </div>
 
                             {/* Taxes + Notes + Create */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-dark-700">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-solid">
                                 <div>
-                                    <label className="block text-sm font-medium text-dark-300 mb-1">IVA / Tasse</label>
+                                    <label className="block text-sm font-medium text-secondary mb-1">IVA / Tasse</label>
                                     <input type="number" value={taxesAmount} onChange={e => setTaxesAmount(Number(e.target.value))}
-                                        className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm" step="0.01" min="0" />
+                                        className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm" step="0.01" min="0" />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-dark-300 mb-1">Note</label>
+                                    <label className="block text-sm font-medium text-secondary mb-1">Note</label>
                                     <input type="text" value={invoiceNotes} onChange={e => setInvoiceNotes(e.target.value)}
-                                        className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm" placeholder="Note opzionali..." />
+                                        className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm" placeholder="Note opzionali..." />
                                 </div>
                                 <div className="flex items-end">
                                     <div className="text-right w-full">
-                                        <p className="text-sm text-dark-400 mb-1">Totale: <span className="text-lg font-bold text-dark-100">{(preview.subtotal_amount + taxesAmount).toFixed(2)} €</span></p>
+                                        <p className="text-sm text-tertiary mb-1">Totale: <span className="text-lg font-bold text-primary">{(preview.subtotal_amount + taxesAmount).toFixed(2)} €</span></p>
                                         <button
                                             onClick={async () => {
                                                 try {
@@ -477,10 +477,10 @@ export default function Billing({ dateRange }) {
             {/* ============ INVOICES TAB ============ */}
             {!loading && activeTab === 'invoices' && (
                 <div className="space-y-4">
-                    <h2 className="text-lg font-semibold text-dark-200">Fatture</h2>
+                    <h2 className="text-lg font-semibold text-secondary">Fatture</h2>
 
                     {invoices.length === 0 ? (
-                        <div className="glass-card p-12 text-center text-dark-400">
+                        <div className="glass-card p-12 text-center text-tertiary">
                             Nessuna fattura. Usa il tab "Nuova Fattura" per crearne una.
                         </div>
                     ) : (
@@ -490,25 +490,25 @@ export default function Billing({ dateRange }) {
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <div className="flex items-center gap-3">
-                                                <h3 className="font-semibold text-dark-100">Fattura #{inv.id}</h3>
+                                                <h3 className="font-semibold text-primary">Fattura #{inv.id}</h3>
                                                 <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS[inv.status]}`}>
                                                     {STATUS_LABELS[inv.status] || inv.status}
                                                 </span>
                                             </div>
-                                            <p className="text-sm text-dark-400 mt-1">
+                                            <p className="text-sm text-tertiary mt-1">
                                                 {inv.client_name}
                                                 {inv.billing_project_name && <> · {inv.billing_project_name}</>}
                                                 {' · '}{inv.period_start} → {inv.period_end}
                                             </p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-lg font-bold text-dark-100">{inv.total_amount.toFixed(2)} {inv.currency}</p>
-                                            <p className="text-xs text-dark-500">Creata: {inv.created_at?.split('T')[0]}</p>
+                                            <p className="text-lg font-bold text-primary">{inv.total_amount.toFixed(2)} {inv.currency}</p>
+                                            <p className="text-xs text-tertiary">Creata: {inv.created_at?.split('T')[0]}</p>
                                         </div>
                                     </div>
 
                                     {/* Actions */}
-                                    <div className="flex gap-2 mt-4 pt-3 border-t border-dark-700/50">
+                                    <div className="flex gap-2 mt-4 pt-3 border-t border-solid/50">
                                         <button onClick={async () => {
                                             const detail = await getInvoice(inv.id)
                                             setShowInvoiceDetail(detail)
@@ -516,8 +516,8 @@ export default function Billing({ dateRange }) {
 
                                         {inv.status === 'DRAFT' && (
                                             <>
-                                                <button onClick={async () => { if (confirm('Emettere questa fattura?')) { await issueInvoice(inv.id); loadInvoices() } }} className="text-xs text-accent-green hover:underline">Emetti</button>
-                                                <button onClick={async () => { if (confirm('Eliminare questa bozza?')) { await deleteInvoice(inv.id); loadInvoices() } }} className="text-xs text-red-400 hover:underline">Elimina</button>
+                                                <button onClick={async () => { if (confirm('Emettere questa fattura?')) { await issueInvoice(inv.id); loadInvoices() } }} className="text-xs text-success hover:underline">Emetti</button>
+                                                <button onClick={async () => { if (confirm('Eliminare questa bozza?')) { await deleteInvoice(inv.id); loadInvoices() } }} className="text-xs text-error hover:underline">Elimina</button>
                                             </>
                                         )}
 
@@ -622,30 +622,30 @@ function ClientModal({ client, jiraInstances, onClose, onSave }) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-dark-800 border border-dark-600 rounded-xl p-6 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
-                <h3 className="text-lg font-semibold text-dark-100 mb-4">{client ? 'Modifica Cliente' : 'Nuovo Cliente'}</h3>
+            <div className="bg-surface border border-solid rounded-xl p-6 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-semibold text-primary mb-4">{client ? 'Modifica Cliente' : 'Nuovo Cliente'}</h3>
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm text-dark-300 mb-1">Nome</label>
-                        <input value={name} onChange={e => setName(e.target.value)} className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm" autoFocus />
+                        <label className="block text-sm text-secondary mb-1">Nome</label>
+                        <input value={name} onChange={e => setName(e.target.value)} className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm" autoFocus />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm text-dark-300 mb-1">Valuta</label>
-                            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm">
+                            <label className="block text-sm text-secondary mb-1">Valuta</label>
+                            <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm">
                                 <option value="EUR">EUR</option>
                                 <option value="USD">USD</option>
                                 <option value="GBP">GBP</option>
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm text-dark-300 mb-1">Tariffa default (€/h)</label>
-                            <input type="number" value={rate} onChange={e => setRate(e.target.value)} className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm" step="0.01" min="0" placeholder="0.00" />
+                            <label className="block text-sm text-secondary mb-1">Tariffa default (€/h)</label>
+                            <input type="number" value={rate} onChange={e => setRate(e.target.value)} className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm" step="0.01" min="0" placeholder="0.00" />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm text-dark-300 mb-1">Istanza JIRA (opzionale)</label>
-                        <select value={jiraInstanceId} onChange={e => setJiraInstanceId(e.target.value ? Number(e.target.value) : '')} className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm">
+                        <label className="block text-sm text-secondary mb-1">Istanza JIRA (opzionale)</label>
+                        <select value={jiraInstanceId} onChange={e => setJiraInstanceId(e.target.value ? Number(e.target.value) : '')} className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm">
                             <option value="">Nessuna</option>
                             {jiraInstances?.instances?.map(inst => (
                                 <option key={inst.id} value={inst.id}>{inst.name}</option>
@@ -672,22 +672,22 @@ function ProjectModal({ project, clients, onClose, onSave }) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-dark-800 border border-dark-600 rounded-xl p-6 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
-                <h3 className="text-lg font-semibold text-dark-100 mb-4">{project ? 'Modifica Progetto' : 'Nuovo Progetto'}</h3>
+            <div className="bg-surface border border-solid rounded-xl p-6 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-semibold text-primary mb-4">{project ? 'Modifica Progetto' : 'Nuovo Progetto'}</h3>
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm text-dark-300 mb-1">Cliente</label>
-                        <select value={clientId} onChange={e => setClientId(Number(e.target.value))} className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm" disabled={!!project}>
+                        <label className="block text-sm text-secondary mb-1">Cliente</label>
+                        <select value={clientId} onChange={e => setClientId(Number(e.target.value))} className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm" disabled={!!project}>
                             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm text-dark-300 mb-1">Nome progetto</label>
-                        <input value={name} onChange={e => setName(e.target.value)} className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm" autoFocus />
+                        <label className="block text-sm text-secondary mb-1">Nome progetto</label>
+                        <input value={name} onChange={e => setName(e.target.value)} className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm" autoFocus />
                     </div>
                     <div>
-                        <label className="block text-sm text-dark-300 mb-1">Tariffa oraria default (€/h)</label>
-                        <input type="number" value={rate} onChange={e => setRate(e.target.value)} className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm" step="0.01" min="0" placeholder="Eredita dal cliente" />
+                        <label className="block text-sm text-secondary mb-1">Tariffa oraria default (€/h)</label>
+                        <input type="number" value={rate} onChange={e => setRate(e.target.value)} className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm" step="0.01" min="0" placeholder="Eredita dal cliente" />
                     </div>
                 </div>
                 <div className="flex justify-end gap-3 mt-6">
@@ -707,18 +707,18 @@ function MappingModal({ projectId, jiraInstances, onClose, onSave }) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-dark-800 border border-dark-600 rounded-xl p-6 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
-                <h3 className="text-lg font-semibold text-dark-100 mb-4">Mappa Progetto JIRA</h3>
+            <div className="bg-surface border border-solid rounded-xl p-6 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-semibold text-primary mb-4">Mappa Progetto JIRA</h3>
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm text-dark-300 mb-1">Istanza JIRA</label>
-                        <select value={instance} onChange={e => setInstance(e.target.value)} className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm">
+                        <label className="block text-sm text-secondary mb-1">Istanza JIRA</label>
+                        <select value={instance} onChange={e => setInstance(e.target.value)} className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm">
                             {jiraInstances.map(i => <option key={i.id || i.name} value={i.name}>{i.name}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm text-dark-300 mb-1">Project Key JIRA</label>
-                        <input value={projectKey} onChange={e => setProjectKey(e.target.value.toUpperCase())} className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm" placeholder="es. PROJ" autoFocus />
+                        <label className="block text-sm text-secondary mb-1">Project Key JIRA</label>
+                        <input value={projectKey} onChange={e => setProjectKey(e.target.value.toUpperCase())} className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm" placeholder="es. PROJ" autoFocus />
                     </div>
                 </div>
                 <div className="flex justify-end gap-3 mt-6">
@@ -741,29 +741,29 @@ function RateModal({ projectId, onClose, onSave }) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-dark-800 border border-dark-600 rounded-xl p-6 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
-                <h3 className="text-lg font-semibold text-dark-100 mb-4">Nuova Tariffa Override</h3>
+            <div className="bg-surface border border-solid rounded-xl p-6 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-semibold text-primary mb-4">Nuova Tariffa Override</h3>
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm text-dark-300 mb-1">Email utente (opzionale)</label>
-                        <input value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm" placeholder="Lascia vuoto per tutti" />
+                        <label className="block text-sm text-secondary mb-1">Email utente (opzionale)</label>
+                        <input value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm" placeholder="Lascia vuoto per tutti" />
                     </div>
                     <div>
-                        <label className="block text-sm text-dark-300 mb-1">Tipo issue (opzionale)</label>
-                        <input value={issueType} onChange={e => setIssueType(e.target.value)} className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm" placeholder="es. Epic, Story, Task" />
+                        <label className="block text-sm text-secondary mb-1">Tipo issue (opzionale)</label>
+                        <input value={issueType} onChange={e => setIssueType(e.target.value)} className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm" placeholder="es. Epic, Story, Task" />
                     </div>
                     <div>
-                        <label className="block text-sm text-dark-300 mb-1">Tariffa oraria (€/h)</label>
-                        <input type="number" value={rate} onChange={e => setRate(e.target.value)} className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm" step="0.01" min="0" autoFocus />
+                        <label className="block text-sm text-secondary mb-1">Tariffa oraria (€/h)</label>
+                        <input type="number" value={rate} onChange={e => setRate(e.target.value)} className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm" step="0.01" min="0" autoFocus />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm text-dark-300 mb-1">Valido da</label>
-                            <input type="date" value={validFrom} onChange={e => setValidFrom(e.target.value)} className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm" />
+                            <label className="block text-sm text-secondary mb-1">Valido da</label>
+                            <input type="date" value={validFrom} onChange={e => setValidFrom(e.target.value)} className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm" />
                         </div>
                         <div>
-                            <label className="block text-sm text-dark-300 mb-1">Valido fino a</label>
-                            <input type="date" value={validTo} onChange={e => setValidTo(e.target.value)} className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-dark-200 text-sm" />
+                            <label className="block text-sm text-secondary mb-1">Valido fino a</label>
+                            <input type="date" value={validTo} onChange={e => setValidTo(e.target.value)} className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-secondary text-sm" />
                         </div>
                     </div>
                 </div>
@@ -788,11 +788,11 @@ function RateModal({ projectId, onClose, onSave }) {
 function InvoiceDetailModal({ invoice, onClose }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-dark-800 border border-dark-600 rounded-xl p-6 w-full max-w-2xl shadow-xl max-h-[80vh] overflow-auto" onClick={e => e.stopPropagation()}>
+            <div className="bg-surface border border-solid rounded-xl p-6 w-full max-w-2xl shadow-xl max-h-[80vh] overflow-auto" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-start mb-4">
                     <div>
-                        <h3 className="text-lg font-semibold text-dark-100">Fattura #{invoice.id}</h3>
-                        <p className="text-sm text-dark-400">{invoice.client_name}{invoice.billing_project_name && ` · ${invoice.billing_project_name}`}</p>
+                        <h3 className="text-lg font-semibold text-primary">Fattura #{invoice.id}</h3>
+                        <p className="text-sm text-tertiary">{invoice.client_name}{invoice.billing_project_name && ` · ${invoice.billing_project_name}`}</p>
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS[invoice.status]}`}>
                         {STATUS_LABELS[invoice.status] || invoice.status}
@@ -800,16 +800,16 @@ function InvoiceDetailModal({ invoice, onClose }) {
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
-                    <div><span className="text-dark-500">Periodo:</span> <span className="text-dark-200 ml-2">{invoice.period_start} → {invoice.period_end}</span></div>
-                    <div><span className="text-dark-500">Valuta:</span> <span className="text-dark-200 ml-2">{invoice.currency}</span></div>
-                    <div><span className="text-dark-500">Raggruppamento:</span> <span className="text-dark-200 ml-2">{invoice.group_by}</span></div>
-                    {invoice.issued_at && <div><span className="text-dark-500">Emessa il:</span> <span className="text-dark-200 ml-2">{invoice.issued_at?.split('T')[0]}</span></div>}
+                    <div><span className="text-tertiary">Periodo:</span> <span className="text-secondary ml-2">{invoice.period_start} → {invoice.period_end}</span></div>
+                    <div><span className="text-tertiary">Valuta:</span> <span className="text-secondary ml-2">{invoice.currency}</span></div>
+                    <div><span className="text-tertiary">Raggruppamento:</span> <span className="text-secondary ml-2">{invoice.group_by}</span></div>
+                    {invoice.issued_at && <div><span className="text-tertiary">Emessa il:</span> <span className="text-secondary ml-2">{invoice.issued_at?.split('T')[0]}</span></div>}
                 </div>
 
                 {/* Line items */}
                 <table className="w-full text-sm mb-4">
                     <thead>
-                        <tr className="text-dark-500 text-xs border-b border-dark-700">
+                        <tr className="text-tertiary text-xs border-b border-solid">
                             <th className="text-left py-2">#</th>
                             <th className="text-left py-2">Descrizione</th>
                             <th className="text-right py-2">Ore</th>
@@ -819,27 +819,27 @@ function InvoiceDetailModal({ invoice, onClose }) {
                     </thead>
                     <tbody>
                         {(invoice.line_items || []).map((li, idx) => (
-                            <tr key={li.id || idx} className="border-b border-dark-700/50">
-                                <td className="py-2 text-dark-500">{idx + 1}</td>
-                                <td className="py-2 text-dark-200">{li.description}</td>
-                                <td className="py-2 text-right text-dark-300">{li.quantity_hours}</td>
-                                <td className="py-2 text-right text-dark-300">{li.hourly_rate} €</td>
-                                <td className="py-2 text-right text-dark-100 font-medium">{li.amount.toFixed(2)} €</td>
+                            <tr key={li.id || idx} className="border-b border-solid/50">
+                                <td className="py-2 text-tertiary">{idx + 1}</td>
+                                <td className="py-2 text-secondary">{li.description}</td>
+                                <td className="py-2 text-right text-secondary">{li.quantity_hours}</td>
+                                <td className="py-2 text-right text-secondary">{li.hourly_rate} €</td>
+                                <td className="py-2 text-right text-primary font-medium">{li.amount.toFixed(2)} €</td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
 
-                <div className="border-t border-dark-600 pt-4 space-y-1 text-sm text-right">
-                    <div className="text-dark-400">Subtotale: <span className="text-dark-200 font-medium">{invoice.subtotal_amount.toFixed(2)} €</span></div>
-                    {invoice.taxes_amount > 0 && <div className="text-dark-400">IVA/Tasse: <span className="text-dark-200">{invoice.taxes_amount.toFixed(2)} €</span></div>}
-                    <div className="text-lg font-bold text-dark-100 pt-2">Totale: {invoice.total_amount.toFixed(2)} {invoice.currency}</div>
+                <div className="border-t border-solid pt-4 space-y-1 text-sm text-right">
+                    <div className="text-tertiary">Subtotale: <span className="text-secondary font-medium">{invoice.subtotal_amount.toFixed(2)} €</span></div>
+                    {invoice.taxes_amount > 0 && <div className="text-tertiary">IVA/Tasse: <span className="text-secondary">{invoice.taxes_amount.toFixed(2)} €</span></div>}
+                    <div className="text-lg font-bold text-primary pt-2">Totale: {invoice.total_amount.toFixed(2)} {invoice.currency}</div>
                 </div>
 
                 {invoice.notes && (
-                    <div className="mt-4 pt-4 border-t border-dark-700">
-                        <p className="text-xs text-dark-500">Note:</p>
-                        <p className="text-sm text-dark-300">{invoice.notes}</p>
+                    <div className="mt-4 pt-4 border-t border-solid">
+                        <p className="text-xs text-tertiary">Note:</p>
+                        <p className="text-sm text-secondary">{invoice.notes}</p>
                     </div>
                 )}
 

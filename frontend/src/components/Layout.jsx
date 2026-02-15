@@ -137,21 +137,21 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
     }
 
     return (
-        <div className="min-h-screen bg-dark-900 flex">
+        <div className="min-h-screen bg-surface flex">
             {/* Sidebar */}
-            <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-dark-800 border-r border-dark-700 flex flex-col transition-all duration-300`}>
+            <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-surface border-r border-solid flex flex-col transition-all duration-300`}>
                 {/* Logo */}
-                <div className="p-4 border-b border-dark-700">
+                <div className="p-4 border-b border-solid">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center shadow-glow">
+                        <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center ">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
                         {sidebarOpen && (
-                            <div className="animate-fade-in">
-                                <h1 className="font-bold text-dark-100">Worklog</h1>
-                                <p className="text-xs text-dark-400">Dashboard</p>
+                            <div className="animate-slide-up">
+                                <h1 className="font-bold text-primary">Worklog</h1>
+                                <p className="text-xs text-tertiary">Dashboard</p>
                             </div>
                         )}
                     </div>
@@ -182,7 +182,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                             {sidebarOpen && (
                                 <>
                                     <span>Tutti i Team</span>
-                                    <span className="ml-auto text-xs text-dark-500">{config.teams.length}</span>
+                                    <span className="ml-auto text-xs text-tertiary">{config.teams.length}</span>
                                 </>
                             )}
                         </NavLink>
@@ -192,7 +192,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                             {sidebarOpen && (
                                 <>
                                     <span>Tutti i Team</span>
-                                    <span className="ml-auto text-xs text-dark-500">0</span>
+                                    <span className="ml-auto text-xs text-tertiary">0</span>
                                 </>
                             )}
                         </div>
@@ -216,7 +216,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                             {sidebarOpen && (
                                 <>
                                     <span>Utenti</span>
-                                    <span className="ml-auto text-xs text-dark-500">0</span>
+                                    <span className="ml-auto text-xs text-tertiary">0</span>
                                 </>
                             )}
                         </div>
@@ -225,7 +225,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                     {/* Individual Teams Section */}
                     {sidebarOpen && config?.teams && config.teams.length > 0 && (
                         <div className="pt-4">
-                            <p className="px-4 text-xs font-semibold text-dark-500 uppercase tracking-wider mb-2">Teams</p>
+                            <p className="px-4 text-xs font-semibold text-tertiary uppercase tracking-wider mb-2">Teams</p>
                             {config.teams.map((team) => (
                                 <NavLink
                                     key={team.name}
@@ -235,7 +235,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                                     }
                                 >
                                     <span className="truncate">{team.name}</span>
-                                    <span className="ml-auto text-xs text-dark-500">{team.member_count}</span>
+                                    <span className="ml-auto text-xs text-tertiary">{team.member_count}</span>
                                 </NavLink>
                             ))}
                         </div>
@@ -243,7 +243,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
 
                     {/* Iniziative Section */}
                     <div className="pt-4">
-                        {sidebarOpen && <p className="px-4 text-xs font-semibold text-dark-500 uppercase tracking-wider mb-2">Iniziative</p>}
+                        {sidebarOpen && <p className="px-4 text-xs font-semibold text-tertiary uppercase tracking-wider mb-2">Iniziative</p>}
 
                         {/* Projects Link */}
                         {epicsByType['Project'] && epicsByType['Project'].length > 0 && (
@@ -257,7 +257,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                                 {sidebarOpen && (
                                     <>
                                         <span>Projects</span>
-                                        <span className="ml-auto text-xs text-dark-500">{epicsByType['Project'].length}</span>
+                                        <span className="ml-auto text-xs text-tertiary">{epicsByType['Project'].length}</span>
                                     </>
                                 )}
                             </NavLink>
@@ -275,7 +275,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                                 {sidebarOpen && (
                                     <>
                                         <span>Epics</span>
-                                        <span className="ml-auto text-xs text-dark-500">{epicsByType['Epic'].length}</span>
+                                        <span className="ml-auto text-xs text-tertiary">{epicsByType['Epic'].length}</span>
                                     </>
                                 )}
                             </NavLink>
@@ -295,7 +295,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
 
                     {/* Billing Link */}
                     <div className="pt-4">
-                        {sidebarOpen && <p className="px-4 text-xs font-semibold text-dark-500 uppercase tracking-wider mb-2">Amministrazione</p>}
+                        {sidebarOpen && <p className="px-4 text-xs font-semibold text-tertiary uppercase tracking-wider mb-2">Amministrazione</p>}
                         <NavLink
                             to="/app/billing"
                             className={({ isActive }) =>
@@ -311,7 +311,7 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
 
                     {/* Settings Link */}
                     <div className="pt-4">
-                        {sidebarOpen && <p className="px-4 text-xs font-semibold text-dark-500 uppercase tracking-wider mb-2">Configurazione</p>}
+                        {sidebarOpen && <p className="px-4 text-xs font-semibold text-tertiary uppercase tracking-wider mb-2">Configurazione</p>}
                         <NavLink
                             to="/app/settings"
                             className={({ isActive }) =>
@@ -326,23 +326,23 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
 
                 {/* Demo Mode Badge */}
                 {config?.demo_mode && sidebarOpen && (
-                    <div className="p-4 border-t border-dark-700">
+                    <div className="p-4 border-t border-solid">
                         <div className="bg-accent-orange/10 border border-accent-orange/30 rounded-lg p-3">
-                            <p className="text-accent-orange text-xs font-medium">Modalità Demo</p>
-                            <p className="text-dark-400 text-xs mt-1">Dati di esempio</p>
+                            <p className="text-warning text-xs font-medium">Modalità Demo</p>
+                            <p className="text-tertiary text-xs mt-1">Dati di esempio</p>
                         </div>
                     </div>
                 )}
 
                 {/* User Menu */}
-                <div className="p-4 border-t border-dark-700">
+                <div className="p-4 border-t border-solid">
                     <UserMenu sidebarOpen={sidebarOpen} />
                 </div>
 
                 {/* Collapse Button */}
                 <button
                     onClick={() => setSidebarOpen(!sidebarOpen)}
-                    className="p-4 border-t border-dark-700 text-dark-400 hover:text-dark-200 transition-colors"
+                    className="p-4 border-t border-solid text-tertiary hover:text-secondary transition-colors"
                 >
                     <svg className={`w-5 h-5 mx-auto transition-transform ${sidebarOpen ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
@@ -354,16 +354,16 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
             <div className="flex-1 flex flex-col">
                 {/* Header - hidden on settings page */}
                 {!isSettingsPage && (
-                    <header className="bg-dark-800/50 backdrop-blur-xl border-b border-dark-700 px-6 py-4 relative z-50">
+                    <header className="bg-surface/50 backdrop-blur-xl border-b border-solid px-6 py-4 relative z-50">
                         <div className="flex items-center justify-between">
                             {/* Date Range Picker */}
                             <div className="relative">
                                 <button
                                     onClick={() => setDatePickerOpen(!datePickerOpen)}
-                                    className="flex items-center gap-3 glass-card px-4 py-2.5 hover:bg-dark-700/50 transition-colors"
+                                    className="flex items-center gap-3 glass-card px-4 py-2.5 hover:bg-surface/50 transition-colors"
                                 >
                                     <CalendarIcon />
-                                    <span className="text-dark-200">
+                                    <span className="text-secondary">
                                         {format(dateRange.startDate, 'd MMM', { locale: it })} - {format(dateRange.endDate, 'd MMM yyyy', { locale: it })}
                                     </span>
                                 </button>
@@ -376,14 +376,14 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                                             onClick={() => setDatePickerOpen(false)}
                                         />
                                         {/* Calendar Dropdown */}
-                                        <div className="fixed top-20 left-6 z-[101] bg-dark-800 border border-dark-600 rounded-xl shadow-xl p-4 animate-slide-up">
+                                        <div className="fixed top-20 left-6 z-[101] bg-surface border border-solid rounded-xl shadow-xl p-4 animate-slide-up">
                                             {/* Presets */}
                                             <div className="flex gap-2 mb-4 flex-wrap">
                                                 {datePresets.map((preset) => (
                                                     <button
                                                         key={preset.label}
                                                         onClick={() => applyPreset(preset)}
-                                                        className="px-3 py-1.5 text-xs font-medium text-dark-300 bg-dark-700 rounded-lg hover:bg-dark-600 transition-colors"
+                                                        className="px-3 py-1.5 text-xs font-medium text-secondary bg-surface rounded-lg hover:bg-surface-hover transition-colors"
                                                     >
                                                         {preset.label}
                                                     </button>
@@ -410,15 +410,15 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                                                         <button
                                                             onClick={decreaseMonth}
                                                             disabled={prevMonthButtonDisabled}
-                                                            className="p-1 hover:bg-dark-700 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                                            className="p-1 hover:bg-surface rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                                         >
-                                                            <svg className="w-5 h-5 text-dark-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <svg className="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                                                             </svg>
                                                         </button>
                                                         <button
                                                             onClick={() => selectWholeMonth(date)}
-                                                            className="text-sm font-semibold text-dark-200 hover:text-white hover:bg-dark-700 px-3 py-1.5 rounded-lg transition-all"
+                                                            className="text-sm font-semibold text-secondary hover:text-white hover:bg-surface px-3 py-1.5 rounded-lg transition-all"
                                                             title="Clicca per selezionare l'intero mese"
                                                         >
                                                             {format(date, 'MMMM yyyy', { locale: it })}
@@ -426,9 +426,9 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                                                         <button
                                                             onClick={increaseMonth}
                                                             disabled={nextMonthButtonDisabled}
-                                                            className="p-1 hover:bg-dark-700 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                                            className="p-1 hover:bg-surface rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                                         >
-                                                            <svg className="w-5 h-5 text-dark-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <svg className="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                                             </svg>
                                                         </button>
@@ -442,13 +442,13 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
 
                             {/* Center: JIRA Instance Tabs */}
                             {config?.jira_instances && config.jira_instances.length > 1 && (
-                                <div className="flex items-center gap-1 bg-dark-800 rounded-xl p-1 border border-dark-600">
+                                <div className="flex items-center gap-1 bg-surface rounded-xl p-1 border border-solid">
                                     {/* All Instances tab */}
                                     <button
                                         onClick={() => setSelectedInstance(null)}
                                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${selectedInstance === null
-                                            ? 'bg-gradient-primary text-white shadow-glow'
-                                            : 'text-dark-400 hover:text-dark-200 hover:bg-dark-700'
+                                            ? 'bg-accent text-white '
+                                            : 'text-tertiary hover:text-secondary hover:bg-surface'
                                             }`}
                                     >
                                         Tutti
@@ -460,9 +460,9 @@ export default function Layout({ children, dateRange, setDateRange, selectedInst
                                             onClick={() => setSelectedInstance(inst.name)}
                                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${selectedInstance === inst.name
                                                 ? index === 0
-                                                    ? 'bg-gradient-to-r from-accent-blue to-blue-600 text-white shadow-glow'
-                                                    : 'bg-gradient-to-r from-accent-green to-emerald-600 text-white shadow-glow-green'
-                                                : 'text-dark-400 hover:text-dark-200 hover:bg-dark-700'
+                                                    ? 'bg-gradient-to-r from-accent-blue to-blue-600 text-white '
+                                                    : 'bg-gradient-to-r from-accent-green to-emerald-600 text-white -green'
+                                                : 'text-tertiary hover:text-secondary hover:bg-surface'
                                                 }`}
                                         >
                                             {inst.name}

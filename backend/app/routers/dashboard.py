@@ -17,6 +17,7 @@ from ..config import (
 )
 from ..cache import get_storage
 from ..auth.dependencies import get_current_user, CurrentUser
+from ..matching_algorithms import get_algorithm, apply_generic_issues
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -94,24 +95,30 @@ async def get_dashboard(
         all_worklogs=all_worklogs  # Pass all worklogs for per-instance breakdown
     )
 
-    # Daily trend
-    daily_trend = calculate_daily_trend(worklogs, start_date, end_date)
-
     # Top epics
     top_epics = calculate_epic_hours(worklogs)[:10]
 
+    # Top projects (for "By Project" chart)
+    top_projects = calculate_project_hours(worklogs)[:10]
+
     # Completion percentage
     completion = (total_hours / expected_hours * 100) if expected_hours > 0 else 0
+
+    # Calculate active users (unique authors with worklogs in period)
+    active_users = len(set(w.author_email.lower() for w in worklogs))
 
     return DashboardResponse(
         total_hours=round(total_hours, 2),
         expected_hours=round(expected_hours, 2),
         completion_percentage=round(completion, 1),
+        daily_working_hours=config.settings.daily_working_hours,
         teams=team_hours,
-        daily_trend=daily_trend,
         top_epics=top_epics,
+        top_projects=top_projects,
         period_start=start_date,
-        period_end=end_date
+        period_end=end_date,
+        worklog_count=len(worklogs),
+        active_users=active_users
     )
 
 
@@ -293,6 +300,82 @@ def calculate_epic_hours(worklogs: list[Worklog]) -> list[EpicHours]:
     return result
 
 
+def calculate_project_hours(worklogs: list[Worklog]) -> list[EpicHours]:
+    """Calculate hours per JIRA project (extracted from issue_key)."""
+    project_data = defaultdict(lambda: {
+        "hours": 0,
+        "contributors": set(),
+        "instance": ""
+    })
+
+    for wl in worklogs:
+        # Extract project key from issue_key (e.g., "DLREQ-1464" -> "DLREQ")
+        project_key = wl.issue_key.split('-')[0] if '-' in wl.issue_key else wl.issue_key
+        project_data[project_key]["hours"] += wl.time_spent_seconds / 3600
+        project_data[project_key]["contributors"].add(wl.author_email)
+        project_data[project_key]["instance"] = wl.jira_instance
+
+    result = []
+    for project_key, data in project_data.items():
+        result.append(EpicHours(
+            epic_key=project_key,
+            epic_name=project_key,  # Use project key as name (clean, readable)
+            total_hours=round(data["hours"], 2),
+            contributor_count=len(data["contributors"]),
+            jira_instance=data["instance"],
+            parent_type="Project"
+        ))
+
+    # Sort by hours descending
+    result.sort(key=lambda x: x.total_hours, reverse=True)
+    return result
+
+
+def calculate_discrepancies_legacy(primary_wls: list[Worklog], secondary_wls: list[Worklog]) -> list[DiscrepancyItem]:
+    """
+    Legacy discrepancy calculation - direct parent_key comparison.
+    Used when no matching algorithms are enabled.
+    """
+    # Build per-initiative hours for both
+    primary_by_init = defaultdict(lambda: {"hours": 0, "name": ""})
+    for w in primary_wls:
+        if w.parent_key:
+            primary_by_init[w.parent_key]["hours"] += w.time_spent_seconds / 3600
+            primary_by_init[w.parent_key]["name"] = w.parent_name or w.parent_key
+
+    secondary_by_init = defaultdict(lambda: {"hours": 0, "name": ""})
+    for w in secondary_wls:
+        if w.parent_key:
+            secondary_by_init[w.parent_key]["hours"] += w.time_spent_seconds / 3600
+            secondary_by_init[w.parent_key]["name"] = w.parent_name or w.parent_key
+
+    # Find discrepancies
+    all_keys = set(primary_by_init.keys()) | set(secondary_by_init.keys())
+    discrepancies = []
+
+    for key in all_keys:
+        p_hours = primary_by_init[key]["hours"] if key in primary_by_init else 0
+        s_hours = secondary_by_init[key]["hours"] if key in secondary_by_init else 0
+        delta = abs(p_hours - s_hours)
+        max_hours = max(p_hours, s_hours)
+        delta_pct = (delta / max_hours * 100) if max_hours > 0 else 0
+
+        # Only report significant discrepancies (>1h or >10%)
+        if delta > 1 or delta_pct > 10:
+            name = (primary_by_init.get(key, {}).get("name") or
+                    secondary_by_init.get(key, {}).get("name") or key)
+            discrepancies.append(DiscrepancyItem(
+                initiative_key=key,
+                initiative_name=name,
+                primary_hours=round(p_hours, 2),
+                secondary_hours=round(s_hours, 2),
+                delta_hours=round(delta, 2),
+                delta_percentage=round(delta_pct, 1)
+            ))
+
+    return discrepancies
+
+
 @router.get("/multi-jira-overview", response_model=MultiJiraOverviewResponse)
 async def get_multi_jira_overview(
     start_date: date = Query(..., description="Start date for the period"),
@@ -357,6 +440,14 @@ async def get_multi_jira_overview(
     complementary_comparisons = []
     complementary_groups = await get_complementary_instances_from_db(current_user.company_id)
 
+    # Check if matching algorithms are enabled
+    matching_algorithms = await storage.get_matching_algorithms(current_user.company_id)
+    enabled_algorithms = [algo for algo in matching_algorithms if algo['enabled']]
+
+    # Get JIRA exclusions (expected discrepancies like leaves, training)
+    jira_exclusions = await storage.get_jira_exclusions(current_user.company_id)
+    exclusion_keys = [exc['exclusion_key'] for exc in jira_exclusions if exc['exclusion_type'] == 'parent_key']
+
     for group_name, group_instances in complementary_groups.items():
         if len(group_instances) < 2:
             continue
@@ -370,42 +461,59 @@ async def get_multi_jira_overview(
             primary_total = sum(w.time_spent_seconds for w in primary_wls) / 3600
             secondary_total = sum(w.time_spent_seconds for w in secondary_wls) / 3600
 
-            # Build per-initiative hours for both
-            primary_by_init = defaultdict(lambda: {"hours": 0, "name": ""})
-            for w in primary_wls:
-                if w.parent_key:
-                    primary_by_init[w.parent_key]["hours"] += w.time_spent_seconds / 3600
-                    primary_by_init[w.parent_key]["name"] = w.parent_name or w.parent_key
-
-            secondary_by_init = defaultdict(lambda: {"hours": 0, "name": ""})
-            for w in secondary_wls:
-                if w.parent_key:
-                    secondary_by_init[w.parent_key]["hours"] += w.time_spent_seconds / 3600
-                    secondary_by_init[w.parent_key]["name"] = w.parent_name or w.parent_key
-
-            # Find discrepancies
-            all_keys = set(primary_by_init.keys()) | set(secondary_by_init.keys())
             discrepancies = []
 
-            for key in all_keys:
-                p_hours = primary_by_init[key]["hours"] if key in primary_by_init else 0
-                s_hours = secondary_by_init[key]["hours"] if key in secondary_by_init else 0
-                delta = abs(p_hours - s_hours)
-                max_hours = max(p_hours, s_hours)
-                delta_pct = (delta / max_hours * 100) if max_hours > 0 else 0
+            # Use matching algorithms if enabled
+            if enabled_algorithms:
+                # Sort by priority (lower = higher priority)
+                enabled_algorithms.sort(key=lambda a: a['priority'])
 
-                # Only report significant discrepancies (>1h or >10%)
-                if delta > 1 or delta_pct > 10:
-                    name = (primary_by_init.get(key, {}).get("name") or
-                            secondary_by_init.get(key, {}).get("name") or key)
-                    discrepancies.append(DiscrepancyItem(
-                        initiative_key=key,
-                        initiative_name=name,
-                        primary_hours=round(p_hours, 2),
-                        secondary_hours=round(s_hours, 2),
-                        delta_hours=round(delta, 2),
-                        delta_percentage=round(delta_pct, 1)
-                    ))
+                # Use the highest priority algorithm
+                algo_config = enabled_algorithms[0]
+                algorithm = get_algorithm(algo_config['algorithm_type'])
+
+                if algorithm:
+                    # Get generic issues BEFORE matching to exclude them from parent linking
+                    generic_issues = await storage.get_generic_issues(current_user.company_id)
+                    generic_issue_codes = [gi['issue_code'] for gi in generic_issues] if generic_issues else []
+
+                    # Get matched groups from algorithm
+                    import json
+                    config = json.loads(algo_config['config']) if isinstance(algo_config['config'], str) else algo_config['config']
+                    matched_groups = algorithm.find_groups(
+                        primary_wls, secondary_wls, config, exclusion_keys, generic_issue_codes
+                    )
+
+                    # Apply generic issues matching (container issues by issue_type)
+                    if generic_issues:
+                        user_to_team = {u["email"].lower(): u.get("team_id") for u in users}
+                        matched_groups = apply_generic_issues(
+                            matched_groups, generic_issues, primary_wls, secondary_wls, user_to_team
+                        )
+
+                    # For each matched group, check if hours align
+                    for linking_key, group in matched_groups.items():
+                        delta = abs(group.delta)
+                        max_hours = max(group.primary_hours, group.secondary_hours)
+                        delta_pct = (delta / max_hours * 100) if max_hours > 0 else 0
+
+                        # Report all discrepancies (>1h or >10%), including excluded ones
+                        if delta > 1 or delta_pct > 10:
+                            discrepancies.append(DiscrepancyItem(
+                                initiative_key=linking_key,
+                                initiative_name=linking_key,
+                                primary_hours=round(group.primary_hours, 2),
+                                secondary_hours=round(group.secondary_hours, 2),
+                                delta_hours=round(delta, 2),
+                                delta_percentage=round(delta_pct, 1),
+                                is_excluded=group.is_excluded
+                            ))
+                else:
+                    # Fallback to old logic if algorithm not found
+                    discrepancies = calculate_discrepancies_legacy(primary_wls, secondary_wls)
+            else:
+                # No algorithms enabled - use legacy direct parent_key comparison
+                discrepancies = calculate_discrepancies_legacy(primary_wls, secondary_wls)
 
             # Sort by delta descending
             discrepancies.sort(key=lambda d: d.delta_hours, reverse=True)

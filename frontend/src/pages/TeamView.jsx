@@ -57,7 +57,7 @@ export default function TeamView({ dateRange, selectedInstance }) {
 
     if (loading) {
         return (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-6 animate-slide-up">
                 <div className="glass-card p-6">
                     <div className="loading-shimmer h-8 w-1/3 rounded mb-2" />
                     <div className="loading-shimmer h-4 w-1/4 rounded" />
@@ -80,19 +80,19 @@ export default function TeamView({ dateRange, selectedInstance }) {
 
     if (isDataEmpty) {
         return (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-6 animate-slide-up">
                 <div className="glass-card p-6">
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => navigate('/')}
-                            className="p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+                            className="p-2 rounded-lg bg-surface hover:bg-surface-hover transition-colors"
                         >
-                            <svg className="w-5 h-5 text-dark-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                             </svg>
                         </button>
                         <div className="flex-1">
-                            <h1 className="text-2xl font-bold text-dark-100">{data.team_name}</h1>
+                            <h1 className="text-2xl font-bold text-primary">{data.team_name}</h1>
                         </div>
                     </div>
                 </div>
@@ -101,7 +101,7 @@ export default function TeamView({ dateRange, selectedInstance }) {
                         title="Nessun membro attivo"
                         message="Non ci sono ore registrate per questo team nel periodo selezionato."
                         icon={
-                            <svg className="w-8 h-8 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-8 h-8 text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
                         }
@@ -129,28 +129,28 @@ export default function TeamView({ dateRange, selectedInstance }) {
         }))
 
         return (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-6 animate-slide-up">
                 {/* Header */}
                 <div className="glass-card p-6">
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => navigate('/')}
-                            className="p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+                            className="p-2 rounded-lg bg-surface hover:bg-surface-hover transition-colors"
                         >
-                            <svg className="w-5 h-5 text-dark-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                             </svg>
                         </button>
                         <div className="flex-1">
-                            <h1 className="text-2xl font-bold text-dark-100">{data.team_name}</h1>
-                            <p className="text-dark-400">Panoramica istanze JIRA per il team</p>
+                            <h1 className="text-2xl font-bold text-primary">{data.team_name}</h1>
+                            <p className="text-tertiary">Panoramica istanze JIRA per il team</p>
                         </div>
                     </div>
                 </div>
 
                 {/* Instance Overview Cards */}
                 <div>
-                    <h2 className="text-lg font-semibold text-dark-100 mb-4">Panoramica Istanze JIRA</h2>
+                    <h2 className="text-lg font-semibold text-primary mb-4">Panoramica Istanze JIRA</h2>
                     <div className={`grid grid-cols-1 md:grid-cols-2 ${overviewData.instances.length >= 3 ? 'lg:grid-cols-3' : ''} gap-4`}>
                         {overviewData.instances.map((inst, index) => (
                             <InstanceCard key={inst.instance_name} instance={inst} color={instanceColors[index % instanceColors.length]} />
@@ -199,23 +199,23 @@ export default function TeamView({ dateRange, selectedInstance }) {
                     return (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div>
-                                <h2 className="text-lg font-semibold text-dark-100 mb-4">Membri del Team</h2>
+                                <h2 className="text-lg font-semibold text-primary mb-4">Membri del Team</h2>
                                 <div className="space-y-3">
                                     {data.members.map((member) => {
                                         const instHours = memberInstanceHours[member.email] || {}
                                         return (
                                             <div
                                                 key={member.email}
-                                                onClick={() => navigate(`/app/users/${encodeURIComponent(member.email)}`)}
+                                                onClick={() => member.user_id && navigate(`/app/users/${member.user_id}`)}
                                                 className="glass-card-hover p-4 flex items-center gap-4"
                                             >
-                                                <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center flex-shrink-0">
+                                                <div className="w-12 h-12 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
                                                     <span className="text-white font-semibold">
                                                         {(member.full_name || member.email).split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                                                     </span>
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <h4 className="font-medium text-dark-100 truncate">{member.full_name}</h4>
+                                                    <h4 className="font-medium text-primary truncate">{member.full_name}</h4>
                                                     <div className="flex flex-wrap gap-1.5 mt-1">
                                                         {instanceNames.map((instName, i) => {
                                                             const h = instHours[instName] || 0
@@ -236,7 +236,7 @@ export default function TeamView({ dateRange, selectedInstance }) {
                                                     </div>
                                                 </div>
                                                 <div className="text-right flex-shrink-0">
-                                                    <p className="font-semibold text-dark-100">{formatHours(member.total_hours)}</p>
+                                                    <p className="font-semibold text-primary">{formatHours(member.total_hours)}</p>
                                                 </div>
                                             </div>
                                         )
@@ -271,13 +271,13 @@ export default function TeamView({ dateRange, selectedInstance }) {
                                             content={({ active, payload, label }) => {
                                                 if (!active || !payload?.length) return null
                                                 return (
-                                                    <div className="bg-dark-800 border border-dark-600 rounded-lg p-3 shadow-xl">
-                                                        <p className="text-dark-300 text-sm mb-2">{payload[0]?.payload?.full_name || label}</p>
+                                                    <div className="bg-surface border border-solid rounded-lg p-3 shadow-xl">
+                                                        <p className="text-secondary text-sm mb-2">{payload[0]?.payload?.full_name || label}</p>
                                                         {payload.map((entry, index) => (
                                                             <div key={index} className="flex items-center gap-2">
                                                                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
-                                                                <span className="text-dark-400 text-sm">{entry.name}:</span>
-                                                                <span className="text-dark-200 font-medium">{formatHours(entry.value)}</span>
+                                                                <span className="text-tertiary text-sm">{entry.name}:</span>
+                                                                <span className="text-secondary font-medium">{formatHours(entry.value)}</span>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -329,27 +329,27 @@ export default function TeamView({ dateRange, selectedInstance }) {
     }))
 
     return (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-6 animate-slide-up">
             {/* Header */}
             <div className="glass-card p-6">
                 <div className="flex items-center gap-4">
                     <button
                         onClick={() => navigate('/')}
-                        className="p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+                        className="p-2 rounded-lg bg-surface hover:bg-surface-hover transition-colors"
                     >
-                        <svg className="w-5 h-5 text-dark-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                         </svg>
                     </button>
                     <div className="flex-1">
-                        <h1 className="text-2xl font-bold text-dark-100">{data.team_name}</h1>
-                        <p className="text-dark-400">{data.members.length} membri</p>
+                        <h1 className="text-2xl font-bold text-primary">{data.team_name}</h1>
+                        <p className="text-tertiary">{data.members.length} membri</p>
                     </div>
                     <div className="text-right">
-                        <p className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+                        <p className="text-3xl font-bold bg-accent bg-clip-text text-transparent">
                             {formatHours(data.total_hours)}
                         </p>
-                        <p className="text-dark-400 text-sm">su {formatHours(data.expected_hours)} previste</p>
+                        <p className="text-tertiary text-sm">su {formatHours(data.expected_hours)} previste</p>
                     </div>
                 </div>
                 <div className="mt-4">
@@ -394,7 +394,7 @@ export default function TeamView({ dateRange, selectedInstance }) {
             {/* Members Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
-                    <h2 className="text-lg font-semibold text-dark-100 mb-4">Membri del Team</h2>
+                    <h2 className="text-lg font-semibold text-primary mb-4">Membri del Team</h2>
                     <div className="space-y-3">
                         {data.members.map((member) => (
                             <UserCard
@@ -403,7 +403,7 @@ export default function TeamView({ dateRange, selectedInstance }) {
                                 email={member.email}
                                 hours={member.total_hours}
                                 teamName={data.team_name}
-                                onClick={() => navigate(`/app/users/${encodeURIComponent(member.email)}`)}
+                                onClick={() => member.user_id && navigate(`/app/users/${member.user_id}`)}
                             />
                         ))}
                     </div>
@@ -425,7 +425,7 @@ export default function TeamView({ dateRange, selectedInstance }) {
                 {initiativePieData.length > 0 ? (
                     <DistributionChart data={initiativePieData} height={280} />
                 ) : (
-                    <div className="h-64 flex items-center justify-center text-dark-400">
+                    <div className="h-64 flex items-center justify-center text-tertiary">
                         Nessuna iniziativa nel periodo selezionato
                     </div>
                 )}
@@ -434,7 +434,7 @@ export default function TeamView({ dateRange, selectedInstance }) {
             {/* Iniziative Section */}
             {data.epics.length > 0 && (
                 <div>
-                    <h2 className="text-lg font-semibold text-dark-100 mb-4">Iniziative Lavorate</h2>
+                    <h2 className="text-lg font-semibold text-primary mb-4">Iniziative Lavorate</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {data.epics.slice(0, 8).map((epic) => (
                             <EpicCard
@@ -469,26 +469,26 @@ function InstanceCard({ instance, color }) {
                     </svg>
                 </div>
                 <div>
-                    <h3 className="font-semibold text-dark-100">{instance.instance_name}</h3>
-                    <p className="text-xs text-dark-400">
+                    <h3 className="font-semibold text-primary">{instance.instance_name}</h3>
+                    <p className="text-xs text-tertiary">
                         {instance.initiative_count} iniziative &middot; {instance.contributor_count} contributori
                     </p>
                 </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <p className="text-sm text-dark-400">Ore Totali</p>
+                    <p className="text-sm text-tertiary">Ore Totali</p>
                     <p className="text-2xl font-bold" style={{ color }}>
                         {formatHours(instance.total_hours)}
                     </p>
-                    <p className="text-xs text-dark-500">su {formatHours(instance.expected_hours)} previste</p>
+                    <p className="text-xs text-tertiary">su {formatHours(instance.expected_hours)} previste</p>
                 </div>
                 <div>
-                    <p className="text-sm text-dark-400">Completamento</p>
+                    <p className="text-sm text-tertiary">Completamento</p>
                     <p className="text-2xl font-bold" style={{ color }}>
                         {Math.round(instance.completion_percentage)}%
                     </p>
-                    <p className="text-xs text-dark-500">
+                    <p className="text-xs text-tertiary">
                         {instance.completion_percentage >= 90 ? 'Ottimo!' : instance.completion_percentage >= 70 ? 'Buono' : 'In corso'}
                     </p>
                 </div>

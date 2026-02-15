@@ -1,7 +1,7 @@
 export default function StepCard({ number, title, description, detail, icon }) {
     return (
         <div className="text-center relative">
-            <div className="w-14 h-14 mx-auto mb-6 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-glow relative">
+            <div className="w-14 h-14 mx-auto mb-6 rounded-2xl bg-accent flex items-center justify-center  relative">
                 <span className="text-white text-xl font-bold">{number}</span>
             </div>
 

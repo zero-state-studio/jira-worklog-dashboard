@@ -80,7 +80,7 @@ export default function FactorialSection() {
                         <button
                             onClick={handleBulkFetch}
                             disabled={bulkFetchStatus === 'loading'}
-                            className="px-4 py-2 bg-gradient-primary text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                            className="px-4 py-2 bg-accent text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
                         >
                             {bulkFetchStatus === 'loading' ? 'Ricerca...' : 'Fetch Employee IDs'}
                         </button>
@@ -135,7 +135,7 @@ export default function FactorialSection() {
                         <button
                             onClick={handleSave}
                             disabled={loading || !apiKey}
-                            className="px-4 py-2 bg-gradient-primary text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                            className="px-4 py-2 bg-accent text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
                         >
                             {loading ? 'Salvataggio...' : 'Salva'}
                         </button>

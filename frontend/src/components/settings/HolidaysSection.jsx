@@ -30,7 +30,7 @@ const TrashIcon = () => (
 const TYPE_BADGES = {
     fixed: { label: 'Nazionale', className: 'bg-accent-blue/20 text-accent-blue' },
     variable: { label: 'Variabile', className: 'bg-accent-purple/20 text-accent-purple' },
-    custom: { label: 'Personalizzato', className: 'bg-accent-green/20 text-accent-green' },
+    custom: { label: 'Personalizzato', className: 'bg-accent-green/20 text-success' },
 }
 
 function formatDayOfWeek(dateStr) {
@@ -86,46 +86,46 @@ function AddHolidayModal({ isOpen, onClose, onSave, year }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-dark-800 border border-dark-700 rounded-xl p-6 w-full max-w-md shadow-2xl">
-                <h3 className="text-lg font-semibold text-dark-100 mb-4">Aggiungi Festivita'</h3>
+            <div className="relative bg-surface border border-solid rounded-xl p-6 w-full max-w-md shadow-lg">
+                <h3 className="text-lg font-semibold text-primary mb-4">Aggiungi Festivita'</h3>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm text-dark-300 mb-1">Nome</label>
+                        <label className="block text-sm text-secondary mb-1">Nome</label>
                         <input
                             type="text"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            className="w-full bg-dark-900 border border-dark-600 rounded-lg px-3 py-2 text-dark-100 focus:border-accent-blue focus:outline-none"
+                            className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-primary focus:border-focus focus:outline-none"
                             placeholder="Es. Santo Patrono"
                             autoFocus
                         />
                     </div>
                     <div>
-                        <label className="block text-sm text-dark-300 mb-1">Data</label>
+                        <label className="block text-sm text-secondary mb-1">Data</label>
                         <input
                             type="date"
                             value={dateValue}
                             onChange={(e) => setDateValue(e.target.value)}
                             min={`${year}-01-01`}
                             max={`${year}-12-31`}
-                            className="w-full bg-dark-900 border border-dark-600 rounded-lg px-3 py-2 text-dark-100 focus:border-accent-blue focus:outline-none"
+                            className="w-full bg-surface border border-solid rounded-lg px-3 py-2 text-primary focus:border-focus focus:outline-none"
                         />
                     </div>
                     {error && (
-                        <p className="text-red-400 text-sm">{error}</p>
+                        <p className="text-error text-sm">{error}</p>
                     )}
                     <div className="flex gap-3 justify-end pt-2">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 rounded-lg bg-dark-700 text-dark-300 hover:bg-dark-600 transition-colors"
+                            className="px-4 py-2 rounded-lg bg-surface text-secondary hover:bg-surface-hover transition-colors"
                         >
                             Annulla
                         </button>
                         <button
                             type="submit"
                             disabled={!name.trim() || !dateValue || saving}
-                            className="px-4 py-2 rounded-lg bg-gradient-primary text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                            className="px-4 py-2 rounded-lg bg-accent text-white hover:opacity-90 transition-opacity disabled:opacity-50"
                         >
                             {saving ? 'Salvataggio...' : 'Aggiungi'}
                         </button>
@@ -188,26 +188,26 @@ export default function HolidaysSection() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-xl font-semibold text-dark-100">Festivita'</h2>
-                    <p className="text-sm text-dark-400 mt-1">
+                    <h2 className="text-xl font-semibold text-primary">Festivita'</h2>
+                    <p className="text-sm text-tertiary mt-1">
                         {stats.active} festivita' attive su {stats.total} totali
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
                     {/* Year selector */}
-                    <div className="flex items-center gap-1 bg-dark-800 border border-dark-700 rounded-lg">
+                    <div className="flex items-center gap-1 bg-surface border border-solid rounded-lg">
                         <button
                             onClick={() => setYear(y => y - 1)}
-                            className="p-2 hover:bg-dark-700 rounded-l-lg transition-colors text-dark-300 hover:text-dark-100"
+                            className="p-2 hover:bg-surface rounded-l-lg transition-colors text-secondary hover:text-primary"
                         >
                             <ChevronLeftIcon />
                         </button>
-                        <span className="px-3 py-2 text-dark-100 font-semibold min-w-[60px] text-center">
+                        <span className="px-3 py-2 text-primary font-semibold min-w-[60px] text-center">
                             {year}
                         </span>
                         <button
                             onClick={() => setYear(y => y + 1)}
-                            className="p-2 hover:bg-dark-700 rounded-r-lg transition-colors text-dark-300 hover:text-dark-100"
+                            className="p-2 hover:bg-surface rounded-r-lg transition-colors text-secondary hover:text-primary"
                         >
                             <ChevronRightIcon />
                         </button>
@@ -215,7 +215,7 @@ export default function HolidaysSection() {
                     {/* Add button */}
                     <button
                         onClick={() => setModalOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-primary text-white hover:opacity-90 transition-opacity"
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white hover:opacity-90 transition-opacity"
                     >
                         <PlusIcon />
                         <span>Aggiungi</span>
@@ -226,21 +226,21 @@ export default function HolidaysSection() {
             {/* Holiday list */}
             <div className="glass-card overflow-hidden">
                 {loading ? (
-                    <div className="p-8 text-center text-dark-400">Caricamento...</div>
+                    <div className="p-8 text-center text-tertiary">Caricamento...</div>
                 ) : holidays.length === 0 ? (
-                    <div className="p-8 text-center text-dark-400">
+                    <div className="p-8 text-center text-tertiary">
                         Nessuna festivita' per il {year}
                     </div>
                 ) : (
                     <table className="w-full">
                         <thead>
-                            <tr className="border-b border-dark-700">
-                                <th className="text-left px-6 py-3 text-dark-400 text-sm font-medium">Data</th>
-                                <th className="text-left px-6 py-3 text-dark-400 text-sm font-medium">Giorno</th>
-                                <th className="text-left px-6 py-3 text-dark-400 text-sm font-medium">Nome</th>
-                                <th className="text-left px-6 py-3 text-dark-400 text-sm font-medium">Tipo</th>
-                                <th className="text-center px-6 py-3 text-dark-400 text-sm font-medium">Attiva</th>
-                                <th className="text-right px-6 py-3 text-dark-400 text-sm font-medium">Azioni</th>
+                            <tr className="border-b border-solid">
+                                <th className="text-left px-6 py-3 text-tertiary text-sm font-medium">Data</th>
+                                <th className="text-left px-6 py-3 text-tertiary text-sm font-medium">Giorno</th>
+                                <th className="text-left px-6 py-3 text-tertiary text-sm font-medium">Nome</th>
+                                <th className="text-left px-6 py-3 text-tertiary text-sm font-medium">Tipo</th>
+                                <th className="text-center px-6 py-3 text-tertiary text-sm font-medium">Attiva</th>
+                                <th className="text-right px-6 py-3 text-tertiary text-sm font-medium">Azioni</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -252,22 +252,22 @@ export default function HolidaysSection() {
                                 return (
                                     <tr
                                         key={holiday.id}
-                                        className={`border-b border-dark-700/50 hover:bg-dark-700/30 transition-colors ${
+                                        className={`border-b border-solid/50 hover:bg-surface/30 transition-colors ${
                                             !holiday.is_active ? 'opacity-50' : ''
                                         }`}
                                     >
-                                        <td className="px-6 py-3 text-dark-200 text-sm">
+                                        <td className="px-6 py-3 text-secondary text-sm">
                                             {formatDateDisplay(holiday.holiday_date)}
                                         </td>
                                         <td className="px-6 py-3 text-sm">
-                                            <span className={`capitalize ${isWeekend ? 'text-dark-500' : 'text-dark-300'}`}>
+                                            <span className={`capitalize ${isWeekend ? 'text-tertiary' : 'text-secondary'}`}>
                                                 {dayOfWeek}
                                             </span>
                                             {isWeekend && (
-                                                <span className="ml-2 text-xs text-dark-500">(weekend)</span>
+                                                <span className="ml-2 text-xs text-tertiary">(weekend)</span>
                                             )}
                                         </td>
-                                        <td className="px-6 py-3 text-dark-100 text-sm font-medium">
+                                        <td className="px-6 py-3 text-primary text-sm font-medium">
                                             {holiday.name}
                                         </td>
                                         <td className="px-6 py-3">
@@ -279,7 +279,7 @@ export default function HolidaysSection() {
                                             <button
                                                 onClick={() => handleToggle(holiday)}
                                                 className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                                                    holiday.is_active ? 'bg-accent-green' : 'bg-dark-600'
+                                                    holiday.is_active ? 'bg-accent-green' : 'bg-surface-hover'
                                                 }`}
                                             >
                                                 <span
@@ -294,7 +294,7 @@ export default function HolidaysSection() {
                                             {holiday.holiday_type === 'custom' && (
                                                 <button
                                                     onClick={() => handleDelete(holiday.id)}
-                                                    className="p-1.5 rounded-lg hover:bg-red-500/20 text-dark-400 hover:text-red-400 transition-colors"
+                                                    className="p-1.5 rounded-lg hover:bg-red-500/20 text-tertiary hover:text-error transition-colors"
                                                     title="Elimina"
                                                 >
                                                     <TrashIcon />

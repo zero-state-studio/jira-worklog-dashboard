@@ -1,19 +1,49 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getUsers, getMultiJiraOverview } from '../api/client'
-import { MultiJiraOverview, MultiJiraCharts, ComplementaryComparisons } from '../components/MultiJiraStats'
+import { getUsers } from '../api/client'
+import { KpiBar, DataTable, Badge, Input, DateRangePicker } from '../components/common'
 import { formatHours } from '../hooks/useData'
-import { StatCard, ProgressBar, MultiProgressBar, CardSkeleton, ErrorState, EmptyState } from '../components/Cards'
+import { Users as UsersIcon, Search } from 'lucide-react'
 
-export default function UsersListView({ dateRange, selectedInstance }) {
+export default function UsersListView({ dateRange, selectedInstance, onDateRangeChange }) {
     const navigate = useNavigate()
     const [users, setUsers] = useState([])
-    const [overviewData, setOverviewData] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
-    const [sortField, setSortField] = useState('total_hours')
-    const [sortAsc, setSortAsc] = useState(false)
-    const [filterTeam, setFilterTeam] = useState('')
+    const [searchQuery, setSearchQuery] = useState('')
+    const [selectedPeriod, setSelectedPeriod] = useState('this-month')
+
+    // Period change handler
+    const handlePeriodChange = (period) => {
+        setSelectedPeriod(period)
+        const now = new Date()
+        let startDate
+        let endDate = now
+
+        switch (period) {
+            case 'this-week':
+                startDate = new Date(now)
+                startDate.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1)) // Monday
+                break
+            case 'this-month':
+                startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+                break
+            case 'last-month':
+                startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+                endDate = new Date(now.getFullYear(), now.getMonth(), 0) // Last day of previous month
+                break
+            case 'this-quarter':
+                const quarter = Math.floor(now.getMonth() / 3)
+                startDate = new Date(now.getFullYear(), quarter * 3, 1)
+                break
+            default:
+                startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+        }
+
+        if (onDateRangeChange) {
+            onDateRangeChange({ startDate, endDate })
+        }
+    }
 
     const fetchData = useCallback(async () => {
         try {
@@ -21,22 +51,6 @@ export default function UsersListView({ dateRange, selectedInstance }) {
             setError(null)
             const result = await getUsers(dateRange.startDate, dateRange.endDate, selectedInstance)
             setUsers(result)
-
-            // Fetch overview if no instance selected
-            if (!selectedInstance) {
-                try {
-                    const overview = await getMultiJiraOverview(dateRange.startDate, dateRange.endDate)
-                    if (overview.instances.length > 1) {
-                        setOverviewData(overview)
-                    } else {
-                        setOverviewData(null)
-                    }
-                } catch {
-                    setOverviewData(null)
-                }
-            } else {
-                setOverviewData(null)
-            }
         } catch (err) {
             setError(err.message)
         } finally {
@@ -50,319 +64,318 @@ export default function UsersListView({ dateRange, selectedInstance }) {
 
     if (loading) {
         return (
-            <div className="space-y-6 animate-fade-in">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <CardSkeleton count={4} />
-                </div>
+            <div className="space-y-6">
+                <div className="h-20 bg-surface-secondary rounded-lg animate-pulse" />
+                <div className="h-96 bg-surface-secondary rounded-lg animate-pulse" />
             </div>
         )
     }
 
     if (error) {
-        return <ErrorState message={error} onRetry={fetchData} />
-    }
-
-    if (!users || users.length === 0) {
         return (
-            <div className="space-y-6 animate-fade-in">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold text-dark-100">Utenti</h1>
-                        <p className="text-dark-400">Panoramica di tutti gli utenti configurati</p>
-                    </div>
-                </div>
-                <div className="glass-card p-8">
-                    <EmptyState
-                        title="Nessun utente configurato"
-                        message="Aggiungi utenti nelle Impostazioni per visualizzare le statistiche."
-                        icon={
-                            <svg className="w-8 h-8 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                            </svg>
-                        }
-                        actionLabel="Vai alle Impostazioni"
-                        onAction={() => navigate('/app/settings')}
-                    />
+            <div className="flex items-center justify-center h-96">
+                <div className="text-center">
+                    <p className="text-error font-semibold mb-2">Error loading users</p>
+                    <p className="text-secondary mb-4">{error}</p>
+                    <button onClick={fetchData} className="btn-primary">
+                        Retry
+                    </button>
                 </div>
             </div>
         )
     }
 
-    // Teams for filter
-    const teams = [...new Set(users.map(u => u.team_name).filter(Boolean))].sort()
+    if (!users || users.length === 0) {
+        return (
+            <div className="space-y-6">
+                {/* Breadcrumb */}
+                <div className="text-xs text-tertiary">
+                    App / Users
+                </div>
 
-    // Filter and sort
-    const filteredUsers = users.filter(u => !filterTeam || u.team_name === filterTeam)
-    const sortedUsers = [...filteredUsers].sort((a, b) => {
-        let valA = a[sortField]
-        let valB = b[sortField]
-        if (typeof valA === 'string') {
-            valA = valA.toLowerCase()
-            valB = valB.toLowerCase()
-        }
-        if (sortAsc) return valA > valB ? 1 : -1
-        return valA < valB ? 1 : -1
-    })
+                {/* Header */}
+                <div>
+                    <h1 className="text-xl font-semibold text-primary mb-1">Users</h1>
+                </div>
 
-    // Aggregate stats
+                <div className="border border-solid rounded-lg bg-surface p-12 text-center">
+                    <UsersIcon className="w-12 h-12 mx-auto text-tertiary mb-3" />
+                    <p className="text-sm text-secondary">No users configured</p>
+                    <button
+                        onClick={() => navigate('/app/settings')}
+                        className="mt-4 px-4 py-2 bg-accent text-inverse rounded-md text-sm font-medium hover:bg-accent-hover transition-colors"
+                    >
+                        Go to Settings
+                    </button>
+                </div>
+            </div>
+        )
+    }
+
+    // Calculate KPIs
     const totalHours = users.reduce((sum, u) => sum + u.total_hours, 0)
     const totalExpected = users.reduce((sum, u) => sum + u.expected_hours, 0)
-    const avgCompletion = totalExpected > 0 ? (totalHours / totalExpected) * 100 : 0
     const activeUsers = users.filter(u => u.total_hours > 0).length
+    const avgHoursPerUser = users.length > 0 ? totalHours / users.length : 0
 
-    const handleSort = (field) => {
-        if (sortField === field) {
-            setSortAsc(!sortAsc)
-        } else {
-            setSortField(field)
-            setSortAsc(false)
+    const kpiItems = [
+        {
+            label: 'Total Users',
+            value: users.length,
+        },
+        {
+            label: 'Total Hours',
+            value: formatHours(totalHours),
+        },
+        {
+            label: 'Avg Hours/User',
+            value: formatHours(avgHoursPerUser),
+        },
+        {
+            label: 'Active Users',
+            value: activeUsers,
+        },
+    ]
+
+    // Helper function to generate initials from name or email
+    const getInitials = (fullName, email) => {
+        if (fullName) {
+            // Generate from name (e.g., "John Doe" -> "JD")
+            const initials = fullName
+                .split(' ')
+                .map(n => n[0])
+                .join('')
+                .toUpperCase()
+                .slice(0, 2)
+            if (initials) return initials
         }
+        if (email) {
+            // Generate from email (e.g., "gianluca.ricaldone@..." -> "GR")
+            const emailPart = email.split('@')[0]
+            const parts = emailPart.split(/[._-]/) // Split by dots, underscores, or hyphens
+            if (parts.length >= 2) {
+                return (parts[0][0] + parts[1][0]).toUpperCase()
+            }
+            // Fallback: first 2 chars of email
+            return emailPart.slice(0, 2).toUpperCase()
+        }
+        return 'U'
     }
 
-    const SortIcon = ({ field }) => {
-        if (sortField !== field) return <span className="text-dark-600 ml-1">&#8597;</span>
-        return <span className="text-accent-blue ml-1">{sortAsc ? '&#8593;' : '&#8595;'}</span>
-    }
+    // Prepare table data
+    const tableColumns = [
+        {
+            key: 'user',
+            label: 'User',
+            type: 'text',
+            sortable: true,
+            render: (_, row) => {
+                const initials = getInitials(row.full_name, row.email)
+
+                return (
+                    <button
+                        onClick={() => navigate(`/app/users/${row.id}`)}
+                        className="flex items-center gap-3 text-left w-full hover:opacity-80 transition-opacity"
+                    >
+                        <div className="w-7 h-7 rounded-full bg-accent-subtle flex items-center justify-center flex-shrink-0">
+                            <span className="text-accent-text font-medium text-xs">{initials}</span>
+                        </div>
+                        <div>
+                            <p className="text-sm text-primary font-medium">{row.full_name}</p>
+                            <p className="text-xs text-tertiary">{row.email}</p>
+                        </div>
+                    </button>
+                )
+            },
+        },
+        {
+            key: 'team_name',
+            label: 'Team',
+            type: 'text',
+            sortable: true,
+            width: '150px',
+            render: (value) =>
+                value ? (
+                    <Badge variant="default">{value}</Badge>
+                ) : (
+                    <span className="text-tertiary text-xs">-</span>
+                ),
+        },
+        {
+            key: 'is_active',
+            label: 'Status',
+            type: 'text',
+            sortable: true,
+            width: '100px',
+            render: (value) =>
+                value === false ? (
+                    <Badge variant="default" className="bg-surface-secondary text-tertiary">Inactive</Badge>
+                ) : (
+                    <Badge variant="success">Active</Badge>
+                ),
+        },
+        {
+            key: 'total_hours',
+            label: 'Hours',
+            type: 'text',
+            sortable: true,
+            width: '150px',
+            render: (value, row) => {
+                const percentage = row.expected_hours > 0 ? (value / row.expected_hours) * 100 : 0
+                return (
+                    <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-primary">
+                            {formatHours(value)}
+                        </span>
+                        {row.expected_hours > 0 && (
+                            <>
+                                <span className="text-tertiary text-xs">/</span>
+                                <span className="font-mono text-xs text-tertiary">
+                                    {formatHours(row.expected_hours)}
+                                </span>
+                                {/* Mini progress bar */}
+                                <div className="w-20 h-1 bg-surface-secondary rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-accent rounded-full transition-all"
+                                        style={{ width: `${Math.min(percentage, 100)}%` }}
+                                    />
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )
+            },
+        },
+        {
+            key: 'worklog_count',
+            label: 'Worklogs',
+            type: 'number',
+            sortable: true,
+            width: '100px',
+            render: (value) => <span className="font-mono text-xs">{value}</span>,
+        },
+        {
+            key: 'completion_percentage',
+            label: 'Completion',
+            type: 'text',
+            sortable: true,
+            width: '120px',
+            render: (value) => {
+                const color =
+                    value >= 90
+                        ? 'text-success'
+                        : value >= 70
+                        ? 'text-accent'
+                        : value > 0
+                        ? 'text-warning'
+                        : 'text-tertiary'
+                return <span className={`font-mono text-xs font-medium ${color}`}>{Math.round(value)}%</span>
+            },
+        },
+    ]
+
+    // Filter users by search query
+    const filteredUsers = users.filter((user) => {
+        const query = searchQuery.toLowerCase()
+        return (
+            user.full_name?.toLowerCase().includes(query) ||
+            user.email?.toLowerCase().includes(query) ||
+            user.team_name?.toLowerCase().includes(query)
+        )
+    })
+
+    const tableData = filteredUsers.map((user) => ({
+        id: user.id,
+        user: user.full_name,
+        full_name: user.full_name,
+        email: user.email,
+        team_name: user.team_name,
+        is_active: user.is_active !== false, // Default to true if undefined
+        total_hours: user.total_hours,
+        expected_hours: user.expected_hours,
+        worklog_count: user.worklog_count || 0,
+        completion_percentage: user.completion_percentage || 0,
+    }))
 
     return (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-6 max-w-[1920px]">
+            {/* Breadcrumb */}
+            <div className="text-xs text-tertiary">
+                App / Users
+            </div>
+
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-dark-100">Utenti</h1>
-                    <p className="text-dark-400">Panoramica di tutti gli utenti configurati</p>
+                    <h1 className="text-xl font-semibold text-primary mb-1">Users</h1>
                 </div>
             </div>
 
-            {/* Multi-JIRA Overview & Charts */}
-            {overviewData && (
-                <div className="space-y-8 mb-8">
-                    <MultiJiraOverview overview={overviewData} />
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <MultiJiraCharts overview={overviewData} users={users} />
-                    </div>
-                </div>
-            )}
-
-            {/* Stats Grid - Show only if NOT in Multi-Jira mode */}
-            {!overviewData && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <StatCard
-                        label="Utenti Totali"
-                        value={users.length}
-                        subtitle={`${activeUsers} attivi nel periodo`}
-                        color="primary"
-                        icon={
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                            </svg>
-                        }
-                    />
-                    <StatCard
-                        label="Ore Totali"
-                        value={formatHours(totalHours)}
-                        subtitle={`su ${formatHours(totalExpected)} previste`}
-                        color="blue"
-                        icon={
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        }
-                    />
-                    <StatCard
-                        label="Completamento Medio"
-                        value={`${Math.round(avgCompletion)}%`}
-                        subtitle={avgCompletion >= 90 ? 'Ottimo!' : avgCompletion >= 70 ? 'Buono' : 'In corso'}
-                        color={avgCompletion >= 90 ? 'green' : avgCompletion >= 70 ? 'blue' : 'orange'}
-                        icon={
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        }
-                    />
-                    <StatCard
-                        label="Team"
-                        value={teams.length}
-                        color="purple"
-                        icon={
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                        }
-                    />
-                </div>
-            )}
-
-            {/* Filter */}
-            {teams.length > 1 && (
-                <div className="flex items-center gap-3">
-                    <span className="text-sm text-dark-400">Filtra per team:</span>
-                    <div className="flex gap-2 flex-wrap">
+            {/* Period Selector */}
+            <div className="flex items-center gap-2">
+                {['this-week', 'this-month', 'last-month', 'this-quarter'].map((period) => {
+                    const labels = {
+                        'this-week': 'This Week',
+                        'this-month': 'This Month',
+                        'last-month': 'Last Month',
+                        'this-quarter': 'This Quarter',
+                    }
+                    const isActive = selectedPeriod === period
+                    return (
                         <button
-                            onClick={() => setFilterTeam('')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${!filterTeam
-                                ? 'bg-gradient-primary text-white shadow-glow'
-                                : 'text-dark-300 bg-dark-700 hover:bg-dark-600'
-                                }`}
+                            key={period}
+                            onClick={() => handlePeriodChange(period)}
+                            className={`h-[28px] px-3 text-xs font-medium rounded-md transition-colors ${
+                                isActive
+                                    ? 'bg-accent-subtle text-accent-text'
+                                    : 'bg-transparent text-secondary hover:bg-surface-hover'
+                            }`}
                         >
-                            Tutti
+                            {labels[period]}
                         </button>
-                        {teams.map(team => (
-                            <button
-                                key={team}
-                                onClick={() => setFilterTeam(team)}
-                                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${filterTeam === team
-                                    ? 'bg-gradient-primary text-white shadow-glow'
-                                    : 'text-dark-300 bg-dark-700 hover:bg-dark-600'
-                                    }`}
-                            >
-                                {team}
-                            </button>
-                        ))}
-                    </div>
+                    )
+                })}
+
+                {/* Custom Date Picker */}
+                <DateRangePicker
+                    startDate={dateRange.startDate}
+                    endDate={dateRange.endDate}
+                    isActive={selectedPeriod === null}
+                    onChange={(range) => {
+                        setSelectedPeriod(null) // Deselect presets
+                        if (onDateRangeChange) {
+                            onDateRangeChange(range)
+                        }
+                    }}
+                />
+            </div>
+
+            {/* KPI Bar */}
+            <KpiBar items={kpiItems} />
+
+            {/* Search Bar */}
+            <div className="max-w-md">
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-tertiary" size={16} />
+                    <input
+                        type="text"
+                        placeholder="Search by name, email, or team..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full h-9 pl-10 pr-3 bg-surface border border-solid rounded-md text-sm text-primary placeholder:text-tertiary focus:outline-none focus:ring-2 focus:ring-accent transition-shadow"
+                    />
                 </div>
-            )}
+            </div>
 
             {/* Users Table */}
-            <div className="glass-card overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-dark-600">
-                                <th
-                                    className="text-left py-3 px-4 text-dark-400 font-medium cursor-pointer hover:text-dark-200 transition-colors"
-                                    onClick={() => handleSort('full_name')}
-                                >
-                                    Utente <SortIcon field="full_name" />
-                                </th>
-                                <th
-                                    className="text-left py-3 px-4 text-dark-400 font-medium cursor-pointer hover:text-dark-200 transition-colors"
-                                    onClick={() => handleSort('team_name')}
-                                >
-                                    Team <SortIcon field="team_name" />
-                                </th>
-                                <th
-                                    className="text-right py-3 px-4 text-dark-400 font-medium cursor-pointer hover:text-dark-200 transition-colors"
-                                    onClick={() => handleSort('total_hours')}
-                                >
-                                    Ore <SortIcon field="total_hours" />
-                                </th>
-                                <th className="text-center py-3 px-4 text-dark-400 font-medium w-48">
-                                    Progresso
-                                </th>
-                                <th
-                                    className="text-right py-3 px-4 text-dark-400 font-medium cursor-pointer hover:text-dark-200 transition-colors"
-                                    onClick={() => handleSort('completion_percentage')}
-                                >
-                                    Completamento <SortIcon field="completion_percentage" />
-                                </th>
-                                <th
-                                    className="text-right py-3 px-4 text-dark-400 font-medium cursor-pointer hover:text-dark-200 transition-colors"
-                                    onClick={() => handleSort('initiative_count')}
-                                >
-                                    Iniziative <SortIcon field="initiative_count" />
-                                </th>
-                                <th
-                                    className="text-right py-3 px-4 text-dark-400 font-medium cursor-pointer hover:text-dark-200 transition-colors"
-                                    onClick={() => handleSort('worklog_count')}
-                                >
-                                    Worklog <SortIcon field="worklog_count" />
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {sortedUsers.map((user) => {
-                                const initials = user.full_name
-                                    .split(' ')
-                                    .map(n => n[0])
-                                    .join('')
-                                    .toUpperCase()
-                                    .slice(0, 2)
-
-                                const completionColor = user.completion_percentage >= 90
-                                    ? 'text-accent-green'
-                                    : user.completion_percentage >= 70
-                                        ? 'text-accent-blue'
-                                        : user.completion_percentage > 0
-                                            ? 'text-accent-orange'
-                                            : 'text-dark-500'
-
-                                return (
-                                    <tr
-                                        key={user.email}
-                                        className="border-b border-dark-700/50 hover:bg-dark-700/30 transition-colors cursor-pointer"
-                                        onClick={() => navigate(`/app/users/${encodeURIComponent(user.email)}`)}
-                                    >
-                                        <td className="py-3 px-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-gradient-primary flex items-center justify-center flex-shrink-0">
-                                                    <span className="text-white font-medium text-xs">{initials}</span>
-                                                </div>
-                                                <div>
-                                                    <p className="text-dark-100 font-medium">{user.full_name}</p>
-                                                    <p className="text-dark-500 text-xs">{user.email}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="py-3 px-4">
-                                            {user.team_name ? (
-                                                <span className="badge-blue text-xs">{user.team_name}</span>
-                                            ) : (
-                                                <span className="text-dark-500 text-xs">-</span>
-                                            )}
-                                        </td>
-                                        <td className="text-right py-3 px-4">
-                                            <span className="text-dark-100 font-semibold">{formatHours(user.total_hours)}</span>
-                                            <span className="text-dark-500 text-xs ml-1">/ {formatHours(user.expected_hours)}</span>
-                                        </td>
-                                        <td className="py-3 px-4">
-                                            {overviewData && user.hours_by_instance ? (
-                                                <MultiProgressBar
-                                                    segments={Object.entries(user.hours_by_instance).map(([inst, hours], i) => {
-                                                        const instColor = overviewData.instances.find(o => o.instance_name === inst)
-                                                            ? ['#667eea', '#3fb950', '#a371f7', '#58a6ff', '#d29922', '#f85149'][
-                                                            overviewData.instances.findIndex(o => o.instance_name === inst) % 6
-                                                            ]
-                                                            : '#888'
-
-                                                        return {
-                                                            value: hours,
-                                                            color: instColor,
-                                                            label: inst
-                                                        }
-                                                    })}
-                                                    max={user.expected_hours}
-                                                    size="sm"
-                                                />
-                                            ) : (
-                                                <ProgressBar value={user.total_hours} max={user.expected_hours} size="sm" />
-                                            )}
-                                        </td>
-                                        <td className="text-right py-3 px-4">
-                                            <span className={`font-semibold ${completionColor}`}>
-                                                {Math.round(user.completion_percentage)}%
-                                            </span>
-                                        </td>
-                                        <td className="text-right py-3 px-4 text-dark-200">
-                                            {user.initiative_count}
-                                        </td>
-                                        <td className="text-right py-3 px-4 text-dark-200">
-                                            {user.worklog_count}
-                                        </td>
-                                    </tr>
-                                )
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* Complementary Comparisons (now at the bottom) */}
-            {overviewData && (
-                <div className="mt-8 pt-8 border-t border-dark-700">
-                    <ComplementaryComparisons overview={overviewData} />
-                </div>
-            )}
+            <DataTable
+                columns={tableColumns}
+                data={tableData}
+                sortable
+                toolbar={{
+                    title: `${filteredUsers.length} ${filteredUsers.length === 1 ? 'User' : 'Users'}${searchQuery ? ` (filtered from ${users.length})` : ''}`,
+                }}
+            />
         </div>
     )
 }

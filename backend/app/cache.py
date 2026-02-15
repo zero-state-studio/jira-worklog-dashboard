@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 import asyncio
 
-from .models import Worklog, Epic, Issue
+from .models import Worklog, Epic, Issue, UserRole
 
 
 class WorklogStorage:
@@ -128,6 +128,7 @@ class WorklogStorage:
                     CREATE TABLE IF NOT EXISTS teams (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         name TEXT NOT NULL UNIQUE,
+                        owner_id INTEGER REFERENCES oauth_users(id) ON DELETE SET NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -251,6 +252,7 @@ class WorklogStorage:
                 await db.execute("""
                     CREATE TABLE IF NOT EXISTS complementary_group_members (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
                         group_id INTEGER NOT NULL REFERENCES complementary_groups(id) ON DELETE CASCADE,
                         instance_id INTEGER NOT NULL REFERENCES jira_instances(id) ON DELETE CASCADE,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -495,6 +497,16 @@ class WorklogStorage:
                 except Exception:
                     pass  # Column already exists
 
+                # Add issue_type to worklogs table (migration 012)
+                try:
+                    await db.execute("ALTER TABLE worklogs ADD COLUMN issue_type TEXT")
+                except Exception:
+                    pass  # Column already exists
+                try:
+                    await db.execute("CREATE INDEX IF NOT EXISTS idx_worklogs_issue_type ON worklogs(company_id, issue_type)")
+                except Exception:
+                    pass  # Index already exists
+
                 # Add default_project_key to jira_instances (migration)
                 try:
                     await db.execute("ALTER TABLE jira_instances ADD COLUMN default_project_key TEXT")
@@ -599,7 +611,8 @@ class WorklogStorage:
                         first_name TEXT,
                         last_name TEXT,
                         picture_url TEXT,
-                        role TEXT NOT NULL DEFAULT 'USER',
+                        role TEXT NOT NULL DEFAULT 'DEV',
+                        role_level INTEGER NOT NULL DEFAULT 1,
                         is_active INTEGER DEFAULT 1,
                         last_login_at TIMESTAMP,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -908,6 +921,70 @@ class WorklogStorage:
                     ON complementary_groups(company_id)
                 """)
 
+                # ========== Role System Migration ==========
+                # Add role_level to oauth_users for hierarchical role queries
+                try:
+                    await db.execute("""
+                        ALTER TABLE oauth_users
+                        ADD COLUMN role_level INTEGER NOT NULL DEFAULT 1
+                    """)
+                    # Backfill role_level from existing role values
+                    await db.execute("UPDATE oauth_users SET role_level = 4 WHERE role = 'ADMIN'")
+                    await db.execute("UPDATE oauth_users SET role_level = 3 WHERE role = 'MANAGER'")
+                    await db.execute("UPDATE oauth_users SET role_level = 2 WHERE role = 'PM'")
+                    await db.execute("UPDATE oauth_users SET role_level = 1 WHERE role IN ('USER', 'DEV')")
+                    # Migrate old role names: USER -> DEV
+                    await db.execute("UPDATE oauth_users SET role = 'DEV' WHERE role = 'USER'")
+                    await db.commit()
+                except Exception:
+                    pass  # Column already exists
+
+                # Add owner_id to teams for team ownership
+                try:
+                    await db.execute("""
+                        ALTER TABLE teams
+                        ADD COLUMN owner_id INTEGER REFERENCES oauth_users(id) ON DELETE SET NULL
+                    """)
+                except Exception:
+                    pass  # Column already exists
+
+                # Indexes for role system
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_oauth_users_role_level
+                    ON oauth_users(company_id, role_level)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_teams_owner_id
+                    ON teams(company_id, owner_id)
+                """)
+
+                # Add role and role_level to users table (for team members)
+                try:
+                    await db.execute("""
+                        ALTER TABLE users
+                        ADD COLUMN role TEXT NOT NULL DEFAULT 'DEV'
+                    """)
+                    await db.execute("""
+                        ALTER TABLE users
+                        ADD COLUMN role_level INTEGER NOT NULL DEFAULT 1
+                    """)
+                    # Backfill role_level from existing role values if any
+                    await db.execute("UPDATE users SET role_level = 4 WHERE role = 'ADMIN'")
+                    await db.execute("UPDATE users SET role_level = 3 WHERE role = 'MANAGER'")
+                    await db.execute("UPDATE users SET role_level = 2 WHERE role = 'PM'")
+                    await db.execute("UPDATE users SET role_level = 1 WHERE role IN ('USER', 'DEV')")
+                    # Migrate old role names: USER -> DEV
+                    await db.execute("UPDATE users SET role = 'DEV' WHERE role = 'USER'")
+                    await db.commit()
+                except Exception:
+                    pass  # Columns already exist
+
+                # Index for role-based queries on users
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_users_role_level
+                    ON users(company_id, role_level)
+                """)
+
                 # Migrate worklog IDs to composite format (id__jira_instance)
                 # This allows multiple JIRA instances to have worklogs with the same original ID
                 try:
@@ -931,6 +1008,57 @@ class WorklogStorage:
                 except Exception as e:
                     print(f"⚠️  Worklog ID migration skipped: {e}")
                     pass
+
+                # ========== Generic Issues Table (Migration 013) ==========
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS generic_issues (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id INTEGER NOT NULL,
+                        issue_code TEXT NOT NULL,
+                        issue_type TEXT NOT NULL,
+                        team_id INTEGER,
+                        description TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(company_id, issue_code, issue_type, team_id),
+                        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+                        FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+                    )
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_generic_issues_company
+                    ON generic_issues(company_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_generic_issues_lookup
+                    ON generic_issues(company_id, issue_code, issue_type)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_generic_issues_team
+                    ON generic_issues(company_id, team_id)
+                """)
+
+                # Cache dei tipi di issue JIRA (migration 014)
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS jira_issue_types (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id INTEGER NOT NULL,
+                        name TEXT NOT NULL,
+                        jira_instance TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(company_id, name, jira_instance),
+                        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+                    )
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_jira_issue_types_company
+                    ON jira_issue_types(company_id)
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_jira_issue_types_name
+                    ON jira_issue_types(company_id, name)
+                """)
 
                 await db.commit()
 
@@ -1173,7 +1301,8 @@ class WorklogStorage:
                 parent_name=wl.parent_name,
                 parent_type=wl.parent_type,
                 epic_key=wl.epic_key,
-                epic_name=wl.epic_name
+                epic_name=wl.epic_name,
+                issue_type=wl.issue_type
             )
             worklogs_with_unique_ids.append(wl_copy)
 
@@ -1216,6 +1345,7 @@ class WorklogStorage:
                         wl.parent_type,
                         wl.epic_key,
                         wl.epic_name,
+                        wl.issue_type,
                         wl.model_dump_json()
                     )
                     for wl in new_worklogs
@@ -1225,8 +1355,8 @@ class WorklogStorage:
                     INSERT INTO worklogs
                     (id, company_id, issue_key, issue_summary, author_email, author_display_name,
                      time_spent_seconds, started, jira_instance, parent_key, parent_name,
-                     parent_type, epic_key, epic_name, data)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     parent_type, epic_key, epic_name, issue_type, data)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, insert_data)
 
                 inserted = len(new_worklogs)
@@ -1248,6 +1378,7 @@ class WorklogStorage:
                         wl.parent_type,
                         wl.epic_key,
                         wl.epic_name,
+                        wl.issue_type,
                         wl.model_dump_json(),
                         wl.id
                     )
@@ -1269,6 +1400,7 @@ class WorklogStorage:
                         parent_type = ?,
                         epic_key = ?,
                         epic_name = ?,
+                        issue_type = ?,
                         data = ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
@@ -1530,12 +1662,13 @@ class WorklogStorage:
     
     # ========== Team Operations ==========
 
-    async def create_team(self, name: str, company_id: int) -> int:
+    async def create_team(self, name: str, company_id: int, owner_id: Optional[int] = None) -> int:
         """Create a new team for a specific company.
 
         Args:
             name: Team name
             company_id: Company ID (REQUIRED for multi-tenant isolation)
+            owner_id: Optional OAuth user ID to set as team owner
 
         Returns:
             Created team ID
@@ -1547,8 +1680,8 @@ class WorklogStorage:
 
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "INSERT INTO teams (name, company_id) VALUES (?, ?)",
-                (name, company_id)
+                "INSERT INTO teams (name, company_id, owner_id) VALUES (?, ?, ?)",
+                (name, company_id, owner_id)
             )
             await db.commit()
             return cursor.lastrowid
@@ -1570,7 +1703,7 @@ class WorklogStorage:
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT id, name, created_at, updated_at FROM teams WHERE id = ? AND company_id = ?",
+                "SELECT id, name, owner_id, created_at, updated_at FROM teams WHERE id = ? AND company_id = ?",
                 (team_id, company_id)
             ) as cursor:
                 row = await cursor.fetchone()
@@ -1578,8 +1711,9 @@ class WorklogStorage:
                     return {
                         "id": row[0],
                         "name": row[1],
-                        "created_at": row[2],
-                        "updated_at": row[3]
+                        "owner_id": row[2],
+                        "created_at": row[3],
+                        "updated_at": row[4]
                     }
         return None
 
@@ -1600,7 +1734,7 @@ class WorklogStorage:
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT id, name, created_at, updated_at FROM teams WHERE name = ? AND company_id = ?",
+                "SELECT id, name, owner_id, created_at, updated_at FROM teams WHERE name = ? AND company_id = ?",
                 (name, company_id)
             ) as cursor:
                 row = await cursor.fetchone()
@@ -1608,13 +1742,14 @@ class WorklogStorage:
                     return {
                         "id": row[0],
                         "name": row[1],
-                        "created_at": row[2],
-                        "updated_at": row[3]
+                        "owner_id": row[2],
+                        "created_at": row[3],
+                        "updated_at": row[4]
                     }
         return None
 
     async def get_all_teams(self, company_id: int) -> list[dict]:
-        """Get all teams with member counts for a specific company.
+        """Get all teams with member counts and owner info for a specific company.
 
         Args:
             company_id: Company ID to filter teams by (REQUIRED for multi-tenant isolation)
@@ -1631,21 +1766,28 @@ class WorklogStorage:
         teams = []
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT t.id, t.name, t.created_at, t.updated_at,
-                       COUNT(u.id) as member_count
+                SELECT t.id, t.name, t.owner_id, t.created_at, t.updated_at,
+                       COUNT(u.id) as member_count,
+                       o.email as owner_email, o.first_name as owner_first_name,
+                       o.last_name as owner_last_name
                 FROM teams t
-                LEFT JOIN users u ON u.team_id = t.id AND u.company_id = ?
+                LEFT JOIN users u ON u.team_id = t.id AND u.company_id = ? AND u.is_active = 1
+                LEFT JOIN oauth_users o ON o.id = t.owner_id AND o.company_id = ?
                 WHERE t.company_id = ?
                 GROUP BY t.id
                 ORDER BY t.name
-            """, (company_id, company_id)) as cursor:
+            """, (company_id, company_id, company_id)) as cursor:
                 async for row in cursor:
                     teams.append({
                         "id": row[0],
                         "name": row[1],
-                        "created_at": row[2],
-                        "updated_at": row[3],
-                        "member_count": row[4]
+                        "owner_id": row[2],
+                        "created_at": row[3],
+                        "updated_at": row[4],
+                        "member_count": row[5],
+                        "owner_email": row[6],
+                        "owner_first_name": row[7],
+                        "owner_last_name": row[8]
                     })
         return teams
 
@@ -1695,6 +1837,68 @@ class WorklogStorage:
             )
             await db.commit()
             return cursor.rowcount > 0
+
+    async def update_team_owner(self, team_id: int, owner_id: Optional[int], company_id: int) -> bool:
+        """Update the owner of a team.
+
+        Args:
+            team_id: Team ID to update
+            owner_id: OAuth user ID to set as owner (None to clear)
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            True if updated, False if team not found or doesn't belong to company
+        """
+        await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "UPDATE teams SET owner_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?",
+                (owner_id, team_id, company_id)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def get_team_with_owner(self, team_id: int, company_id: int) -> Optional[dict]:
+        """Get a team by ID with owner details.
+
+        Args:
+            team_id: Team ID to retrieve
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            Team dict with owner info if found, None otherwise
+        """
+        await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT t.id, t.name, t.owner_id, t.created_at, t.updated_at,
+                       o.email as owner_email, o.first_name as owner_first_name,
+                       o.last_name as owner_last_name
+                FROM teams t
+                LEFT JOIN oauth_users o ON o.id = t.owner_id AND o.company_id = ?
+                WHERE t.id = ? AND t.company_id = ?
+            """, (company_id, team_id, company_id)) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return {
+                        "id": row[0],
+                        "name": row[1],
+                        "owner_id": row[2],
+                        "created_at": row[3],
+                        "updated_at": row[4],
+                        "owner_email": row[5],
+                        "owner_first_name": row[6],
+                        "owner_last_name": row[7]
+                    }
+        return None
 
     # ========== User Operations ==========
 
@@ -1749,10 +1953,10 @@ class WorklogStorage:
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT u.id, u.email, u.first_name, u.last_name, u.team_id,
-                       u.created_at, u.updated_at, t.name as team_name
+                       u.created_at, u.updated_at, t.name as team_name, u.is_active
                 FROM users u
                 LEFT JOIN teams t ON t.id = u.team_id AND t.company_id = ?
-                WHERE u.id = ? AND u.company_id = ?
+                WHERE u.id = ? AND u.company_id = ? AND u.is_active = 1
             """, (company_id, user_id, company_id)) as cursor:
                 row = await cursor.fetchone()
                 if not row:
@@ -1767,6 +1971,7 @@ class WorklogStorage:
                     "created_at": row[5],
                     "updated_at": row[6],
                     "team_name": row[7],
+                    "is_active": bool(row[8]),
                     "jira_accounts": []
                 }
 
@@ -1800,7 +2005,7 @@ class WorklogStorage:
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND company_id = ?",
+                "SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND company_id = ? AND is_active = 1",
                 (email, company_id)
             ) as cursor:
                 row = await cursor.fetchone()
@@ -1827,10 +2032,11 @@ class WorklogStorage:
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
                 SELECT u.id, u.email, u.first_name, u.last_name, u.team_id,
-                       u.created_at, u.updated_at, t.name as team_name
+                       u.created_at, u.updated_at, t.name as team_name,
+                       u.role, u.role_level, u.is_active
                 FROM users u
                 LEFT JOIN teams t ON t.id = u.team_id AND t.company_id = ?
-                WHERE u.company_id = ?
+                WHERE u.company_id = ? AND u.is_active = 1
                 ORDER BY u.last_name, u.first_name
             """, (company_id, company_id)) as cursor:
                 async for row in cursor:
@@ -1843,6 +2049,9 @@ class WorklogStorage:
                         "created_at": row[5],
                         "updated_at": row[6],
                         "team_name": row[7],
+                        "role": row[8],
+                        "role_level": row[9],
+                        "is_active": bool(row[10]),
                         "jira_accounts": []
                     })
 
@@ -1888,7 +2097,7 @@ class WorklogStorage:
                 SELECT u.id, u.email, u.first_name, u.last_name, u.team_id,
                        u.created_at, u.updated_at
                 FROM users u
-                WHERE u.team_id = ? AND u.company_id = ?
+                WHERE u.team_id = ? AND u.company_id = ? AND u.is_active = 1
                 ORDER BY u.last_name, u.first_name
             """, (team_id, company_id)) as cursor:
                 async for row in cursor:
@@ -1939,7 +2148,10 @@ class WorklogStorage:
             return cursor.rowcount > 0
 
     async def delete_user(self, user_id: int, company_id: int) -> bool:
-        """Delete a user and their JIRA accounts for a specific company.
+        """Soft delete a user (marks as inactive) for a specific company.
+
+        This preserves all historical worklog data while preventing the user
+        from appearing in active user lists and from logging in.
 
         Args:
             user_id: User ID to delete
@@ -1954,9 +2166,33 @@ class WorklogStorage:
             raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
-            # JIRA accounts will be deleted by CASCADE
+            # Soft delete: mark user as inactive instead of hard delete
+            # This preserves worklog history, billing data, and reports
             cursor = await db.execute(
-                "DELETE FROM users WHERE id = ? AND company_id = ?",
+                "UPDATE users SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?",
+                (user_id, company_id)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def reactivate_user(self, user_id: int, company_id: int) -> bool:
+        """Reactivate a soft-deleted user for a specific company.
+
+        Args:
+            user_id: User ID to reactivate
+            company_id: Company ID (REQUIRED for multi-tenant isolation)
+
+        Returns:
+            True if reactivated, False if user not found or doesn't belong to company
+        """
+        await self.initialize()
+
+        if not company_id:
+            raise ValueError("company_id is required for multi-tenant operations")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "UPDATE users SET is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?",
                 (user_id, company_id)
             )
             await db.commit()
@@ -2564,14 +2800,15 @@ class WorklogStorage:
                     "members": []
                 }
 
-            # Get members (only from same company)
+            # Get members (only from same company), primary instance first
             async with db.execute("""
                 SELECT ji.id, ji.name, ji.url
                 FROM complementary_group_members cgm
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
-                WHERE cgm.group_id = ? AND ji.company_id = ?
-                ORDER BY ji.name
-            """, (group_id, company_id)) as cursor:
+                JOIN complementary_groups cg ON cg.id = cgm.group_id
+                WHERE cgm.group_id = ? AND cgm.company_id = ? AND ji.company_id = ? AND cg.company_id = ?
+                ORDER BY CASE WHEN ji.id = cg.primary_instance_id THEN 0 ELSE 1 END, ji.name
+            """, (group_id, company_id, company_id, company_id)) as cursor:
                 async for row in cursor:
                     group["members"].append({
                         "id": row[0],
@@ -2616,17 +2853,18 @@ class WorklogStorage:
                         "members": []
                     })
 
-            # Get members for all groups (only from same company)
+            # Get members for all groups (only from same company), primary instance first
             group_ids = [g["id"] for g in groups]
             if group_ids:
                 placeholders = ",".join("?" * len(group_ids))
-                params = group_ids + [company_id]
+                params = group_ids + [company_id, company_id, company_id]
                 async with db.execute(f"""
                     SELECT cgm.group_id, ji.id, ji.name, ji.url
                     FROM complementary_group_members cgm
                     JOIN jira_instances ji ON ji.id = cgm.instance_id
-                    WHERE cgm.group_id IN ({placeholders}) AND ji.company_id = ?
-                    ORDER BY ji.name
+                    JOIN complementary_groups cg ON cg.id = cgm.group_id
+                    WHERE cgm.group_id IN ({placeholders}) AND cgm.company_id = ? AND ji.company_id = ? AND cg.company_id = ?
+                    ORDER BY CASE WHEN ji.id = cg.primary_instance_id THEN 0 ELSE 1 END, ji.name
                 """, params) as cursor:
                     async for row in cursor:
                         group_id, inst_id, inst_name, inst_url = row
@@ -2767,9 +3005,9 @@ class WorklogStorage:
 
             try:
                 await db.execute("""
-                    INSERT INTO complementary_group_members (group_id, instance_id)
-                    VALUES (?, ?)
-                """, (group_id, instance_id))
+                    INSERT INTO complementary_group_members (company_id, group_id, instance_id)
+                    VALUES (?, ?, ?)
+                """, (company_id, group_id, instance_id))
                 await db.commit()
                 return True
             except Exception:
@@ -2797,11 +3035,10 @@ class WorklogStorage:
             raise ValueError("company_id is required for multi-tenant operations")
 
         async with aiosqlite.connect(self.db_path) as db:
-            # Verify group belongs to company before removing membership
+            # Verify group belongs to company before removing membership (direct company_id filter)
             cursor = await db.execute("""
                 DELETE FROM complementary_group_members
-                WHERE group_id = ? AND instance_id = ?
-                AND group_id IN (SELECT id FROM complementary_groups WHERE company_id = ?)
+                WHERE group_id = ? AND instance_id = ? AND company_id = ?
             """, (group_id, instance_id, company_id))
             await db.commit()
             return cursor.rowcount > 0
@@ -2851,18 +3088,19 @@ class WorklogStorage:
                     if count != len(instance_ids):
                         raise ValueError(f"Some instances don't belong to company {company_id}")
 
-            # Remove all existing members
-            await db.execute(
-                "DELETE FROM complementary_group_members WHERE group_id = ?",
-                (group_id,)
-            )
+            # Remove all existing members (filter by company_id for security)
+            await db.execute("""
+                DELETE FROM complementary_group_members
+                WHERE group_id = ?
+                AND group_id IN (SELECT id FROM complementary_groups WHERE company_id = ?)
+            """, (group_id, company_id))
 
             # Add new members
             for instance_id in instance_ids:
                 await db.execute("""
-                    INSERT INTO complementary_group_members (group_id, instance_id)
-                    VALUES (?, ?)
-                """, (group_id, instance_id))
+                    INSERT INTO complementary_group_members (company_id, group_id, instance_id)
+                    VALUES (?, ?, ?)
+                """, (company_id, group_id, instance_id))
 
             await db.commit()
             return True
@@ -2890,8 +3128,8 @@ class WorklogStorage:
                 FROM complementary_group_members cgm
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
                 JOIN complementary_groups cg ON cg.id = cgm.group_id
-                WHERE cg.company_id = ? AND ji.company_id = ?
-            """, (company_id, company_id)) as cursor:
+                WHERE cgm.company_id = ? AND cg.company_id = ? AND ji.company_id = ?
+            """, (company_id, company_id, company_id)) as cursor:
                 async for row in cursor:
                     names.append(row[0])
         return names
@@ -2918,9 +3156,9 @@ class WorklogStorage:
                 FROM complementary_group_members cgm
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
                 JOIN complementary_groups cg ON cg.id = cgm.group_id
-                WHERE cgm.group_id = ? AND cg.company_id = ? AND ji.company_id = ?
-                ORDER BY ji.name
-            """, (group_id, company_id, company_id)) as cursor:
+                WHERE cgm.group_id = ? AND cgm.company_id = ? AND cg.company_id = ? AND ji.company_id = ?
+                ORDER BY CASE WHEN ji.id = cg.primary_instance_id THEN 0 ELSE 1 END, ji.name
+            """, (group_id, company_id, company_id, company_id)) as cursor:
                 async for row in cursor:
                     names.append(row[0])
         return names
@@ -3467,8 +3705,8 @@ class WorklogStorage:
                 FROM complementary_group_members cgm
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
                 JOIN complementary_groups cg ON cg.id = cgm.group_id
-                WHERE ji.name = ? AND ji.company_id = ? AND cg.company_id = ?
-            """, (instance_name, company_id, company_id)) as cursor:
+                WHERE ji.name = ? AND cgm.company_id = ? AND ji.company_id = ? AND cg.company_id = ?
+            """, (instance_name, company_id, company_id, company_id)) as cursor:
                 group_ids = [row[0] async for row in cursor]
 
             if not group_ids:
@@ -3476,12 +3714,13 @@ class WorklogStorage:
 
             # Find all other instances in those groups (only from same company)
             placeholders = ",".join("?" * len(group_ids))
-            params = list(group_ids) + [company_id, instance_name]
+            params = list(group_ids) + [company_id, company_id, instance_name]
             async with db.execute(f"""
                 SELECT DISTINCT ji.name
                 FROM complementary_group_members cgm
                 JOIN jira_instances ji ON ji.id = cgm.instance_id
                 WHERE cgm.group_id IN ({placeholders})
+                AND cgm.company_id = ?
                 AND ji.company_id = ?
                 AND ji.name != ?
                 ORDER BY ji.name
@@ -4623,12 +4862,16 @@ class WorklogStorage:
 
     async def get_leaves_in_range(
         self,
+        company_id: int,
         start_date: date,
         end_date: date,
         user_id: Optional[int] = None,
         status_filter: Optional[str] = None
     ) -> list[dict]:
-        """Get leaves within date range from storage."""
+        """Get leaves within date range from storage (scoped to company)."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
         await self.initialize()
 
         query = """
@@ -4641,9 +4884,10 @@ class WorklogStorage:
                 fl.created_at
             FROM factorial_leaves fl
             JOIN users u ON fl.user_id = u.id
-            WHERE (fl.start_date <= ? AND fl.finish_date >= ?)
+            WHERE u.company_id = ?
+              AND (fl.start_date <= ? AND fl.finish_date >= ?)
         """
-        params = [end_date.isoformat(), start_date.isoformat()]
+        params = [company_id, end_date.isoformat(), start_date.isoformat()]
 
         if user_id:
             query += " AND fl.user_id = ?"
@@ -4818,19 +5062,20 @@ class WorklogStorage:
         google_id: str,
         email: str,
         company_id: int,
-        role: str = "USER",
+        role: str = "DEV",
         first_name: str = None,
         last_name: str = None,
         picture_url: str = None
     ) -> int:
-        """Create a new OAuth user."""
+        """Create a new OAuth user with role_level calculated from role."""
         await self.initialize()
+        role_level = UserRole.get_level(role)
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute("""
                 INSERT INTO oauth_users
-                (company_id, google_id, email, first_name, last_name, picture_url, role, last_login_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (company_id, google_id, email, first_name, last_name, picture_url, role))
+                (company_id, google_id, email, first_name, last_name, picture_url, role, role_level, last_login_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (company_id, google_id, email, first_name, last_name, picture_url, role, role_level))
             await db.commit()
             return cursor.lastrowid
 
@@ -4905,7 +5150,7 @@ class WorklogStorage:
         role: str = None,
         is_active: int = None
     ):
-        """Update OAuth user profile."""
+        """Update OAuth user profile. Automatically syncs role_level when role changes."""
         await self.initialize()
 
         updates = []
@@ -4923,6 +5168,9 @@ class WorklogStorage:
         if role is not None:
             updates.append("role = ?")
             params.append(role)
+            # Sync role_level whenever role changes
+            updates.append("role_level = ?")
+            params.append(UserRole.get_level(role))
         if is_active is not None:
             updates.append("is_active = ?")
             params.append(is_active)
@@ -5277,6 +5525,291 @@ class WorklogStorage:
                 json.dumps(metadata) if metadata else None
             ))
             await db.commit()
+
+    # ============================================
+    # MATCHING ALGORITHMS
+    # ============================================
+
+    async def get_matching_algorithms(self, company_id: int) -> list[dict]:
+        """Get all matching algorithms for company (scoped to company)."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT id, algorithm_type, algorithm_name, description, enabled, config, priority
+                FROM matching_algorithms
+                WHERE company_id = ?
+                ORDER BY priority ASC, algorithm_name ASC
+            """, (company_id,)) as cursor:
+                algorithms = []
+                async for row in cursor:
+                    algorithms.append({
+                        'id': row[0],
+                        'algorithm_type': row[1],
+                        'algorithm_name': row[2],
+                        'description': row[3],
+                        'enabled': bool(row[4]),
+                        'config': json.loads(row[5]) if row[5] else {},
+                        'priority': row[6]
+                    })
+                return algorithms
+
+    async def update_matching_algorithm(
+        self,
+        company_id: int,
+        algorithm_type: str,
+        enabled: bool,
+        config: dict = None,
+        priority: int = None
+    ) -> None:
+        """Update matching algorithm settings (scoped to company)."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        await self.initialize()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            # Build update query dynamically
+            updates = ["enabled = ?"]
+            params = [int(enabled)]
+
+            if config is not None:
+                updates.append("config = ?")
+                params.append(json.dumps(config))
+
+            if priority is not None:
+                updates.append("priority = ?")
+                params.append(priority)
+
+            updates.append("updated_at = CURRENT_TIMESTAMP")
+            params.extend([company_id, algorithm_type])
+
+            await db.execute(f"""
+                UPDATE matching_algorithms
+                SET {', '.join(updates)}
+                WHERE company_id = ? AND algorithm_type = ?
+            """, params)
+            await db.commit()
+
+    async def initialize_matching_algorithms(self, company_id: int) -> None:
+        """Initialize default matching algorithms for company."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        await self.initialize()
+
+        # Import here to avoid circular dependency
+        from app.matching_algorithms import get_available_algorithms
+
+        available = get_available_algorithms()
+
+        async with aiosqlite.connect(self.db_path) as db:
+            for algo in available:
+                # Check if already exists
+                async with db.execute("""
+                    SELECT id FROM matching_algorithms
+                    WHERE company_id = ? AND algorithm_type = ?
+                """, (company_id, algo['algorithm_type'])) as cursor:
+                    existing = await cursor.fetchone()
+
+                if not existing:
+                    # Insert default (disabled)
+                    await db.execute("""
+                        INSERT INTO matching_algorithms
+                        (company_id, algorithm_type, algorithm_name, description, enabled, priority)
+                        VALUES (?, ?, ?, ?, 0, 1)
+                    """, (
+                        company_id,
+                        algo['algorithm_type'],
+                        algo['algorithm_name'],
+                        algo['description']
+                    ))
+
+            await db.commit()
+
+    # ========== JIRA Exclusions Methods ==========
+
+    async def get_jira_exclusions(self, company_id: int) -> list[dict]:
+        """Get all JIRA exclusions for a company."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """
+                SELECT id, exclusion_key, exclusion_type, description, created_at
+                FROM jira_exclusions
+                WHERE company_id = ?
+                ORDER BY exclusion_key
+                """,
+                (company_id,)
+            )
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    async def add_jira_exclusion(
+        self,
+        company_id: int,
+        exclusion_key: str,
+        exclusion_type: str,
+        description: str = None
+    ) -> dict:
+        """Add a new JIRA exclusion."""
+        if not company_id:
+            raise ValueError("company_id is required")
+        if exclusion_type not in ['issue_key', 'parent_key']:
+            raise ValueError("exclusion_type must be 'issue_key' or 'parent_key'")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                INSERT INTO jira_exclusions (company_id, exclusion_key, exclusion_type, description)
+                VALUES (?, ?, ?, ?)
+                """,
+                (company_id, exclusion_key, exclusion_type, description)
+            )
+            await db.commit()
+
+            exclusion_id = cursor.lastrowid
+            return {
+                'id': exclusion_id,
+                'exclusion_key': exclusion_key,
+                'exclusion_type': exclusion_type,
+                'description': description
+            }
+
+    async def delete_jira_exclusion(self, company_id: int, exclusion_id: int):
+        """Delete a JIRA exclusion."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                DELETE FROM jira_exclusions
+                WHERE id = ? AND company_id = ?
+                """,
+                (exclusion_id, company_id)
+            )
+            await db.commit()
+
+    # ============ Generic Issues CRUD ============
+
+    async def get_generic_issues(self, company_id: int) -> list[dict]:
+        """Get all generic issue mappings for a company."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """
+                SELECT gi.id, gi.issue_code, gi.issue_type,
+                       gi.team_id, gi.description, gi.created_at, gi.updated_at,
+                       t.name as team_name
+                FROM generic_issues gi
+                LEFT JOIN teams t ON t.id = gi.team_id
+                WHERE gi.company_id = ?
+                ORDER BY gi.issue_code, gi.issue_type
+                """,
+                (company_id,)
+            )
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    async def add_generic_issue(
+        self,
+        company_id: int,
+        issue_code: str,
+        issue_type: str,
+        team_id: int,
+        description: str = None
+    ) -> dict:
+        """Add a new generic issue mapping."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                INSERT INTO generic_issues (company_id, issue_code, issue_type, team_id, description)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (company_id, issue_code, issue_type, team_id, description)
+            )
+            await db.commit()
+
+            generic_issue_id = cursor.lastrowid
+            return {
+                'id': generic_issue_id,
+                'issue_code': issue_code,
+                'issue_type': issue_type,
+                'team_id': team_id,
+                'description': description
+            }
+
+    async def delete_generic_issue(self, company_id: int, generic_issue_id: int):
+        """Delete a generic issue mapping."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                DELETE FROM generic_issues
+                WHERE id = ? AND company_id = ?
+                """,
+                (generic_issue_id, company_id)
+            )
+            await db.commit()
+
+    # ========== JIRA Issue Types Cache ==========
+
+    async def upsert_jira_issue_types(self, company_id: int, jira_instance: str, issue_types: list[str]):
+        """Upsert JIRA issue types cache for a specific instance."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            # Delete existing types for this instance
+            await db.execute(
+                "DELETE FROM jira_issue_types WHERE company_id = ? AND jira_instance = ?",
+                (company_id, jira_instance)
+            )
+
+            # Insert new types
+            for issue_type in issue_types:
+                await db.execute(
+                    """
+                    INSERT INTO jira_issue_types (company_id, name, jira_instance)
+                    VALUES (?, ?, ?)
+                    """,
+                    (company_id, issue_type, jira_instance)
+                )
+
+            await db.commit()
+
+    async def get_cached_jira_issue_types(self, company_id: int) -> list[str]:
+        """Get all unique JIRA issue types from cache."""
+        if not company_id:
+            raise ValueError("company_id is required")
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                SELECT DISTINCT name
+                FROM jira_issue_types
+                WHERE company_id = ?
+                ORDER BY name
+                """,
+                (company_id,)
+            )
+            rows = await cursor.fetchall()
+            return [row[0] for row in rows]
 
 
 # Global storage instance

@@ -6,6 +6,39 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+# ============ Role System ============
+
+class UserRole:
+    """Hierarchical role system with 4 levels."""
+    DEV = "DEV"
+    PM = "PM"
+    MANAGER = "MANAGER"
+    ADMIN = "ADMIN"
+
+    LEVELS = {
+        "DEV": 1,
+        "PM": 2,
+        "MANAGER": 3,
+        "ADMIN": 4,
+    }
+
+    ALL_ROLES = [DEV, PM, MANAGER, ADMIN]
+
+    @classmethod
+    def get_level(cls, role: str) -> int:
+        """Return the numeric level for a role. Raises ValueError if invalid."""
+        if role not in cls.LEVELS:
+            raise ValueError(f"Invalid role: {role}. Must be one of {cls.ALL_ROLES}")
+        return cls.LEVELS[role]
+
+    @classmethod
+    def validate(cls, role: str) -> str:
+        """Validate a role string and return it. Raises ValueError if invalid."""
+        if role not in cls.LEVELS:
+            raise ValueError(f"Invalid role: {role}. Must be one of {cls.ALL_ROLES}")
+        return role
+
+
 # ============ Configuration Models ============
 
 class JiraInstanceConfig(BaseModel):
@@ -61,6 +94,7 @@ class Worklog(BaseModel):
     issue_key: str
     issue_summary: str
     author_email: str
+    author_user_id: Optional[int] = None
     author_display_name: str
     time_spent_seconds: int
     started: datetime
@@ -72,7 +106,9 @@ class Worklog(BaseModel):
     # Epic (se trovata nella gerarchia)
     epic_key: Optional[str] = None
     epic_name: Optional[str] = None
-    
+    # JIRA issue type (Bug, Story, Task, Sub-task, etc.)
+    issue_type: Optional[str] = None
+
     @property
     def hours(self) -> float:
         return self.time_spent_seconds / 3600
@@ -115,17 +151,22 @@ class TeamBase(BaseModel):
 
 class TeamCreate(TeamBase):
     """Model for creating a new team."""
-    pass
+    owner_id: Optional[int] = None
 
 
 class TeamUpdate(BaseModel):
     """Model for updating a team."""
     name: Optional[str] = None
+    owner_id: Optional[int] = None
 
 
 class TeamInDB(TeamBase):
     """Team model with database fields."""
     id: int
+    owner_id: Optional[int] = None
+    owner_email: Optional[str] = None
+    owner_first_name: Optional[str] = None
+    owner_last_name: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     member_count: int = 0
@@ -149,6 +190,7 @@ class UserUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     team_id: Optional[int] = None
+    role: Optional[str] = Field(default=None, pattern="^(DEV|PM|MANAGER|ADMIN)$")
 
 
 class UserInDB(UserBase):
@@ -156,6 +198,7 @@ class UserInDB(UserBase):
     id: int
     team_id: Optional[int] = None
     team_name: Optional[str] = None
+    is_active: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     jira_accounts: list[UserJiraAccount] = Field(default_factory=list)
@@ -284,7 +327,9 @@ class TeamHours(BaseModel):
 class UserHours(BaseModel):
     """Hours logged by a user."""
     email: str
+    user_id: Optional[int] = None
     full_name: str
+    role: Optional[str] = None
     total_hours: float
     team_name: str
 
@@ -304,11 +349,14 @@ class DashboardResponse(BaseModel):
     total_hours: float
     expected_hours: float
     completion_percentage: float
+    daily_working_hours: int
     teams: list[TeamHours]
-    daily_trend: list[DailyHours]
     top_epics: list[EpicHours]
+    top_projects: list[EpicHours] = []
     period_start: date
     period_end: date
+    worklog_count: int = 0
+    active_users: int = 0
 
 
 class TeamDetailResponse(BaseModel):
@@ -319,11 +367,13 @@ class TeamDetailResponse(BaseModel):
     members: list[UserHours]
     epics: list[EpicHours]
     daily_trend: list[DailyHours]
+    worklogs: list[Worklog] = []
 
 
 class UserDetailResponse(BaseModel):
     """Response for user detail view."""
     email: str
+    user_id: int = None
     full_name: str
     team_name: str
     total_hours: float
@@ -392,6 +442,7 @@ class DiscrepancyItem(BaseModel):
     secondary_hours: float
     delta_hours: float
     delta_percentage: float
+    is_excluded: bool = False  # True if this is an expected discrepancy (e.g., leaves, training)
 
 
 class ComplementaryComparison(BaseModel):
@@ -745,7 +796,7 @@ class OAuthUserCreate(BaseModel):
     google_id: str
     email: str
     company_id: int
-    role: str = "USER"
+    role: str = Field(default="DEV", pattern="^(DEV|PM|MANAGER|ADMIN)$")
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     picture_url: Optional[str] = None
@@ -761,6 +812,7 @@ class OAuthUserResponse(BaseModel):
     last_name: Optional[str] = None
     picture_url: Optional[str] = None
     role: str
+    role_level: int = 1
     is_active: bool
     last_login_at: Optional[datetime] = None
     created_at: datetime
@@ -771,7 +823,7 @@ class OAuthUserUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     picture_url: Optional[str] = None
-    role: Optional[str] = None
+    role: Optional[str] = Field(default=None, pattern="^(DEV|PM|MANAGER|ADMIN)$")
     is_active: Optional[bool] = None
 
 
@@ -793,7 +845,7 @@ class RefreshTokenRequest(BaseModel):
 class InvitationCreate(BaseModel):
     """Request to create an invitation."""
     email: str
-    role: str = "USER"
+    role: str = Field(default="DEV", pattern="^(DEV|PM|MANAGER|ADMIN)$")
 
 
 class InvitationResponse(BaseModel):
@@ -846,7 +898,7 @@ class DevLoginRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=255)
     first_name: str = Field(default="Dev", min_length=1, max_length=100)
     last_name: str = Field(default="User", min_length=1, max_length=100)
-    role: str = Field(default="ADMIN", pattern="^(ADMIN|MANAGER|USER)$")
+    role: str = Field(default="ADMIN", pattern="^(DEV|PM|MANAGER|ADMIN)$")
 
 
 class AuthAuditLogEntry(BaseModel):
@@ -859,3 +911,50 @@ class AuthAuditLogEntry(BaseModel):
     ip_address: Optional[str] = None
     metadata: Optional[dict] = None
     created_at: datetime
+
+
+class MatchingAlgorithmUpdate(BaseModel):
+    """Request model for updating matching algorithm settings."""
+    enabled: bool
+    config: Optional[dict] = None
+    priority: Optional[int] = None
+
+
+class JiraExclusionCreate(BaseModel):
+    """Request model for creating JIRA exclusion."""
+    exclusion_key: str = Field(..., min_length=1, max_length=50)
+    exclusion_type: str = Field(default="parent_key", pattern="^(issue_key|parent_key)$")
+    description: Optional[str] = Field(None, max_length=200)
+
+
+# ============ Generic Issues Models ============
+
+class GenericIssueCreate(BaseModel):
+    """Request model for creating a generic issue mapping.
+
+    Maps a container issue (e.g., SYSMMFG-3658) to collect worklogs of a certain
+    issue type (e.g., Incident) from the complementary instance, optionally filtered by team.
+    """
+    issue_code: str = Field(..., min_length=1, max_length=50, description="Container issue code (e.g., SYSMMFG-3658)")
+    issue_type: str = Field(..., min_length=1, max_length=50, description="Issue type to match (e.g., Incident, Request)")
+    team_id: Optional[int] = Field(None, description="Optional team filter (NULL = global)")
+    description: Optional[str] = Field(None, max_length=200, description="User notes")
+
+
+class GenericIssueUpdate(BaseModel):
+    """Request model for updating a generic issue mapping."""
+    issue_code: Optional[str] = Field(None, min_length=1, max_length=50)
+    issue_type: Optional[str] = Field(None, min_length=1, max_length=50)
+    team_id: Optional[int] = None
+    description: Optional[str] = Field(None, max_length=200)
+
+
+class GenericIssueInDB(BaseModel):
+    """Generic issue mapping with database fields."""
+    id: int
+    issue_code: str
+    issue_type: str
+    team_id: Optional[int] = None
+    description: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None

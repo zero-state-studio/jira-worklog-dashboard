@@ -9,7 +9,7 @@ import secrets
 from ..auth_config import auth_settings
 
 
-def create_access_token(user_id: int, company_id: int, email: str, role: str) -> str:
+def create_access_token(user_id: int, company_id: int, email: str, role: str, role_level: int = None) -> str:
     """
     Create a JWT access token with user claims.
 
@@ -17,11 +17,16 @@ def create_access_token(user_id: int, company_id: int, email: str, role: str) ->
         user_id: OAuth user ID
         company_id: Company/organization ID
         email: User email
-        role: User role (ADMIN, MANAGER, USER)
+        role: User role (DEV, PM, MANAGER, ADMIN)
+        role_level: Numeric role level (1-4). If None, derived from role via UserRole.
 
     Returns:
         Encoded JWT token string
     """
+    if role_level is None:
+        from ..models import UserRole
+        role_level = UserRole.get_level(role)
+
     expire = datetime.utcnow() + timedelta(minutes=auth_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     jti = secrets.token_urlsafe(16)  # JWT ID for token tracking
 
@@ -30,6 +35,7 @@ def create_access_token(user_id: int, company_id: int, email: str, role: str) ->
         "email": email,
         "company_id": company_id,
         "role": role,
+        "role_level": role_level,
         "jti": jti,  # JWT ID
         "exp": expire,  # Expiration time
         "type": "access"  # Token type

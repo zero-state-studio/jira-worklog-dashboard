@@ -23,7 +23,7 @@ export default function StatCounter({ value, suffix = '', prefix = '', label, de
                     {icon}
                 </div>
             )}
-            <div className="text-4xl md:text-5xl font-bold bg-gradient-primary bg-clip-text text-transparent leading-tight">
+            <div className="text-4xl md:text-5xl font-bold bg-accent bg-clip-text text-transparent leading-tight">
                 {prefix}{count}{suffix}
             </div>
             <p className="text-dark-400 text-sm mt-1 font-medium uppercase tracking-wider">

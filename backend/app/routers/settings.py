@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from ..models import (
-    AppConfig,
+    AppConfig, UserRole,
     TeamCreate, TeamUpdate, TeamInDB, TeamWithMembers,
     UserCreate, UserUpdate, UserInDB,
     FetchAccountIdRequest, FetchAccountIdResponse,
@@ -17,6 +17,9 @@ from ..models import (
     BulkUserCreateRequest, BulkUserCreateResult, BulkUserCreateResponse,
     BulkFetchAccountResult, BulkFetchAccountSummary, BulkFetchAccountResponse,
     HolidayCreate, HolidayUpdate,
+    MatchingAlgorithmUpdate,
+    JiraExclusionCreate,
+    GenericIssueCreate,
 )
 from ..config import get_config
 from ..cache import get_storage
@@ -46,17 +49,17 @@ async def create_team(team: TeamCreate, current_user: CurrentUser = Depends(requ
     if existing:
         raise HTTPException(status_code=400, detail="Team name already exists")
 
-    team_id = await storage.create_team(team.name, current_user.company_id)
-    created = await storage.get_team(team_id, current_user.company_id)
+    team_id = await storage.create_team(team.name, current_user.company_id, owner_id=team.owner_id)
+    created = await storage.get_team_with_owner(team_id, current_user.company_id)
     return TeamInDB(**created, member_count=0)
 
 
 @router.get("/teams/{team_id}", response_model=TeamWithMembers)
 async def get_team(team_id: int, current_user: CurrentUser = Depends(get_current_user)):
-    """Get a team by ID with its members (scoped to current user's company)."""
+    """Get a team by ID with its members and owner info (scoped to current user's company)."""
     storage = get_storage()
 
-    team = await storage.get_team(team_id, current_user.company_id)
+    team = await storage.get_team_with_owner(team_id, current_user.company_id)
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
 
@@ -85,9 +88,15 @@ async def update_team(team_id: int, team: TeamUpdate, current_user: CurrentUser 
 
         await storage.update_team(team_id, team.name, current_user.company_id)
 
-    updated = await storage.get_team(team_id, current_user.company_id)
+    if team.owner_id is not None:
+        # owner_id of 0 or None means clear the owner
+        owner_value = team.owner_id if team.owner_id > 0 else None
+        await storage.update_team_owner(team_id, owner_value, current_user.company_id)
+
     teams = await storage.get_all_teams(current_user.company_id)
-    team_data = next((t for t in teams if t["id"] == team_id), updated)
+    team_data = next((t for t in teams if t["id"] == team_id), None)
+    if not team_data:
+        team_data = await storage.get_team_with_owner(team_id, current_user.company_id)
     return TeamInDB(**team_data)
 
 
@@ -155,6 +164,7 @@ async def create_user(user: UserCreate, current_user: CurrentUser = Depends(requ
         last_name=created["last_name"],
         team_id=created["team_id"],
         team_name=created["team_name"],
+        is_active=created.get("is_active", True),
         created_at=created["created_at"],
         updated_at=created["updated_at"],
         jira_accounts=created["jira_accounts"]
@@ -177,6 +187,7 @@ async def get_user(user_id: int, current_user: CurrentUser = Depends(get_current
         last_name=user["last_name"],
         team_id=user["team_id"],
         team_name=user["team_name"],
+        is_active=user.get("is_active", True),
         created_at=user["created_at"],
         updated_at=user["updated_at"],
         jira_accounts=user["jira_accounts"]
@@ -225,6 +236,7 @@ async def update_user(user_id: int, user: UserUpdate, current_user: CurrentUser 
         last_name=updated["last_name"],
         team_id=updated["team_id"],
         team_name=updated["team_name"],
+        is_active=updated.get("is_active", True),
         created_at=updated["created_at"],
         updated_at=updated["updated_at"],
         jira_accounts=updated["jira_accounts"]
@@ -233,7 +245,11 @@ async def update_user(user_id: int, user: UserUpdate, current_user: CurrentUser 
 
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: int, current_user: CurrentUser = Depends(require_admin)):
-    """Delete a user (ADMIN only)."""
+    """Soft delete a user (marks as inactive) - ADMIN only.
+
+    This preserves all historical worklog data while hiding the user from active lists.
+    The user's worklogs, billing data, and reports remain intact.
+    """
     storage = get_storage()
 
     existing = await storage.get_user(user_id, current_user.company_id)
@@ -241,7 +257,25 @@ async def delete_user(user_id: int, current_user: CurrentUser = Depends(require_
         raise HTTPException(status_code=404, detail="User not found")
 
     await storage.delete_user(user_id, current_user.company_id)
-    return {"success": True, "message": "User deleted"}
+    return {"success": True, "message": "User deactivated (soft delete)"}
+
+
+@router.post("/users/{user_id}/reactivate")
+async def reactivate_user(user_id: int, current_user: CurrentUser = Depends(require_admin)):
+    """Reactivate a soft-deleted user - ADMIN only.
+
+    Restores a previously deactivated user, allowing them to appear in active lists again.
+    """
+    storage = get_storage()
+
+    # Note: We need to query the user without is_active filter to find deactivated users
+    # For now, just try to reactivate and check if it succeeded
+    success = await storage.reactivate_user(user_id, current_user.company_id)
+
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found or already active")
+
+    return {"success": True, "message": "User reactivated"}
 
 
 def extract_name_from_email(email: str) -> tuple[str, str]:
@@ -981,6 +1015,29 @@ async def remove_member_from_group(
 
 # ========== Holidays Endpoints ==========
 
+@router.get("/holidays/range")
+async def get_holidays_for_range(
+    start_date: str,
+    end_date: str,
+    country: str = "IT",
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """Get active holiday dates for a date range (scoped to company)."""
+    storage = get_storage()
+
+    holiday_dates = await storage.get_active_holiday_dates(
+        start_date, end_date, current_user.company_id, country
+    )
+
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "country": country,
+        "holiday_dates": sorted(list(holiday_dates)),
+        "count": len(holiday_dates)
+    }
+
+
 @router.get("/holidays/{year}")
 async def get_holidays(year: int, country: str = "IT", current_user: CurrentUser = Depends(get_current_user)):
     """Get holidays for a year (scoped to company). Auto-seeds defaults if none exist."""
@@ -1142,3 +1199,265 @@ async def clear_all_worklogs(
     except Exception as e:
         logger.error(f"Failed to clear worklogs: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to clear worklogs: {str(e)}")
+
+
+# ========== Role Migration Endpoint ==========
+
+@router.post("/migrate-roles")
+async def migrate_roles(current_user: CurrentUser = Depends(require_admin)):
+    """
+    Migrate legacy USER roles to DEV and backfill role_level (ADMIN only).
+
+    This is a one-time migration for existing databases that had the old
+    USER role. It converts USER -> DEV and ensures role_level is set correctly.
+    """
+    storage = get_storage()
+
+    import aiosqlite
+    async with aiosqlite.connect(storage.db_path) as db:
+        # Count users with old USER role
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM oauth_users WHERE role = 'USER' AND company_id = ?",
+            (current_user.company_id,)
+        )
+        user_role_count = (await cursor.fetchone())[0]
+
+        # Migrate USER -> DEV
+        await db.execute(
+            "UPDATE oauth_users SET role = 'DEV', role_level = 1 WHERE role = 'USER' AND company_id = ?",
+            (current_user.company_id,)
+        )
+
+        # Backfill role_level for all roles
+        for role_name in UserRole.ALL_ROLES:
+            level = UserRole.get_level(role_name)
+            await db.execute(
+                "UPDATE oauth_users SET role_level = ? WHERE role = ? AND company_id = ?",
+                (level, role_name, current_user.company_id)
+            )
+
+        await db.commit()
+
+        # Get final counts
+        cursor = await db.execute(
+            "SELECT role, COUNT(*) FROM oauth_users WHERE company_id = ? GROUP BY role",
+            (current_user.company_id,)
+        )
+        role_counts = {row[0]: row[1] for row in await cursor.fetchall()}
+
+    return {
+        "success": True,
+        "migrated_from_user_to_dev": user_role_count,
+        "role_counts": role_counts
+    }
+
+
+# ========== Matching Algorithms Endpoints ==========
+
+@router.get("/matching-algorithms")
+async def get_matching_algorithms(current_user: CurrentUser = Depends(get_current_user)):
+    """Get all matching algorithms configuration for current company."""
+    storage = get_storage()
+
+    # Initialize algorithms if not exists
+    await storage.initialize_matching_algorithms(current_user.company_id)
+
+    # Get algorithms
+    algorithms = await storage.get_matching_algorithms(current_user.company_id)
+
+    return {
+        "algorithms": algorithms
+    }
+
+
+@router.put("/matching-algorithms/{algorithm_type}")
+async def update_matching_algorithm(
+    algorithm_type: str,
+    update_data: MatchingAlgorithmUpdate,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Update matching algorithm settings (ADMIN only)."""
+    storage = get_storage()
+
+    # Verify algorithm exists
+    algorithms = await storage.get_matching_algorithms(current_user.company_id)
+    algorithm = next((a for a in algorithms if a['algorithm_type'] == algorithm_type), None)
+
+    if not algorithm:
+        raise HTTPException(status_code=404, detail=f"Algorithm '{algorithm_type}' not found")
+
+    # Update
+    await storage.update_matching_algorithm(
+        current_user.company_id,
+        algorithm_type,
+        update_data.enabled,
+        config=update_data.config,
+        priority=update_data.priority
+    )
+
+    return {
+        "success": True,
+        "algorithm_type": algorithm_type,
+        "enabled": update_data.enabled
+    }
+
+
+# ========== JIRA Exclusions Endpoints ==========
+
+@router.get("/jira-exclusions")
+async def get_jira_exclusions(current_user: CurrentUser = Depends(get_current_user)):
+    """Get all JIRA exclusions for current company."""
+    storage = get_storage()
+    exclusions = await storage.get_jira_exclusions(current_user.company_id)
+    return {"exclusions": exclusions}
+
+
+@router.post("/jira-exclusions")
+async def add_jira_exclusion(
+    exclusion_data: JiraExclusionCreate,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Add a new JIRA exclusion (ADMIN only)."""
+    storage = get_storage()
+
+    exclusion = await storage.add_jira_exclusion(
+        current_user.company_id,
+        exclusion_data.exclusion_key,
+        exclusion_data.exclusion_type,
+        exclusion_data.description
+    )
+
+    return {
+        "success": True,
+        "exclusion": exclusion
+    }
+
+
+@router.delete("/jira-exclusions/{exclusion_id}")
+async def delete_jira_exclusion(
+    exclusion_id: int,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Delete a JIRA exclusion (ADMIN only)."""
+    storage = get_storage()
+
+    await storage.delete_jira_exclusion(current_user.company_id, exclusion_id)
+
+    return {"success": True}
+
+
+# ============ Generic Issues ============
+
+@router.get("/generic-issues")
+async def list_generic_issues(
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """List all generic issue mappings for the company."""
+    storage = get_storage()
+    generic_issues = await storage.get_generic_issues(current_user.company_id)
+    return {"generic_issues": generic_issues}
+
+
+@router.post("/generic-issues")
+async def create_generic_issue(
+    generic_issue_data: GenericIssueCreate,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Create a new generic issue mapping (ADMIN only)."""
+    storage = get_storage()
+
+    generic_issue = await storage.add_generic_issue(
+        current_user.company_id,
+        generic_issue_data.issue_code,
+        generic_issue_data.issue_type,
+        generic_issue_data.team_id,
+        generic_issue_data.description
+    )
+
+    return {
+        "success": True,
+        "generic_issue": generic_issue
+    }
+
+
+@router.delete("/generic-issues/{generic_issue_id}")
+async def delete_generic_issue(
+    generic_issue_id: int,
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Delete a generic issue mapping (ADMIN only)."""
+    storage = get_storage()
+
+    await storage.delete_generic_issue(current_user.company_id, generic_issue_id)
+
+    return {"success": True}
+
+
+@router.get("/jira-issue-types")
+async def get_jira_issue_types(
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """Get all available issue types from cache (populated during sync)."""
+    storage = get_storage()
+
+    # Read from cache instead of calling JIRA
+    issue_types = await storage.get_cached_jira_issue_types(current_user.company_id)
+
+    return {"issue_types": issue_types}
+
+
+@router.post("/jira-issue-types/refresh")
+async def refresh_jira_issue_types(
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Manually refresh JIRA issue types cache by fetching from JIRA APIs (ADMIN only)."""
+    from ..jira_client import JiraClient
+    from ..models import JiraInstanceConfig
+    storage = get_storage()
+
+    # Get all JIRA instances for this company
+    instances_data = await storage.get_all_jira_instances(current_user.company_id, include_credentials=True)
+
+    refreshed_count = 0
+
+    for instance_dict in instances_data:
+        try:
+            # Convert dict to JiraInstanceConfig
+            instance = JiraInstanceConfig(
+                name=instance_dict["name"],
+                url=instance_dict["url"],
+                email=instance_dict["email"],
+                api_token=instance_dict["api_token"],
+                tempo_api_token=instance_dict.get("tempo_api_token")
+            )
+
+            jira_client = JiraClient(instance)
+            issue_types_data = await jira_client.get_all_issue_types()
+
+            # Extract names (exclude subtasks)
+            issue_types = [
+                it["name"] for it in issue_types_data
+                if not it.get("subtask", False)
+            ]
+
+            # Upsert to cache
+            await storage.upsert_jira_issue_types(
+                current_user.company_id,
+                instance_dict["name"],
+                issue_types
+            )
+
+            refreshed_count += len(issue_types)
+
+        except Exception as e:
+            print(f"Warning: Failed to fetch issue types from {instance_dict.get('name', 'unknown')}: {e}")
+            continue
+
+    # Get updated cache
+    all_types = await storage.get_cached_jira_issue_types(current_user.company_id)
+
+    return {
+        "success": True,
+        "refreshed_count": refreshed_count,
+        "issue_types": all_types
+    }

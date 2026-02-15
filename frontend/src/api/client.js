@@ -74,10 +74,49 @@ async function fetchApi(endpoint, params = {}) {
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({}))
-        throw new Error(error.detail || `API Error: ${response.status}`)
+        console.error('[API Error]', {
+            status: response.status,
+            url: url.toString(),
+            error: error,
+            detail: error.detail
+        })
+        throw new Error(error.detail || JSON.stringify(error) || `API Error: ${response.status}`)
     }
 
     return response.json()
+}
+
+// ============ Worklogs API ============
+
+export async function getWorklogs(params = {}) {
+    const {
+        startDate,
+        endDate,
+        author,
+        jiraInstance,
+        page = 1,
+        pageSize = 50
+    } = params
+
+    console.log('[getWorklogs] Input params:', { startDate, endDate, author, jiraInstance, page, pageSize })
+
+    if (!startDate || !endDate) {
+        throw new Error('startDate and endDate are required')
+    }
+
+    const formattedStartDate = formatDate(startDate)
+    const formattedEndDate = formatDate(endDate)
+
+    console.log('[getWorklogs] Formatted dates:', { formattedStartDate, formattedEndDate })
+
+    return fetchApi('/worklogs', {
+        start_date: formattedStartDate,
+        end_date: formattedEndDate,
+        author: author || undefined,
+        jira_instance: jiraInstance || undefined,
+        page,
+        page_size: pageSize
+    })
 }
 
 // ============ Dashboard API ============
@@ -114,8 +153,8 @@ export async function getUsers(startDate = null, endDate = null, jiraInstance = 
     return fetchApi('/users', params)
 }
 
-export async function getUserDetail(email, startDate, endDate, jiraInstance = null) {
-    return fetchApi(`/users/${encodeURIComponent(email)}`, {
+export async function getUserDetail(userId, startDate, endDate, jiraInstance = null) {
+    return fetchApi(`/users/${userId}`, {
         start_date: formatDate(startDate),
         end_date: formatDate(endDate),
         jira_instance: jiraInstance
@@ -191,7 +230,13 @@ export async function clearCache() {
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({}))
-        throw new Error(error.detail || `API Error: ${response.status}`)
+        console.error('[API Error]', {
+            status: response.status,
+            url: url.toString(),
+            error: error,
+            detail: error.detail
+        })
+        throw new Error(error.detail || JSON.stringify(error) || `API Error: ${response.status}`)
     }
 
     return response.json()
@@ -333,7 +378,13 @@ async function fetchApiPost(endpoint, data = {}) {
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({}))
-        throw new Error(error.detail || `API Error: ${response.status}`)
+        console.error('[API Error]', {
+            status: response.status,
+            url: url.toString(),
+            error: error,
+            detail: error.detail
+        })
+        throw new Error(error.detail || JSON.stringify(error) || `API Error: ${response.status}`)
     }
 
     return response.json()
@@ -359,7 +410,13 @@ async function fetchApiPut(endpoint, data = {}) {
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({}))
-        throw new Error(error.detail || `API Error: ${response.status}`)
+        console.error('[API Error]', {
+            status: response.status,
+            url: url.toString(),
+            error: error,
+            detail: error.detail
+        })
+        throw new Error(error.detail || JSON.stringify(error) || `API Error: ${response.status}`)
     }
 
     return response.json()
@@ -384,7 +441,13 @@ async function fetchApiDelete(endpoint) {
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({}))
-        throw new Error(error.detail || `API Error: ${response.status}`)
+        console.error('[API Error]', {
+            status: response.status,
+            url: url.toString(),
+            error: error,
+            detail: error.detail
+        })
+        throw new Error(error.detail || JSON.stringify(error) || `API Error: ${response.status}`)
     }
 
     return response.json()
@@ -515,6 +578,55 @@ export async function addInstanceToGroup(groupId, instanceId) {
 export async function removeInstanceFromGroup(groupId, instanceId) {
     return fetchApiDelete(`/settings/complementary-groups/${groupId}/members/${instanceId}`)
 }
+
+// ============ Settings API - Matching Algorithms ============
+
+export async function getMatchingAlgorithms() {
+    return fetchApi('/settings/matching-algorithms')
+}
+
+export async function updateMatchingAlgorithm(algorithmType, enabled, config = null, priority = null) {
+    const body = { enabled }
+    if (config !== null) body.config = config
+    if (priority !== null) body.priority = priority
+    return fetchApiPut(`/settings/matching-algorithms/${algorithmType}`, body)
+}
+
+// ============ Settings API - JIRA Exclusions ============
+
+export async function getJiraExclusions() {
+    return fetchApi('/settings/jira-exclusions')
+}
+
+export async function addJiraExclusion(exclusionKey, exclusionType, description = null) {
+    const body = {
+        exclusion_key: exclusionKey,
+        exclusion_type: exclusionType
+    }
+    if (description) body.description = description
+    return fetchApiPost('/settings/jira-exclusions', body)
+}
+
+export async function deleteJiraExclusion(exclusionId) {
+    return fetchApiDelete(`/settings/jira-exclusions/${exclusionId}`)
+}
+
+// ============ Settings API - Generic Issues ============
+
+export const getGenericIssues = () => fetchApi('/settings/generic-issues');
+
+export const addGenericIssue = (issueCode, issueType, teamId, description) =>
+  fetchApiPost('/settings/generic-issues', {
+    issue_code: issueCode,
+    issue_type: issueType,
+    team_id: teamId || null,
+    description
+  });
+
+export const deleteGenericIssue = (genericIssueId) =>
+  fetchApiDelete(`/settings/generic-issues/${genericIssueId}`);
+
+export const getAllJiraIssueTypes = () => fetchApi('/settings/jira-issue-types');
 
 // ============ Logs API ============
 
@@ -652,6 +764,14 @@ export async function getComplementaryInstancesForPackage(instanceNames) {
 
 export async function getHolidays(year, country = 'IT') {
     return fetchApi(`/settings/holidays/${year}`, { country })
+}
+
+export async function getHolidaysForRange(startDate, endDate, country = 'IT') {
+    return fetchApi(`/settings/holidays/range`, {
+        start_date: startDate,
+        end_date: endDate,
+        country
+    })
 }
 
 export async function createHoliday(data) {

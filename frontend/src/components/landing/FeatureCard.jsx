@@ -9,7 +9,7 @@ export default function FeatureCard({ icon, title, description, color = 'blue' }
     }
 
     return (
-        <div className="glass-card-hover p-6 animate-fade-in">
+        <div className="glass-card-hover p-6 animate-slide-up">
             <div className={`w-12 h-12 rounded-xl ${colorClasses[color]} flex items-center justify-center mb-4`}>
                 {icon}
             </div>

@@ -40,6 +40,7 @@ async def list_teams(
             if team_name not in team_members:
                 team_members[team_name] = []
             team_members[team_name].append({
+                "id": user["id"],
                 "email": user["email"],
                 "full_name": f"{user['first_name']} {user['last_name']}"
             })
@@ -134,13 +135,17 @@ async def get_team_detail(
     # Daily trend
     daily_trend = calculate_daily_trend(worklogs, start_date, end_date)
 
+    # Sort worklogs by date (newest first) and limit to recent 100
+    sorted_worklogs = sorted(worklogs, key=lambda w: w.started, reverse=True)[:100]
+
     return TeamDetailResponse(
         team_name=team_data["name"],
         total_hours=round(total_hours, 2),
         expected_hours=round(expected_hours, 2),
         members=member_hours,
         epics=epic_hours,
-        daily_trend=daily_trend
+        daily_trend=daily_trend,
+        worklogs=sorted_worklogs
     )
 
 
@@ -301,11 +306,15 @@ def calculate_member_hours_from_db(worklogs: list[Worklog], team_members: list[d
     result = []
     for member in team_members:
         email = member["email"]
+        user_id = member.get("id")
         full_name = f"{member['first_name']} {member['last_name']}"
+        role = member.get("role")
         hours = member_data.get(email.lower(), 0)
         result.append(UserHours(
             email=email,
+            user_id=user_id,
             full_name=full_name,
+            role=role,
             total_hours=round(hours, 2),
             team_name=team_name
         ))

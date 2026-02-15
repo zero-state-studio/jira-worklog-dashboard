@@ -16,17 +16,33 @@ function hashColor(str) {
     return `hsl(${hue}, 55%, 45%)`
 }
 
-function getInitials(firstName, lastName) {
+function getInitials(firstName, lastName, email) {
+    // Try to generate from first/last name
     const first = (firstName || '')[0] || ''
     const last = (lastName || '')[0] || ''
-    return (first + last).toUpperCase() || '?'
+    const nameInitials = (first + last).toUpperCase()
+
+    if (nameInitials) return nameInitials
+
+    // Fallback: generate from email
+    if (email) {
+        const emailPart = email.split('@')[0]
+        const parts = emailPart.split(/[._-]/) // Split by dots, underscores, or hyphens
+        if (parts.length >= 2) {
+            return (parts[0][0] + parts[1][0]).toUpperCase()
+        }
+        // Fallback: first 2 chars of email
+        return emailPart.slice(0, 2).toUpperCase()
+    }
+
+    return 'U'
 }
 
 export default function UserAvatar({ user, size = 'md' }) {
     const sizeClass = SIZES[size] || SIZES.md
     const initials = useMemo(
-        () => getInitials(user?.first_name, user?.last_name),
-        [user?.first_name, user?.last_name]
+        () => getInitials(user?.first_name, user?.last_name, user?.email),
+        [user?.first_name, user?.last_name, user?.email]
     )
     const bgColor = useMemo(
         () => hashColor(`${user?.first_name || ''}${user?.last_name || ''}${user?.email || ''}`),

@@ -7,7 +7,7 @@ export default function KillerFeatureCard({ icon, badge, title, description, ben
     const c = colorMap[color] || colorMap.blue
 
     return (
-        <div className={`glass-card p-8 border-l-4 ${c.border} hover:shadow-glow transition-all duration-300`}>
+        <div className={`glass-card p-8 border-l-4 ${c.border} hover: transition-all duration-300`}>
             {badge && (
                 <span className={`inline-block px-3 py-1 text-xxs font-semibold rounded-full ${c.badge} uppercase tracking-wider mb-4`}>
                     {badge}

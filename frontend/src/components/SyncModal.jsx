@@ -143,26 +143,26 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                 onClick={syncing ? undefined : onClose}
             />
 
             {/* Modal */}
-            <div className="relative bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-dark-700 animate-fade-in max-h-[90vh] flex flex-col">
+            <div className="relative bg-surface rounded-lg shadow-lg w-full max-w-lg mx-4 border border-solid animate-slide-up max-h-[90vh] flex flex-col">
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-dark-700">
+                <div className="flex items-center justify-between p-6 border-b border-solid">
                     <div>
-                        <h2 className="text-xl font-bold text-dark-100">Sincronizza Dati</h2>
-                        <p className="text-sm text-dark-400 mt-1">
+                        <h2 className="text-xl font-bold text-primary">Sincronizza Dati</h2>
+                        <p className="text-sm text-tertiary mt-1">
                             Scarica i worklog da JIRA
                         </p>
                     </div>
                     {!syncing && (
                         <button
                             onClick={onClose}
-                            className="p-2 rounded-lg hover:bg-dark-700 transition-colors"
+                            className="p-2 rounded-lg hover:bg-surface transition-colors"
                         >
-                            <svg className="w-5 h-5 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-5 h-5 text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </button>
@@ -179,10 +179,10 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
                         /* Progress UI */
                         <div className="space-y-5">
                             <div className="text-center">
-                                <h3 className="text-lg font-semibold text-dark-100 mb-1">
+                                <h3 className="text-lg font-semibold text-primary mb-1">
                                     Sincronizzazione in corso...
                                 </h3>
-                                <p className="text-sm text-dark-400">
+                                <p className="text-sm text-tertiary">
                                     Non chiudere questa finestra
                                 </p>
                             </div>
@@ -190,14 +190,14 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
                             {/* Progress bar */}
                             <div>
                                 <div className="flex items-center justify-between text-sm mb-2">
-                                    <span className="text-dark-300">Progresso</span>
-                                    <span className="text-dark-100 font-mono font-medium">
+                                    <span className="text-secondary">Progresso</span>
+                                    <span className="text-primary font-mono font-medium">
                                         {progress?.percent ?? 0}%
                                     </span>
                                 </div>
-                                <div className="w-full h-3 bg-dark-700 rounded-full overflow-hidden">
+                                <div className="w-full h-3 bg-surface rounded-full overflow-hidden">
                                     <div
-                                        className="h-full bg-gradient-primary rounded-full transition-all duration-500 ease-out"
+                                        className="h-full bg-accent rounded-full transition-all duration-500 ease-out"
                                         style={{ width: `${progress?.percent ?? 0}%` }}
                                     />
                                 </div>
@@ -218,7 +218,7 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
                                                     ? 'bg-accent-green/5 border-accent-green/30'
                                                     : isInProgress
                                                         ? 'bg-accent-blue/5 border-accent-blue/30'
-                                                        : 'bg-dark-700/30 border-dark-600/50'
+                                                        : 'bg-surface/30 border-solid/50'
                                             }`}
                                         >
                                             <div className="flex items-center gap-3">
@@ -234,21 +234,21 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
                                                         <div className="animate-spin rounded-full h-4 w-4 border-2 border-accent-blue/30 border-t-accent-blue"></div>
                                                     </div>
                                                 ) : (
-                                                    <div className="w-5 h-5 rounded-full border-2 border-dark-500 flex-shrink-0" />
+                                                    <div className="w-5 h-5 rounded-full border-2 border-strong flex-shrink-0" />
                                                 )}
 
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2">
                                                         <span className={`font-medium text-sm ${
                                                             isComplete ? 'text-accent-green' :
-                                                            isInProgress ? 'text-dark-100' :
-                                                            'text-dark-400'
+                                                            isInProgress ? 'text-primary' :
+                                                            'text-tertiary'
                                                         }`}>
                                                             {instName}
                                                         </span>
                                                     </div>
                                                     {status?.message && (
-                                                        <p className={`text-xs mt-0.5 ${isComplete ? 'text-accent-green/70' : 'text-dark-400'}`}>
+                                                        <p className={`text-xs mt-0.5 ${isComplete ? 'text-accent-green/70' : 'text-tertiary'}`}>
                                                             {isComplete
                                                                 ? `${status.synced} nuovi, ${status.updated} aggiornati, ${status.deleted} eliminati`
                                                                 : status.message
@@ -266,10 +266,10 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
                         <>
                             {/* Data Status */}
                             {dataStatus && (
-                                <div className="bg-dark-700/50 rounded-lg p-4">
+                                <div className="bg-surface/50 rounded-lg p-4">
                                     <div className="flex items-center gap-2 text-sm">
-                                        <div className={`w-2 h-2 rounded-full ${dataStatus.has_data ? 'bg-accent-green' : 'bg-dark-500'}`} />
-                                        <span className="text-dark-300">
+                                        <div className={`w-2 h-2 rounded-full ${dataStatus.has_data ? 'bg-accent-green' : 'bg-surface-secondary'}`} />
+                                        <span className="text-secondary">
                                             {dataStatus.has_data
                                                 ? `${dataStatus.total_worklogs} worklog salvati (${dataStatus.date_range_start} → ${dataStatus.date_range_end})`
                                                 : 'Nessun dato salvato - esegui la prima sincronizzazione'
@@ -281,26 +281,26 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
 
                             {/* Date Range */}
                             <div>
-                                <label className="block text-sm font-medium text-dark-300 mb-2">
+                                <label className="block text-sm font-medium text-secondary mb-2">
                                     Intervallo Date
                                 </label>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs text-dark-400 mb-1">Da</label>
+                                        <label className="block text-xs text-tertiary mb-1">Da</label>
                                         <input
                                             type="date"
                                             value={startDate}
                                             onChange={(e) => setStartDate(e.target.value)}
-                                            className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 focus:outline-none focus:border-accent-blue"
+                                            className="w-full px-3 py-2 bg-surface border border-solid rounded-lg text-primary focus:outline-none focus:border-focus"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs text-dark-400 mb-1">A</label>
+                                        <label className="block text-xs text-tertiary mb-1">A</label>
                                         <input
                                             type="date"
                                             value={endDate}
                                             onChange={(e) => setEndDate(e.target.value)}
-                                            className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-dark-100 focus:outline-none focus:border-accent-blue"
+                                            className="w-full px-3 py-2 bg-surface border border-solid rounded-lg text-primary focus:outline-none focus:border-focus"
                                         />
                                     </div>
                                 </div>
@@ -309,7 +309,7 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
                             {/* Instance Selection */}
                             <div>
                                 <div className="flex items-center justify-between mb-2">
-                                    <label className="block text-sm font-medium text-dark-300">
+                                    <label className="block text-sm font-medium text-secondary">
                                         Istanze JIRA
                                     </label>
                                     <button
@@ -325,18 +325,18 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
                                             key={inst.name}
                                             className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedInstances.includes(inst.name)
                                                     ? 'border-accent-blue bg-accent-blue/10'
-                                                    : 'border-dark-600 hover:border-dark-500'
+                                                    : 'border-solid hover:border-strong'
                                                 }`}
                                         >
                                             <input
                                                 type="checkbox"
                                                 checked={selectedInstances.includes(inst.name)}
                                                 onChange={() => toggleInstance(inst.name)}
-                                                className="w-4 h-4 rounded border-dark-500"
+                                                className="w-4 h-4 rounded border-strong"
                                             />
                                             <div>
-                                                <div className="text-dark-100 font-medium">{inst.name}</div>
-                                                <div className="text-xs text-dark-400">{inst.url}</div>
+                                                <div className="text-primary font-medium">{inst.name}</div>
+                                                <div className="text-xs text-tertiary">{inst.url}</div>
                                             </div>
                                         </label>
                                     ))}
@@ -361,16 +361,16 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
                                     </div>
                                     <div className="grid grid-cols-3 gap-4 text-sm">
                                         <div className="text-center">
-                                            <div className="text-lg font-bold text-dark-100">{result.worklogs_synced}</div>
-                                            <div className="text-dark-400">Nuovi</div>
+                                            <div className="text-lg font-bold text-primary">{result.worklogs_synced}</div>
+                                            <div className="text-tertiary">Nuovi</div>
                                         </div>
                                         <div className="text-center">
-                                            <div className="text-lg font-bold text-dark-100">{result.worklogs_updated}</div>
-                                            <div className="text-dark-400">Aggiornati</div>
+                                            <div className="text-lg font-bold text-primary">{result.worklogs_updated}</div>
+                                            <div className="text-tertiary">Aggiornati</div>
                                         </div>
                                         <div className="text-center">
-                                            <div className="text-lg font-bold text-dark-100">{result.worklogs_deleted}</div>
-                                            <div className="text-dark-400">Eliminati</div>
+                                            <div className="text-lg font-bold text-primary">{result.worklogs_deleted}</div>
+                                            <div className="text-tertiary">Eliminati</div>
                                         </div>
                                     </div>
 
@@ -379,8 +379,8 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
                                         <div className="mt-4 pt-3 border-t border-accent-green/20 space-y-1.5">
                                             {Object.entries(instanceStatuses).map(([name, st]) => (
                                                 <div key={name} className="flex items-center justify-between text-xs">
-                                                    <span className="text-dark-300">{name}</span>
-                                                    <span className="text-dark-400">
+                                                    <span className="text-secondary">{name}</span>
+                                                    <span className="text-tertiary">
                                                         {st.synced} nuovi, {st.updated} agg., {st.deleted} elim.
                                                     </span>
                                                 </div>
@@ -410,10 +410,10 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
 
                 {/* Footer */}
                 {!syncing && (
-                    <div className="flex items-center justify-end gap-3 p-6 border-t border-dark-700">
+                    <div className="flex items-center justify-end gap-3 p-6 border-t border-solid">
                         <button
                             onClick={onClose}
-                            className="px-4 py-2 text-dark-300 hover:text-dark-100 transition-colors"
+                            className="px-4 py-2 text-secondary hover:text-primary transition-colors"
                         >
                             {result ? 'Chiudi' : 'Annulla'}
                         </button>
@@ -421,7 +421,7 @@ export default function SyncModal({ isOpen, onClose, onSyncComplete }) {
                             <button
                                 onClick={handleSync}
                                 disabled={selectedInstances.length === 0}
-                                className="flex items-center gap-2 px-5 py-2 bg-gradient-primary text-white font-medium rounded-lg shadow-glow hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex items-center gap-2 px-5 py-2 bg-accent text-inverse font-medium rounded-md hover:bg-accent-hover transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

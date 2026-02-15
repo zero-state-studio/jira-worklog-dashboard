@@ -908,6 +908,300 @@ function TeamList({ teams }) {
 
 ---
 
+## Frontend Conventions
+
+### Design System Rules (Critical)
+
+**All UI components MUST follow the design system** defined in `frontend/DESIGN_SYSTEM.md` and `frontend/src/styles/design-tokens.css`.
+
+#### Typography
+
+```tsx
+// ✅ Good - Use design tokens
+<h1 className="text-2xl font-semibold text-primary">Dashboard</h1>
+<p className="text-sm text-secondary">Body text at 14px</p>
+<span className="text-xs text-tertiary">Metadata at 11px</span>
+
+// ❌ Bad - Hardcoded sizes or too large
+<h1 className="text-3xl">Dashboard</h1>  // 30px - too large!
+<p className="text-base">Body text</p>   // 16px in Tailwind default - wrong!
+<span style={{fontSize: '12px'}}>Text</span>  // Inline styles forbidden
+```
+
+**Rules:**
+- Max text size: **24px** (text-2xl) - never use text-3xl or larger
+- Body text: **14px** (text-sm in our config, NOT text-base)
+- Table text: **13px** for high density
+- Numbers/metrics: Use `font-mono` (JetBrains Mono)
+- Font: DM Sans for all UI text
+
+#### Colors
+
+```tsx
+// ✅ Good - CSS variables only
+<div className="bg-surface border border-border text-primary">
+  <Button variant="primary">Action</Button>
+  <Badge variant="success">Active</Badge>
+</div>
+
+// ❌ Bad - Hardcoded colors
+<div className="bg-white border-gray-200 text-black">  // Don't use Tailwind color names
+<div style={{background: '#2563EB'}}>Button</div>  // Never hardcode hex
+<div className="bg-gradient-to-r from-blue-600 to-purple-600">  // No gradients!
+```
+
+**Rules:**
+- Single accent color: #2563EB (var(--color-accent))
+- Use semantic colors ONLY for status: success, warning, error
+- Background: #FAFAFA (var(--color-bg)), NOT pure white
+- All colors via CSS variables: `var(--color-*)`
+
+#### Component Usage
+
+```tsx
+// ✅ Good - Use component library
+import { Button, Badge, Input, Card, Modal, DataTable } from '@/components/common'
+
+<Button variant="primary" size="md" loading={isSaving}>
+  Save Changes
+</Button>
+
+<Input
+  label="Email"
+  value={email}
+  onChange={(e) => setEmail(e.target.value)}
+  error={errors.email}
+/>
+
+// ❌ Bad - Inline styles or custom components
+<button className="px-5 py-2 bg-gradient-primary shadow-glow">
+  Save Changes
+</button>
+
+<div>
+  <label>Email</label>
+  <input className="w-full px-4 py-2 bg-dark-700" />
+</div>
+```
+
+**Required Components:**
+- `Button` - All clickable actions (4 variants, 3 sizes)
+- `Badge` - All status indicators (dot + text pattern)
+- `Input` - All form inputs (built-in label/error)
+- `Select` - All dropdowns (searchable, keyboard nav)
+- `Card` - All content containers (flat design, no glass)
+- `Modal` - All dialogs (sm/md/lg sizes, slide-up animation)
+- `DataTable` - All data grids (36px rows, sortable, pagination)
+
+#### Spacing
+
+```tsx
+// ✅ Good - Use spacing scale (4px grid)
+<div className="p-6 gap-4">  // 24px padding, 16px gap
+<div className="space-y-3">  // 12px vertical spacing
+
+// ❌ Bad - Excessive padding or custom values
+<div className="p-12">  // 48px - too spacious for regular cards
+<div className="p-8">   // 32px - only for large empty states
+<div style={{padding: '18px'}}>  // Custom values forbidden
+```
+
+**Rules:**
+- Card padding: p-4 (16px) or p-6 (24px)
+- Section gaps: 16-24px between major sections
+- No p-8, p-10, p-12 on regular cards
+- Empty states can use p-6 max
+
+#### Shadows & Borders
+
+```tsx
+// ✅ Good - Minimal shadows
+<div className="flat-card">  // Border + shadow-sm
+<Modal>  // shadow-lg OK for modals
+
+// ❌ Bad - Heavy shadows or no borders
+<div className="shadow-lg">  // Too heavy for cards
+<div className="shadow-glow">  // Colored glows forbidden
+<div className="glass-card">  // Glass morphism deprecated
+<div className="rounded-2xl">  // 16px radius - too rounded (max 8px)
+```
+
+**Rules:**
+- Cards: border (1px) + shadow-sm only
+- Modals/Dropdowns: shadow-lg allowed (elevated UI)
+- Buttons: NO shadows (flat design)
+- Max border radius: 8px (--radius-lg)
+
+#### Layout Patterns
+
+```tsx
+// ✅ Good - Use NewLayout wrapper
+import NewLayout from './NewLayout'
+
+function MyPage() {
+  return (
+    <NewLayout title="Dashboard" breadcrumbs={['Home', 'Dashboard']}>
+      <div className="p-6 space-y-6">
+        <KpiBar metrics={metrics} />
+        <Card className="p-6">
+          <DataTable columns={columns} data={rows} />
+        </Card>
+      </div>
+    </NewLayout>
+  )
+}
+
+// ❌ Bad - Custom layout or missing structure
+function MyPage() {
+  return (
+    <div>
+      <h1 className="text-5xl mb-10">Dashboard</h1>  // Too large, too spacious
+      <div className="grid grid-cols-3 gap-12">  // Too much gap
+```
+
+**Required Structure:**
+- Wrap all pages in `<NewLayout>`
+- Page padding: p-6 (24px)
+- Content spacing: space-y-6 or gap-6
+- Sidebar: 220px → 48px collapsible
+- Header: 48px height with breadcrumbs
+
+### State Management Patterns
+
+```javascript
+// ✅ Good - Clear state naming
+const [isLoading, setIsLoading] = useState(false)
+const [teams, setTeams] = useState([])
+const [error, setError] = useState(null)
+
+// ✅ Good - API calls with error handling
+const fetchTeams = async () => {
+  setIsLoading(true)
+  setError(null)
+  try {
+    const data = await apiClient.get('/teams')
+    setTeams(data)
+  } catch (err) {
+    setError(err.message)
+  } finally {
+    setIsLoading(false)
+  }
+}
+
+// ❌ Bad - Unclear state or missing error handling
+const [data, setData] = useState()  // What is "data"?
+const [loading, setLoading] = useState()  // Boolean should be "is" prefix
+
+const fetchTeams = async () => {
+  const data = await apiClient.get('/teams')  // No try/catch!
+  setTeams(data)
+}
+```
+
+### API Integration Pattern
+
+```javascript
+// ✅ Good - Use apiClient wrapper (Tauri-aware)
+import { apiClient } from '../api/client'
+
+const response = await apiClient.get('/teams')
+const team = await apiClient.post('/teams', teamData)
+const updated = await apiClient.put(`/teams/${id}`, updates)
+await apiClient.delete(`/teams/${id}`)
+
+// ❌ Bad - Direct fetch (doesn't work with Tauri)
+const response = await fetch('/api/teams')
+```
+
+### Component Organization
+
+```tsx
+// ✅ Good - Organized component structure
+import React, { useState, useEffect } from 'react'
+import { Button, Card, DataTable } from '@/components/common'
+import { apiClient } from '@/api/client'
+
+interface TeamListProps {
+  companyId: number
+  onTeamSelect: (team: Team) => void
+}
+
+function TeamList({ companyId, onTeamSelect }: TeamListProps) {
+  // 1. State declarations
+  const [teams, setTeams] = useState<Team[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+
+  // 2. Effects
+  useEffect(() => {
+    fetchTeams()
+  }, [companyId])
+
+  // 3. Event handlers
+  const fetchTeams = async () => { /* ... */ }
+  const handleRowClick = (team: Team) => { /* ... */ }
+
+  // 4. Render helpers
+  const renderStatus = (team: Team) => { /* ... */ }
+
+  // 5. Main render
+  return (
+    <Card className="p-6">
+      <DataTable
+        columns={columns}
+        data={teams}
+        loading={isLoading}
+        onRowClick={handleRowClick}
+      />
+    </Card>
+  )
+}
+
+export default TeamList
+```
+
+### Which Component When?
+
+| Need | Component | Example |
+|------|-----------|---------|
+| Clickable action | `Button` | Save, Cancel, Delete, Export |
+| Status indicator | `Badge` | Active, Pending, Error |
+| Form input | `Input` | Text, email, password fields |
+| Dropdown selection | `Select` | Status picker, team selector |
+| Content container | `Card` | Wrapping sections, panels |
+| Dialog/popup | `Modal` | Confirmation, forms, details |
+| Data list | `DataTable` | User list, worklog list, invoices |
+| Metrics row | `KpiBar` | Dashboard KPIs, summary stats |
+
+### Animation Guidelines
+
+```css
+/* ✅ Good - Subtle, fast transitions (< 200ms) */
+.button {
+  transition: background-color 150ms ease;
+}
+
+.modal {
+  animation: slide-up 200ms ease-out;
+}
+
+/* ❌ Bad - Elaborate or slow animations */
+.button {
+  transition: all 500ms cubic-bezier(.68,-0.55,.27,1.55);  // Too slow, bounce effect
+}
+
+.page-enter {
+  animation: elaborate-entrance 1s ease-in-out;  // Page loads shouldn't animate
+}
+```
+
+**Rules:**
+- All transitions under 200ms
+- No bounce, spring, or "playful" effects
+- No animations on page load or scroll
+- Only animate: modals (slide-up), hovers (color), sidebar (width)
+
+---
+
 ## Security Checklist
 
 Before merging code, verify:
