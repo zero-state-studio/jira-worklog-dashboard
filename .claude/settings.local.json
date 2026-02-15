@@ -63,7 +63,14 @@
       "Bash(npx --package typescript tsc:*)",
       "Bash(python:*)",
       "Bash(git push:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(# Restore:*)",
+      "Bash(backend/.env.example:*)",
+      "Bash(POSTGRES_SETUP.md:*)",
+      "Bash(~/.zshrc)",
+      "Bash(./setup_local_postgres.sh:*)",
+      "Bash(export DATABASE_URL=\"postgresql://jira_user:dev_password_123@localhost:5432/jira_worklog_dev\" /opt/homebrew/opt/postgresql@15/bin/psql \"$DATABASE_URL\" -f backend/migrations/001_initial_schema.sql)",
+      "Bash(/opt/homebrew/opt/postgresql@15/bin/psql:*)"
     ]
   }
 }

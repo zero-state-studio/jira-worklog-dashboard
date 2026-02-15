@@ -1,0 +1,66 @@
+# Python
+backend/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/*.pyd
+backend/.Python
+backend/venv/
+backend/env/
+backend/.venv/
+backend/.pytest_cache/
+backend/*.db
+backend/*.db-journal
+backend/*.log
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.cache/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs
+*.md
+docs/
+
+# Env files (secrets)
+.env
+.env.*
+!.env.example
+
+# Database files (will use Railway volume)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Testing
+tests/
+*.test.*
+*.spec.*
+
+# Desktop app (not needed for Railway)
+desktop/
+tauri/
+
+# Next.js migration (not needed)
+jira-workload-next/

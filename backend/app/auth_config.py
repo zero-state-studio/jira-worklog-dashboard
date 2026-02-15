@@ -2,11 +2,14 @@
 Authentication Configuration - OAuth and JWT settings.
 """
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 from typing import Optional
 
 
 class AuthSettings(BaseSettings):
     """Authentication configuration from environment variables."""
+
+    model_config = ConfigDict(extra='ignore', env_file='.env')
 
     # Google OAuth
     GOOGLE_CLIENT_ID: str
@@ -43,9 +46,6 @@ class AuthSettings(BaseSettings):
     SMTP_PASSWORD: Optional[str] = None
     SENDGRID_API_KEY: Optional[str] = None
     FROM_EMAIL: str = "noreply@jira-worklog.local"
-
-    class Config:
-        env_file = ".env"
 
 
 # Global auth settings instance
